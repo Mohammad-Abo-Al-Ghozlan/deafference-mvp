@@ -98,3 +98,5 @@ export class CameraPermissionService {
 }
 
 export default CameraPermissionService;
+
+export default CameraPermissionService;
