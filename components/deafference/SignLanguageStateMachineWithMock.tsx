@@ -1,7 +1,7 @@
 // components/deafference/SignLanguageStateMachineWithMock.tsx
 'use client';
 
-import React, { useState, useReducer, ReactNode } from 'react';
+import React, { useState, useReducer, ReactNode, useEffect } from 'react';
 import { useMockEventGenerator } from '@/hooks/useMockEventGenerator';
 import { MockEvent, SignRecognizedPayload, SignDiscardedPayload } from '@/types/mock-events';
 import styles from './SignLanguageStateMachine.module.css';
@@ -253,6 +253,18 @@ const SignLanguageStateMachineWithMock: React.FC<
   const [mockEventLog, setMockEventLog] = useState<MockEvent[]>([]);
 
   /**
+   * Auto-recover from error state after 3 seconds
+   */
+  useEffect(() => {
+    if (state.current === 'error') {
+      const timer = setTimeout(() => {
+        dispatch({ type: 'TRANSITION_TO', payload: { state: 'listening' } });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.current]);
+
+  /**
    * Handle incoming mock events from the generator
    */
   const handleMockEvent = (event: MockEvent): void => {
@@ -323,7 +335,7 @@ const SignLanguageStateMachineWithMock: React.FC<
         return (
           <ErrorScreen
             errorMessage={state.context.errorMessage}
-            onRetry={() => handleTransition('permission_needed')}
+            onRetry={() => handleTransition('listening')}
           />
         );
       default:
