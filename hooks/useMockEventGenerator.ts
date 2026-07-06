@@ -59,6 +59,12 @@ export const useMockEventGenerator = (
   const [eventCount, setEventCount] = useState<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastEventTypeRef = useRef<MockEventType>('SIGN_RECOGNIZED');
+  const onEventRef = useRef<MockEventCallback>(onEvent);
+
+  // Keep onEventRef in sync with the latest onEvent callback
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   /**
    * Generates a random confidence score
@@ -123,9 +129,9 @@ export const useMockEventGenerator = (
    */
   const emitMockEvent = useCallback((): void => {
     const event = generateMockEvent();
-    onEvent(event);
+    onEventRef.current(event);
     setEventCount((prev) => prev + 1);
-  }, [onEvent]);
+  }, []);
 
   /**
    * Starts the simulation
@@ -174,20 +180,12 @@ export const useMockEventGenerator = (
     }
 
     return () => {
-      stopSimulation();
-    };
-  }, []);
-
-  /**
-   * Cleanup interval on unmount
-   */
-  useEffect(() => {
-    return () => {
       if (intervalRef.current !== null) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, []);
+  }, [autoStart, startSimulation]);
 
   return {
     isSimulating,
