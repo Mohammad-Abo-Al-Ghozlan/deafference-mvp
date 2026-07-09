@@ -10,14 +10,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model CameraPermission {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  status    String   // Enum: "granted" | "denied" | "dismissed"
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
 
-  @@index([userId])
-  @@index([status])
-  @@map("camera_permissions")
+  cameraPermission CameraPermission?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CameraPermission {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique
+  status    String  @default("prompted") // 'granted', 'denied', 'prompted'
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
