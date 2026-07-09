@@ -1,7 +1,7 @@
 // components/deafference/SignLanguageStateMachineWithMock.tsx
 'use client';
 
-import React, { useState, useReducer, ReactNode, useEffect } from 'react';
+import React, { useState, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { useMockEventGenerator } from '@/hooks/useMockEventGenerator';
 import { MockEvent, SignRecognizedPayload, SignDiscardedPayload } from '@/types/mock-events';
 import styles from './SignLanguageStateMachine.module.css';
@@ -251,18 +251,40 @@ const SignLanguageStateMachineWithMock: React.FC<
   });
 
   const [mockEventLog, setMockEventLog] = useState<MockEvent[]>([]);
+  const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const errorCountRef = useRef<number>(0);
+  const [errorTrigger, setErrorTrigger] = useState<number>(0);
 
   /**
    * Auto-recover from error state after 3 seconds
+   * Uses errorTrigger to force re-run even when state.current stays 'error'
    */
   useEffect(() => {
     if (state.current === 'error') {
-      const timer = setTimeout(() => {
+      // Clear any existing timer
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+      }
+
+      // Set a new recovery timer
+      errorTimerRef.current = setTimeout(() => {
         dispatch({ type: 'TRANSITION_TO', payload: { state: 'listening' } });
+        errorTimerRef.current = null;
       }, 3000);
-      return () => clearTimeout(timer);
+    } else {
+      // Clear timer if leaving error state
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = null;
+      }
     }
-  }, [state.current]);
+
+    return () => {
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+      }
+    };
+  }, [state.current, errorTrigger]);
 
   /**
    * Handle incoming mock events from the generator
@@ -287,6 +309,8 @@ const SignLanguageStateMachineWithMock: React.FC<
           errorMessage: `Sign discarded: ${payload.reason} (confidence: ${(payload.confidence * 100).toFixed(1)}%)`,
         },
       });
+      // Trigger effect to reset the error recovery timer
+      setErrorTrigger((prev) => prev + 1);
     }
   };
 
