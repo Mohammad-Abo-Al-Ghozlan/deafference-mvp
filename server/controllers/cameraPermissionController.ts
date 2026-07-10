@@ -91,7 +91,8 @@ export const getCameraPermission = async (
   res: Response<ApiResponse<CameraPermissionResponse>>
 ): Promise<void> => {
   try {
-    const userId = parseInt(req.params.userId, 10);
+    const userIdParam = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+    const userId = parseInt(userIdParam, 10);
 
     if (!Number.isInteger(userId) || userId <= 0) {
       res.status(400).json({
