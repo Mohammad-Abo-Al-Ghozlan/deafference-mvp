@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import Link from "next/link"
 import { ArrowRight, Globe } from "lucide-react"
 import { Container } from "@/components/shared/container"
 import { LANDING_NAV, COMPANY_NAME } from "@/lib/constants"
@@ -24,17 +25,21 @@ export function Navbar() {
         </a>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
-          {LANDING_NAV.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              )}
-            >
-              {item.label}
-            </a>
-          ))}
+          {LANDING_NAV.map((item) => {
+            const className = cn(
+              "rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            )
+
+            return item.href.startsWith("#") ? (
+              <a key={item.href} href={item.href} className={className}>
+                {item.label}
+              </a>
+            ) : (
+              <Link key={item.href} href={item.href} className={className}>
+                {item.label}
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="flex items-center gap-2">

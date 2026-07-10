@@ -44,7 +44,7 @@ export default function SignPredictionDemo({
   enabled = true,
 }: SignPredictionDemoProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   
   // Initialize TensorFlow model and prediction engine
   const { isModelLoading, isModelReady, modelError, predictionEngine } =

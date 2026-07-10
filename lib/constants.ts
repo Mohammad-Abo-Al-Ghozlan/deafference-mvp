@@ -15,6 +15,8 @@ export const LANDING_NAV = [
   { label: "How it works", href: "#how-it-works" },
   { label: "Features", href: "#features" },
   { label: "FAQ", href: "#faq" },
+  { label: "Mock Demo", href: "/mock-testing-demo" },
+  { label: "State Machine Demo", href: "/enhanced-state-machine-demo" },
 ] as const
 
 export const LANDING_METRICS = [

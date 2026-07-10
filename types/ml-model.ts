@@ -26,7 +26,7 @@ export type PredictionResult =
  * Can be a canvas, ImageData, or tensor representation
  */
 export type VideoFrame = {
-  data: ArrayLike | undefined;
+  data: ArrayLike<number> | undefined;
   width: number;
   height: number;
 };

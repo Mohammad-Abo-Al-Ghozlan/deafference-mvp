@@ -184,7 +184,7 @@ export const useTensorFlowModel = (): UseTensorFlowModelReturn => {
  * @returns VideoFrame object suitable for prediction engine
  */
 export const useCanvasToVideoFrame = (
-  canvasRef: React.RefObject<HTMLCanvasElement>
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
 ): VideoFrame => {
   const [frame, setFrame] = useState<VideoFrame>({
     data: undefined,
