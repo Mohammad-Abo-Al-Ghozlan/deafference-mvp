@@ -9,6 +9,7 @@ import { ApplicationHeader } from "./application-header"
 import { CameraView } from "./camera-view"
 import { StatusCard } from "./status-card"
 import { TranslationPanel } from "./translation-panel"
+import { TTSControls } from "./tts-controls"
 import { ControlPanel } from "./control-panel"
 import { RecentTranslations } from "./recent-translations"
 import { TipsCard } from "./tips-card"
@@ -35,6 +36,7 @@ export function DeafferenceApp() {
               <StatusCard />
               <Pipeline currentStep={0} />
               <TranslationPanel />
+              <TTSControls />
               <ControlPanel />
               <RecentTranslations />
               <TipsCard />
