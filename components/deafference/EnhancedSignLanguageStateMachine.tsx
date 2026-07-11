@@ -1,12 +1,14 @@
 'use client';
 
-import { useReducer, useCallback, useRef, useEffect } from 'react';
+import { useReducer, useCallback, useRef, useEffect, useState } from 'react';
 import { useMockEventGenerator } from '@/hooks/useMockEventGenerator';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { useTensorFlowModel } from '@/hooks/useTensorFlowModel';
 import CameraDeniedScreen from './CameraDeniedScreen';
 import BrowserUnsupportedScreen from './BrowserUnsupportedScreen';
 import NoSignsDetectedScreen from './NoSignsDetectedScreen';
+import ModelLoadErrorFallback from './ModelLoadErrorFallback';
+import LoadingSpinner from './LoadingSpinner';
 import styles from './ErrorScreens.module.css';
 
 type AppState =
@@ -68,10 +70,35 @@ export default function EnhancedSignLanguageStateMachine({
   const [state, dispatch] = useReducer(reducer, 'permission_needed');
   const recognizedSignRef = useRef<{ text: string; confidence: number } | null>(null);
   const lastEventRef = useRef<string>('');
-  
+
   // Initialize TensorFlow.js and prediction engine (Stage 2)
-  const { isModelLoading, isModelReady, modelError, predictionEngine } =
+  // hasError/errorMessage/retry (KAN-14+): timeout + failure fallback handling
+  const { isModelLoading, isModelReady, hasError, errorMessage, predictionEngine, retry } =
     useTensorFlowModel();
+
+  // When the model fails to load, the user can choose to fall back to the
+  // Stage 1 mock event generator instead of being blocked entirely.
+  const [isMockMode, setIsMockMode] = useState(false);
+
+  // Debug-only override so the failure/timeout screen can be exercised without
+  // a real network failure (the mock TF.js engine otherwise never fails).
+  const [debugForceError, setDebugForceError] = useState(false);
+  const effectiveHasError = hasError || debugForceError;
+  const effectiveErrorMessage = hasError
+    ? errorMessage
+    : debugForceError
+      ? 'Simulated failure: network timeout while fetching model weights.'
+      : null;
+
+  const handleContinueInMockMode = useCallback(() => {
+    setIsMockMode(true);
+  }, []);
+
+  const handleRetryModelLoad = useCallback(() => {
+    setIsMockMode(false);
+    setDebugForceError(false);
+    retry();
+  }, [retry]);
 
   const handleMockEvent = useCallback(
     (event: any) => {
@@ -123,11 +150,11 @@ export default function EnhancedSignLanguageStateMachine({
    * When model is ready, automatically transition from loading_model to listening
    */
   useEffect(() => {
-    if (state === 'loading_model' && isModelReady && !isModelLoading) {
-      // Model initialization complete, safe to start listening
+    if (state === 'loading_model' && ((isModelReady && !isModelLoading) || isMockMode)) {
+      // Model initialization complete (or the user opted into mock mode), safe to start listening
       transitionState('listening');
     }
-  }, [state, isModelReady, isModelLoading, transitionState]);
+  }, [state, isModelReady, isModelLoading, isMockMode, transitionState]);
 
   const handlePermissionRequest = () => {
     transitionState('loading_model');
@@ -178,71 +205,26 @@ export default function EnhancedSignLanguageStateMachine({
         )}
 
         {state === 'loading_model' && (
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            {/* TensorFlow.js Model Loading Progress */}
-            {isModelLoading || !isModelReady ? (
-              <>
-                <div
-                  style={{
-                    width: '100%',
-                    height: '4px',
-                    background: 'rgba(148, 163, 184, 0.2)',
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                    marginBottom: '1rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      height: '100%',
-                      background: '#3b82f6',
-                      animation: 'slideRight 2s infinite',
-                      width: '30%',
-                    }}
-                  />
-                </div>
-                <p style={{ color: '#cbd5e1' }}>Initializing TensorFlow.js...</p>
-                <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                  {isModelLoading ? 'Loading model engine...' : 'Preparing prediction engine...'}
-                </p>
-              </>
-            ) : null}
-
-            {/* Model Error State */}
-            {modelError && (
-              <div
-                style={{
-                  background: 'rgba(220, 38, 38, 0.1)',
-                  border: '1px solid rgba(220, 38, 38, 0.5)',
-                  borderRadius: '0.5rem',
-                  padding: '1rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                <p style={{ color: '#fca5a5', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                  ⚠️ Model Initialization Failed
-                </p>
-                <p style={{ color: '#fda8a8', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                  {modelError.message}
-                </p>
+          <div style={{ marginTop: '-1rem', marginBottom: '-1rem', marginLeft: '-1rem', marginRight: '-1rem' }}>
+            {effectiveHasError ? (
+              <ModelLoadErrorFallback
+                errorMessage={effectiveErrorMessage ?? 'Unknown error while initializing the model.'}
+                onRetry={handleRetryModelLoad}
+                onContinueMockMode={handleContinueInMockMode}
+              />
+            ) : (
+              <div style={{ padding: '1rem 1rem 2rem' }}>
+                <LoadingSpinner
+                  label={isModelLoading ? 'Loading model engine...' : 'Preparing prediction engine...'}
+                />
                 <button
-                  className={`${styles.button} ${styles.primaryButton}`}
-                  onClick={() => {
-                    // Retry by transitioning back to permission_needed
-                    transitionState('permission_needed');
-                  }}
-                  style={{ marginTop: '0.5rem' }}
+                  className={`${styles.button} ${styles.secondaryButton}`}
+                  onClick={() => setDebugForceError(true)}
+                  style={{ marginTop: '1rem' }}
                 >
-                  Retry
+                  🧪 Simulate Model Load Failure
                 </button>
               </div>
-            )}
-
-            {/* Fallback Manual Button for Testing */}
-            {!modelError && isModelLoading && (
-              <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '1rem' }}>
-                This may take a few seconds...
-              </p>
             )}
           </div>
         )}

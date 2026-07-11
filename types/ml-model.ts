@@ -56,6 +56,8 @@ export interface ModelState {
   isModelLoading: boolean;
   isModelReady: boolean;
   modelError: Error | null;
+  hasError: boolean;
+  errorMessage: string | null;
 }
 
 /**
@@ -63,4 +65,6 @@ export interface ModelState {
  */
 export interface UseTensorFlowModelReturn extends ModelState {
   predictionEngine: PredictionEngine | null;
+  /** Resets error state and re-runs model initialization from scratch */
+  retry: () => void;
 }

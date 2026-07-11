@@ -105,6 +105,27 @@ class MockPredictionEngine implements PredictionEngine {
  * }, [isModelReady, predictionEngine]);
  * ```
  */
+/** Maximum time to wait for TF.js + the model to become ready before treating it as a failure */
+const MODEL_LOAD_TIMEOUT_MS = 15000;
+
+/**
+ * Rejects with a timeout error if `promise` doesn't settle within `timeoutMs`.
+ * The underlying timer is always cleared so it can't fire after the race is decided.
+ */
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Model loading timed out after ${timeoutMs / 1000}s. Please check your network connection.`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+};
+
 export const useTensorFlowModel = (): UseTensorFlowModelReturn => {
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [isModelReady, setIsModelReady] = useState<boolean>(false);
@@ -113,47 +134,72 @@ export const useTensorFlowModel = (): UseTensorFlowModelReturn => {
 
   // Reference to prevent cleanup on model ready (persist across re-renders)
   const engineRef = useRef<PredictionEngine | null>(null);
-  const initializationAttemptedRef = useRef<boolean>(false);
+
+  // Bumped on every load attempt so a stale (e.g. superseded-by-retry) attempt
+  // can detect it's no longer current and skip updating state.
+  const attemptIdRef = useRef<number>(0);
+  const isInitializingRef = useRef<boolean>(false);
+
+  const initializeModel = useCallback(async (): Promise<void> => {
+    if (isInitializingRef.current) {
+      return;
+    }
+    isInitializingRef.current = true;
+
+    const attemptId = ++attemptIdRef.current;
+
+    try {
+      setIsModelLoading(true);
+      setModelError(null);
+
+      // Wait for TensorFlow.js to be ready and backend initialized, bounded by a
+      // timeout so a stalled network/CORS/OOM failure doesn't hang forever.
+      // This ensures WebGL/WebAssembly backend is available if supported.
+      await withTimeout(tf.ready(), MODEL_LOAD_TIMEOUT_MS);
+
+      if (attemptId !== attemptIdRef.current) {
+        // A newer attempt (retry) has started; discard this stale result.
+        return;
+      }
+
+      // Stage 2: Create mock prediction engine
+      // In Stage 3, this will be replaced with: tf.loadLayersModel('path/to/model.json')
+      const engine = new MockPredictionEngine();
+      engineRef.current = engine;
+      setPredictionEngine(engine);
+
+      setIsModelReady(true);
+      setIsModelLoading(false);
+    } catch (error) {
+      if (attemptId !== attemptIdRef.current) {
+        // A newer attempt (retry) has started; discard this stale failure.
+        return;
+      }
+
+      const errorObj = error instanceof Error ? error : new Error('Unknown model initialization error');
+      setModelError(errorObj);
+      setIsModelLoading(false);
+      setIsModelReady(false);
+
+      // Log error for debugging
+      console.error('[TensorFlow Model] Initialization failed:', errorObj);
+    } finally {
+      isInitializingRef.current = false;
+    }
+  }, []);
+
+  const retry = useCallback((): void => {
+    setModelError(null);
+    setPredictionEngine(null);
+    setIsModelReady(false);
+    initializeModel();
+  }, [initializeModel]);
 
   /**
    * Initialize TensorFlow.js and create prediction engine
    * Runs once on component mount
    */
   useEffect(() => {
-    // Guard against multiple initialization attempts
-    if (initializationAttemptedRef.current) {
-      return;
-    }
-    initializationAttemptedRef.current = true;
-
-    const initializeModel = async (): Promise<void> => {
-      try {
-        setIsModelLoading(true);
-        setModelError(null);
-
-        // Wait for TensorFlow.js to be ready and backend initialized
-        // This ensures WebGL/WebAssembly backend is available if supported
-        await tf.ready();
-
-        // Stage 2: Create mock prediction engine
-        // In Stage 3, this will be replaced with: tf.loadLayersModel('path/to/model.json')
-        const engine = new MockPredictionEngine();
-        engineRef.current = engine;
-        setPredictionEngine(engine);
-
-        setIsModelReady(true);
-        setIsModelLoading(false);
-      } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error('Unknown model initialization error');
-        setModelError(errorObj);
-        setIsModelLoading(false);
-        setIsModelReady(false);
-
-        // Log error for debugging
-        console.error('[TensorFlow Model] Initialization failed:', errorObj);
-      }
-    };
-
     initializeModel();
 
     // Cleanup function: dispose prediction engine resources on unmount
@@ -166,13 +212,16 @@ export const useTensorFlowModel = (): UseTensorFlowModelReturn => {
       // Note: Be cautious with tf.disposeVariables() in production
       // as it may dispose shared tensors
     };
-  }, []);
+  }, [initializeModel]);
 
   return {
     isModelLoading,
     isModelReady,
     modelError,
+    hasError: modelError !== null,
+    errorMessage: modelError?.message ?? null,
     predictionEngine,
+    retry,
   };
 };
 
