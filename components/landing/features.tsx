@@ -5,6 +5,7 @@ import { AudioLines, Camera, Languages, Layers3, ShieldCheck, Wand2 } from "luci
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const features = [
   {
@@ -60,9 +61,7 @@ export function Features() {
             const Icon = feature.icon
             return (
               <Card key={feature.title} className="p-6">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-brand-orange/12 text-brand-red">
-                  <Icon className="size-5" />
-                </div>
+                <IconBadge icon={Icon} />
                 <h3 className="mt-5 text-lg font-semibold text-foreground">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">{feature.description}</p>
               </Card>

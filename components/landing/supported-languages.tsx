@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const languages = [
   "English",
@@ -40,9 +41,7 @@ export function SupportedLanguages() {
             transition={{ duration: 0.55, ease: "easeOut" }}
           >
             <Card className="h-full p-6">
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-foreground text-background">
-                <Globe2 className="size-5" />
-              </div>
+              <IconBadge icon={Globe2} variant="solid" />
               <h3 className="mt-5 text-xl font-semibold text-foreground">
                 Localized where it matters, adaptable where it counts.
               </h3>

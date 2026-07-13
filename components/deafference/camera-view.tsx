@@ -99,7 +99,9 @@ export function CameraView() {
           <div
             className={cn(
               "relative aspect-video overflow-hidden rounded-3xl border-2",
-              status === "streaming" ? "border-border bg-black" : "border-dashed border-border bg-muted/35",
+              status === "streaming"
+                ? "state-active-ring border-indicator-indigo/40 bg-black"
+                : "border-dashed border-border bg-muted/35",
             )}
           >
             <video

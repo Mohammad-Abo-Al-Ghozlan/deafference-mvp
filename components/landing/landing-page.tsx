@@ -5,7 +5,6 @@ import { Hero } from "./hero"
 import { WhyChooseUs } from "./why-choose-us"
 import { HowItWorks } from "./how-it-works"
 import { Features } from "./features"
-import { Technology } from "./technology"
 import { Performance } from "./performance"
 import { UseCases } from "./use-cases"
 import { BestConditions } from "./best-conditions"
@@ -24,7 +23,6 @@ export function LandingPage() {
         <WhyChooseUs />
         <HowItWorks />
         <Features />
-        <Technology />
         <Performance />
         <UseCases />
         <BestConditions />

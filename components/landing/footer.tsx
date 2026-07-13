@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { Globe2, Mail, MessageSquare } from "lucide-react"
 import { Container } from "@/components/shared/container"
-import { LANDING_NAV, COMPANY_NAME } from "@/lib/constants"
+import { LANDING_NAV } from "@/lib/constants"
 import { Logo } from "@/components/deafference/logo"
 
 const socialLinks = [
@@ -23,10 +23,7 @@ export function Footer() {
     >
       <Container className="grid gap-8 lg:grid-cols-[1fr_auto_auto] lg:items-start">
         <div className="max-w-sm">
-          <div className="flex items-center gap-3">
-            <Logo className="shadow-none ring-0" />
-            <span className="text-sm font-semibold tracking-wide text-foreground">{COMPANY_NAME}</span>
-          </div>
+          <Logo />
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
             Professional AI landing architecture with a separate translation workflow and room for
             future product pages.

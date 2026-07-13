@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, Headphones, Laptop, ShieldCheck, Smile } from "lu
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const conditions = [
   "Quiet, controlled environments for speech capture",
@@ -39,9 +40,7 @@ export function BestConditions() {
           >
             <Card className="h-full p-6">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-foreground text-background">
-                  <CheckCircle2 className="size-5" />
-                </div>
+                <IconBadge icon={CheckCircle2} variant="solid" />
                 <h3 className="text-xl font-semibold text-foreground">Good-fit conditions</h3>
               </div>
               <ul className="mt-6 space-y-3 text-sm leading-7 text-muted-foreground">
@@ -66,9 +65,7 @@ export function BestConditions() {
               const Icon = item.icon
               return (
                 <Card key={item.label} className="p-5">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-brand-orange/12 text-brand-red">
-                    <Icon className="size-4" />
-                  </div>
+                  <IconBadge icon={Icon} size="compact" />
                   <h3 className="mt-4 text-base font-semibold text-foreground">{item.label}</h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
                 </Card>

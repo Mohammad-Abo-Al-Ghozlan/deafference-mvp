@@ -5,6 +5,7 @@ import { BriefcaseBusiness, GraduationCap, HeartHandshake, Users } from "lucide-
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const useCases = [
   {
@@ -51,9 +52,7 @@ export function UseCases() {
             return (
               <Card key={item.title} className="p-6">
                 <div className="flex items-center gap-4">
-                  <div className="flex size-12 items-center justify-center rounded-2xl bg-brand-orange/12 text-brand-red">
-                    <Icon className="size-5" />
-                  </div>
+                  <IconBadge icon={Icon} />
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">{item.title}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
