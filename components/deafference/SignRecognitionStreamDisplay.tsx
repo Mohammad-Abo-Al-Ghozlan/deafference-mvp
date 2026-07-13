@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useSignRecognitionPipeline } from '@/hooks/useSignRecognitionPipeline';
+import { useGrammarReorder } from '@/hooks/useGrammarReorder';
 
 interface StreamDisplayProps {
   /** Custom className for root container */
@@ -46,6 +47,12 @@ export const SignRecognitionStreamDisplay: React.FC<StreamDisplayProps> = ({
 
   const [debounceMs, setDebounceMs] = useState(1200);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
+
+  // Grammar Reordering Module scaffold (post KAN-23): instead of displaying the
+  // finalized gloss array as raw joined text, route it through the reordering
+  // interface first. Pass-through today (identical output to getSentenceString()),
+  // grammar-corrected once the real engine replaces the stub in utils/grammarEngine.ts.
+  const { orderedSentence } = useGrammarReorder(glossBufferState.stabilizedSentence);
 
   const handleDebounceTuning = (ms: number) => {
     setDebounceMs(ms);
@@ -109,7 +116,7 @@ export const SignRecognitionStreamDisplay: React.FC<StreamDisplayProps> = ({
         <h3>Stabilized Sentence</h3>
         <div className="sentence-container">
           <div className="sentence-text">
-            {getSentenceString() || '(No words finalized yet)'}
+            {orderedSentence || '(No words finalized yet)'}
           </div>
           <div className="sentence-stats">
             <span className="stat">
@@ -197,7 +204,8 @@ export const SignRecognitionStreamDisplay: React.FC<StreamDisplayProps> = ({
             {JSON.stringify(
               {
                 bufferState: glossBufferState,
-                sentence: getSentenceString(),
+                rawSentence: getSentenceString(),
+                orderedSentence,
               },
               null,
               2
