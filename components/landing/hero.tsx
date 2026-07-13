@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
-import { APP_ROUTES, LANDING_METRICS, COMPANY_TAGLINE } from "@/lib/constants"
+import { APP_ROUTES, LANDING_METRICS } from "@/lib/constants"
 
 const stats = [
   "Real-time translation pipeline",
@@ -31,12 +31,12 @@ export function Hero() {
             </Badge>
 
             <h1 className="mt-6 max-w-3xl text-5xl font-semibold tracking-tight text-balance text-foreground sm:text-6xl lg:text-7xl">
-              Deafference turns speech into clear sign-language experiences.
+              Deafference turns spoken words into fluid, accessible sign language.
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-pretty text-muted-foreground sm:text-xl">
-              {COMPANY_TAGLINE}. Designed for teams that need an elegant, reliable, and
-              future-proof landing experience before the product suite expands.
+              We listen to speech, understand what&apos;s being said, and translate it into clear,
+              sign-ready visuals in real time — breaking communication barriers as the conversation happens.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

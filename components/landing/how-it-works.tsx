@@ -5,6 +5,7 @@ import { ArrowRight, Mic, Settings2, Sparkles, Wand2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const steps = [
   {
@@ -52,9 +53,7 @@ export function HowItWorks() {
               return (
                 <Card key={step.title} className="p-6">
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-foreground text-background">
-                      <Icon className="size-5" />
-                    </div>
+                    <IconBadge icon={Icon} variant="solid" />
                     <span className="text-sm font-semibold text-muted-foreground">0{index + 1}</span>
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-foreground">{step.title}</h3>

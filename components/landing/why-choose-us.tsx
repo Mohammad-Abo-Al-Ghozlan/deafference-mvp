@@ -5,6 +5,7 @@ import { ShieldCheck, LayoutGrid, Sparkles, Workflow } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const reasons = [
   {
@@ -50,9 +51,7 @@ export function WhyChooseUs() {
             const Icon = item.icon
             return (
               <Card key={item.title} className="h-full p-6 transition-transform duration-300 hover:-translate-y-1">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-brand-orange/12 text-brand-red">
-                  <Icon className="size-5" />
-                </div>
+                <IconBadge icon={Icon} />
                 <h3 className="mt-5 text-lg font-semibold text-foreground">{item.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">{item.description}</p>
               </Card>

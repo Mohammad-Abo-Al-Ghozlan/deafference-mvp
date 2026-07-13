@@ -5,6 +5,7 @@ import { ArrowUpRight, Compass, HeartHandshake, ShieldCheck } from "lucide-react
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const values = [
   {
@@ -74,9 +75,7 @@ export function Mission() {
               return (
                 <Card key={item.title} className="p-5">
                   <div className="flex items-start gap-4">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-brand-orange/12 text-brand-red">
-                      <Icon className="size-5" />
-                    </div>
+                    <IconBadge icon={Icon} />
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">{item.title}</h3>
                       <p className="mt-2 text-sm leading-7 text-muted-foreground">{item.description}</p>

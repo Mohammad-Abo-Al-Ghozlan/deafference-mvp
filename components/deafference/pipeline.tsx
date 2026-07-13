@@ -45,6 +45,7 @@ export function Pipeline({ currentStep = 0 }: { currentStep?: number }) {
                   className={cn(
                     "flex size-11 items-center justify-center rounded-full transition-colors",
                     done || active ? "brand-gradient text-white" : "bg-muted text-muted-foreground",
+                    active && !done && "state-active-pulse",
                   )}
                 >
                   <Icon className="size-5" />

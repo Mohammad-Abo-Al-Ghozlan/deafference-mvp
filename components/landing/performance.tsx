@@ -5,6 +5,7 @@ import { Gauge, ShieldCheck, Zap } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Container } from "@/components/shared/container"
 import { SectionTitle } from "@/components/shared/section-title"
+import { IconBadge } from "@/components/shared/icon-badge"
 
 const metrics = [
   { value: "< 300ms", label: "to animate core UI transitions" },
@@ -54,9 +55,7 @@ export function Performance() {
                   const Icon = item.icon
                   return (
                     <div key={item.title} className="rounded-2xl border border-border bg-muted/30 p-4">
-                      <div className="flex size-10 items-center justify-center rounded-xl bg-foreground text-background">
-                        <Icon className="size-4" />
-                      </div>
+                      <IconBadge icon={Icon} variant="solid" size="compact" />
                       <h3 className="mt-4 text-sm font-semibold text-foreground">{item.title}</h3>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
                     </div>
