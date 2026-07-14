@@ -12,13 +12,42 @@ const PIPELINE_STEPS = [
   { label: "Translation", description: "Render the translated message.", icon: Languages },
 ] as const
 
-export function Pipeline({ currentStep = 0 }: { currentStep?: number }) {
+// Centralized switch for the mock-data disclosure badge below. Flip to
+// `false` once the pipeline is wired to a real recognition model — the
+// badge (and its tooltip) disappear entirely, no other changes needed.
+function MockModeBadge() {
+  return (
+    <div className="group relative inline-flex">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-amber-600 dark:text-amber-400">
+        <span className="relative flex size-1.5">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex size-1.5 rounded-full bg-amber-500" />
+        </span>
+        Demo Pipeline Active
+      </span>
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-5 text-popover-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+        Currently showing simulated translations. Real-time model integration is pending.
+      </div>
+    </div>
+  )
+}
+
+export function Pipeline({
+  currentStep = 0,
+  isMockMode = true,
+}: {
+  currentStep?: number
+  isMockMode?: boolean
+}) {
   return (
     <Card className="p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-          Pipeline
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+            Pipeline
+          </p>
+          {isMockMode && <MockModeBadge />}
+        </div>
         <span className="text-xs font-medium text-muted-foreground">Listening workflow</span>
       </div>
       <motion.ol

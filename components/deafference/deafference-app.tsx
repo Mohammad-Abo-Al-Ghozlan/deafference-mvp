@@ -14,6 +14,11 @@ import { ControlPanel } from "./control-panel"
 import { RecentTranslations } from "./recent-translations"
 import { TipsCard } from "./tips-card"
 
+// Top-level switch for the "Demo Pipeline Active" disclosure badge shown
+// next to the pipeline's Hand Detection / AI Recognition steps. Flip to
+// `false` once /translate is wired to the real recognition model.
+const isMockMode = true
+
 export function DeafferenceApp() {
   const [accessibilityOpen, setAccessibilityOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -34,7 +39,7 @@ export function DeafferenceApp() {
 
             <section className="space-y-5">
               <StatusCard />
-              <Pipeline currentStep={0} />
+              <Pipeline currentStep={0} isMockMode={isMockMode} />
               <TranslationPanel />
               <TTSControls />
               <ControlPanel />
