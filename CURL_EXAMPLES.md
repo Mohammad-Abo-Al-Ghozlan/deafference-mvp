@@ -1,10 +1,16 @@
-# Camera Permission API - cURL Testing Examples
+# Deafference API - cURL Testing Examples
 
 ## Prerequisites
 
-- API server running on `http://localhost:3000`
+- A migrated database (see the README "Backend API" section: `npx prisma migrate dev`)
+- API server running on `http://localhost:4000` (`npm run server:dev`)
 - `curl` command available in terminal
-- jq (optional, for pretty-printing JSON)
+- `jq` (optional, for pretty-printing JSON)
+
+> **Data model note:** `userId` is an **integer** foreign key to a `User` row.
+> You must create a user first (`POST /api/users`) and use the returned integer
+> `id` as the `userId` for camera-permission calls. See the full flow at the
+> bottom of this file.
 
 ---
 
@@ -13,57 +19,87 @@
 ### 1. Health Check
 
 ```bash
-curl -X GET http://localhost:3000/health
+curl -X GET http://localhost:4000/health
 ```
 
 **Expected Response (200):**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "environment": "development"
+  "status": "ok",
+  "timestamp": "2026-07-16T10:30:00.000Z"
 }
 ```
 
 ---
 
-### 2. Create Camera Permission (New User)
+### 2. Create User
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users \
   -H "Content-Type: application/json" \
   -d '{
-    "userId": "user-12345",
+    "email": "alice@example.com",
+    "name": "Alice"
+  }'
+```
+
+**Expected Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "alice@example.com",
+    "name": "Alice",
+    "createdAt": "2026-07-16T10:30:00.123Z",
+    "updatedAt": "2026-07-16T10:30:00.123Z"
+  }
+}
+```
+
+> `name` is optional. The integer `id` returned here is the `userId` used below.
+
+---
+
+### 3. Create Camera Permission (Upsert)
+
+`POST /api/users/camera-permission` uses **create-or-update** semantics: it
+creates the record if none exists for the user, otherwise updates it. Either
+way it returns **200**.
+
+```bash
+curl -X POST http://localhost:4000/api/users/camera-permission \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1,
+    "status": "granted"
+  }'
+```
+
+**Expected Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 1,
     "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
-```
-
-**Expected Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "clq1a2b3c4d5e6f7g8h9i0j1",
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00.000Z",
-    "createdAt": "2024-01-15T10:30:00.123Z"
+    "createdAt": "2026-07-16T10:30:05.000Z",
+    "updatedAt": "2026-07-16T10:30:05.000Z"
   }
 }
 ```
 
 ---
 
-### 3. Update Permission (Upsert - Status Changed)
+### 4. Update Permission (Same Endpoint, Status Changed)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users/camera-permission \
   -H "Content-Type: application/json" \
   -d '{
-    "userId": "user-12345",
-    "status": "denied",
-    "updatedAt": "2024-01-15T11:00:00Z"
+    "userId": 1,
+    "status": "denied"
   }'
 ```
 
@@ -72,23 +108,23 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
 {
   "success": true,
   "data": {
-    "id": "clq1a2b3c4d5e6f7g8h9i0j1",
-    "userId": "user-12345",
+    "id": 1,
+    "userId": 1,
     "status": "denied",
-    "updatedAt": "2024-01-15T11:00:00.000Z",
-    "createdAt": "2024-01-15T10:30:00.123Z"
+    "createdAt": "2026-07-16T10:30:05.000Z",
+    "updatedAt": "2026-07-16T10:31:00.000Z"
   }
 }
 ```
 
-**Note:** `createdAt` remains unchanged, but `updatedAt` reflects the new timestamp.
+**Note:** `createdAt` stays the same; `updatedAt` advances (managed by Prisma).
 
 ---
 
-### 4. Get User's Permission
+### 5. Get User's Permission
 
 ```bash
-curl -X GET http://localhost:3000/api/users/user-12345/camera-permission
+curl -X GET http://localhost:4000/api/users/camera-permission/1
 ```
 
 **Expected Response (200):**
@@ -96,39 +132,11 @@ curl -X GET http://localhost:3000/api/users/user-12345/camera-permission
 {
   "success": true,
   "data": {
-    "id": "clq1a2b3c4d5e6f7g8h9i0j1",
-    "userId": "user-12345",
+    "id": 1,
+    "userId": 1,
     "status": "denied",
-    "updatedAt": "2024-01-15T11:00:00.000Z",
-    "createdAt": "2024-01-15T10:30:00.123Z"
-  }
-}
-```
-
----
-
-### 5. Create Permission with Different Status
-
-```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-67890",
-    "status": "dismissed",
-    "updatedAt": "2024-01-15T09:15:00Z"
-  }'
-```
-
-**Expected Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "clq2b3c4d5e6f7g8h9i0j1k2",
-    "userId": "user-67890",
-    "status": "dismissed",
-    "updatedAt": "2024-01-15T09:15:00.000Z",
-    "createdAt": "2024-01-15T10:31:00.456Z"
+    "createdAt": "2026-07-16T10:30:05.000Z",
+    "updatedAt": "2026-07-16T10:31:00.000Z"
   }
 }
 ```
@@ -137,16 +145,14 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
 
 ## ❌ Error Test Cases
 
-### Test 1: Invalid Status (400 Validation Error)
+Every case below is reachable against the real API.
+
+### Test 1: Create User — Missing email (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-12345",
-    "status": "invalid_value",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
+  -d '{ "name": "No Email" }'
 ```
 
 **Expected Response (400):**
@@ -155,22 +161,19 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "email is required"
   }
 }
 ```
 
 ---
 
-### Test 2: Missing Required Field - userId (400)
+### Test 2: Create User — Invalid email format (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
+  -d '{ "email": "not-an-email" }'
 ```
 
 **Expected Response (400):**
@@ -179,22 +182,42 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "email must be a valid email address"
   }
 }
 ```
 
 ---
 
-### Test 3: Missing Required Field - status (400)
+### Test 3: Create User — Duplicate email (409)
+
+Send the same email twice; the second request conflicts on the unique constraint.
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-12345",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
+  -d '{ "email": "alice@example.com" }'
+```
+
+**Expected Response (409):**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "A user with this email already exists"
+  }
+}
+```
+
+---
+
+### Test 4: Camera Permission — Invalid status (400)
+
+```bash
+curl -X POST http://localhost:4000/api/users/camera-permission \
+  -H "Content-Type: application/json" \
+  -d '{ "userId": 1, "status": "invalid_value" }'
 ```
 
 **Expected Response (400):**
@@ -203,22 +226,19 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "status must be one of: granted, denied, prompted"
   }
 }
 ```
 
 ---
 
-### Test 4: Missing Required Field - updatedAt (400)
+### Test 5: Camera Permission — Missing userId (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users/camera-permission \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted"
-  }'
+  -d '{ "status": "granted" }'
 ```
 
 **Expected Response (400):**
@@ -227,23 +247,19 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "userId is required"
   }
 }
 ```
 
 ---
 
-### Test 5: Invalid Date Format (400)
+### Test 6: Camera Permission — Missing status (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users/camera-permission \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "not-a-valid-date"
-  }'
+  -d '{ "userId": 1 }'
 ```
 
 **Expected Response (400):**
@@ -252,23 +268,19 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "status is required"
   }
 }
 ```
 
 ---
 
-### Test 6: Future Date (400)
+### Test 7: Camera Permission — Non-integer userId (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+curl -X POST http://localhost:4000/api/users/camera-permission \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "2099-12-31T23:59:59Z"
-  }'
+  -d '{ "userId": "abc", "status": "granted" }'
 ```
 
 **Expected Response (400):**
@@ -277,23 +289,17 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "userId must be a positive integer"
   }
 }
 ```
 
 ---
 
-### Test 7: Empty userId (400)
+### Test 8: Get Permission — Non-integer userId (400)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "",
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
+curl -X GET http://localhost:4000/api/users/camera-permission/not-a-number
 ```
 
 **Expected Response (400):**
@@ -302,17 +308,19 @@ curl -X POST http://localhost:3000/api/users/camera-permission \
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed"
+    "message": "userId must be a positive integer"
   }
 }
 ```
 
 ---
 
-### Test 8: Get Non-Existent User (404)
+### Test 9: Get Permission — Not found (404)
+
+Use a valid integer with no permission record.
 
 ```bash
-curl -X GET http://localhost:3000/api/users/non-existent-user-xyz/camera-permission
+curl -X GET http://localhost:4000/api/users/camera-permission/999999999
 ```
 
 **Expected Response (404):**
@@ -328,22 +336,10 @@ curl -X GET http://localhost:3000/api/users/non-existent-user-xyz/camera-permiss
 
 ---
 
-### Test 9: Get with Empty userId (400)
-
-```bash
-curl -X GET http://localhost:3000/api/users//camera-permission
-```
-
-This will result in a routing issue. Expected: **404 Not Found**
-
----
-
 ### Test 10: Invalid Endpoint (404)
 
 ```bash
-curl -X POST http://localhost:3000/api/users/invalid-endpoint \
-  -H "Content-Type: application/json" \
-  -d '{}'
+curl -X GET http://localhost:4000/api/invalid-endpoint
 ```
 
 **Expected Response (404):**
@@ -352,154 +348,63 @@ curl -X POST http://localhost:3000/api/users/invalid-endpoint \
   "success": false,
   "error": {
     "code": "NOT_FOUND",
-    "message": "Route POST /api/users/invalid-endpoint not found"
+    "message": "Route not found"
   }
 }
 ```
+
+---
+
+> **On the removed 404 branch:** `POST /api/users/camera-permission` no longer
+> has a "record to update not found" 404. It uses `upsert` (create-or-update),
+> so a missing record is created rather than erroring — that branch was
+> unreachable and has been removed. The **only** 404 for permissions is on the
+> `GET` above (Test 9).
+>
+> **Foreign key note:** posting a permission for a `userId` that does not exist
+> in the `User` table fails the FK constraint and returns a `500 DATABASE_ERROR`.
+> Always create the user first (see the flow below).
 
 ---
 
 ## 🎯 Valid Permission Status Values
 
-Only these values are accepted for the `status` field:
-
 | Value | Description |
 |-------|-------------|
 | `"granted"` | User granted camera permission |
 | `"denied"` | User denied camera permission |
-| `"dismissed"` | User dismissed the permission prompt |
+| `"prompted"` | User has been prompted but not yet decided (default) |
 
 ---
 
-## 📊 Using with Pretty-Print (jq)
-
-If you have `jq` installed, format the response nicely:
+## 🚀 Full Flow (zero → user → permission → read back)
 
 ```bash
-curl -X GET http://localhost:3000/api/users/user-12345/camera-permission | jq '.'
-```
+API=http://localhost:4000
 
-**Output:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "clq1a2b3c4d5e6f7g8h9i0j1",
-    "userId": "user-12345",
-    "status": "denied",
-    "updatedAt": "2024-01-15T11:00:00.000Z",
-    "createdAt": "2024-01-15T10:30:00.123Z"
-  }
-}
-```
+# 0. Server up?
+curl "$API/health"
 
----
-
-## 🔧 Advanced cURL Options
-
-### Save Response to File
-
-```bash
-curl -X GET http://localhost:3000/api/users/user-12345/camera-permission \
-  -o response.json
-```
-
-### Show Headers and Body
-
-```bash
-curl -X GET http://localhost:3000/api/users/user-12345/camera-permission \
-  -i
-```
-
-### Measure Response Time
-
-```bash
-curl -X GET http://localhost:3000/api/users/user-12345/camera-permission \
-  -w "Response time: %{time_total}s\n"
-```
-
-### Add Custom Headers
-
-```bash
-curl -X POST http://localhost:3000/api/users/camera-permission \
+# 1. Create a user (capture the integer id)
+USER_ID=$(curl -s -X POST "$API/api/users" \
   -H "Content-Type: application/json" \
-  -H "X-Request-ID: 12345" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }'
+  -d '{"email":"flow@example.com","name":"Flow User"}' \
+  | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+echo "userId = $USER_ID"
+
+# 2. Set the camera permission for that user
+curl -X POST "$API/api/users/camera-permission" \
+  -H "Content-Type: application/json" \
+  -d "{\"userId\":$USER_ID,\"status\":\"granted\"}"
+
+# 3. Read the permission back
+curl "$API/api/users/camera-permission/$USER_ID"
 ```
 
 ---
 
-## 📝 Batch Testing with Bash Script
-
-Save this as `test-all.sh` and run `bash test-all.sh`:
+## 📊 Pretty-Print with jq
 
 ```bash
-#!/bin/bash
-
-API="http://localhost:3000"
-
-echo "Test 1: Create Permission"
-curl -s -X POST "$API/api/users/camera-permission" \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"user-1","status":"granted","updatedAt":"2024-01-15T10:30:00Z"}' | jq '.'
-
-echo -e "\n\nTest 2: Get Permission"
-curl -s -X GET "$API/api/users/user-1/camera-permission" | jq '.'
-
-echo -e "\n\nTest 3: Update Permission"
-curl -s -X POST "$API/api/users/camera-permission" \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"user-1","status":"denied","updatedAt":"2024-01-15T11:00:00Z"}' | jq '.'
+curl -s http://localhost:4000/api/users/camera-permission/1 | jq '.'
 ```
-
----
-
-## 🚀 Quick Start Test Sequence
-
-Run these commands in order to test the full flow:
-
-```bash
-# 1. Check if server is up
-curl http://localhost:3000/health
-
-# 2. Create new permission
-curl -X POST http://localhost:3000/api/users/camera-permission \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"test-user","status":"granted","updatedAt":"2024-01-15T10:30:00Z"}'
-
-# 3. Retrieve the permission
-curl http://localhost:3000/api/users/test-user/camera-permission
-
-# 4. Update the permission
-curl -X POST http://localhost:3000/api/users/camera-permission \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"test-user","status":"denied","updatedAt":"2024-01-15T11:00:00Z"}'
-
-# 5. Verify update
-curl http://localhost:3000/api/users/test-user/camera-permission
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Connection Refused
-- **Issue:** `curl: (7) Failed to connect`
-- **Solution:** Ensure server is running: `npm run dev`
-
-### 404 Not Found on Valid Endpoint
-- **Issue:** Endpoint returns 404
-- **Solution:** Check URL matches exactly (case-sensitive)
-
-### 400 Validation Error
-- **Issue:** Request returns validation error
-- **Solution:** Check JSON syntax and required fields
-
-### 500 Internal Server Error
-- **Issue:** Unexpected server error
-- **Solution:** Check server logs, verify database connection
-

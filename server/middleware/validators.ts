@@ -1,12 +1,21 @@
 // middleware/validators.ts
 import { Request, Response, NextFunction } from 'express';
 import { CameraPermissionRequest, CameraPermissionStatus } from '../types/camera-permission';
+import { CreateUserRequest } from '../types/user';
 
 export interface ValidatedRequest extends Request {
   validatedBody?: CameraPermissionRequest;
 }
 
+export interface ValidatedUserRequest extends Request {
+  validatedBody?: CreateUserRequest;
+}
+
 const VALID_STATUSES: CameraPermissionStatus[] = ['granted', 'denied', 'prompted'];
+
+// Basic RFC-5322-ish email shape check (kept intentionally simple, mirroring
+// the lightweight validation style used elsewhere in this file).
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const validateCameraPermissionPayload = (
   req: ValidatedRequest,
@@ -67,6 +76,68 @@ export const validateCameraPermissionPayload = (
       userId,
       status: status as CameraPermissionStatus,
     };
+
+    next();
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid request payload',
+      },
+    });
+  }
+};
+
+export const validateCreateUserPayload = (
+  req: ValidatedUserRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  try {
+    const { email, name } = req.body;
+
+    // Validate email
+    if (email === undefined || email === null || email === '') {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'email is required',
+        },
+      });
+      return;
+    }
+
+    if (typeof email !== 'string' || !EMAIL_REGEX.test(email)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'email must be a valid email address',
+        },
+      });
+      return;
+    }
+
+    // Validate name (optional)
+    if (name !== undefined && name !== null && typeof name !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'name must be a string',
+        },
+      });
+      return;
+    }
+
+    // Attach validated data to request
+    const validated: CreateUserRequest = { email };
+    if (typeof name === 'string') {
+      validated.name = name;
+    }
+    req.validatedBody = validated;
 
     next();
   } catch (error) {

@@ -63,16 +63,15 @@ export const updateCameraPermission = async (
         return;
       }
 
-      if (error.message.includes('Record to update not found')) {
-        res.status(404).json({
-          success: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Camera permission record not found',
-          },
-        });
-        return;
-      }
+      // NOTE (BE-5): This endpoint intentionally uses prisma.upsert()
+      // (create-or-update), as documented on the route ("Update or create a
+      // camera permission record") and reflected by its 200 (not 201)
+      // response. Because upsert creates the row when it is absent, Prisma
+      // never throws "Record to update not found" here, so the former 404
+      // branch was unreachable dead code and has been removed.
+      // A strict update-only variant would instead use prisma.update() and
+      // keep the 404; we deliberately keep upsert so a permission can be set
+      // before one exists (e.g. immediately after a user is created).
     }
 
     // Generic database error

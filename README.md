@@ -93,6 +93,76 @@ Make sure you have [Node.js](https://nodejs.org/) installed (v18+ recommended).
 
 ---
 
+## 🔌 Backend API
+
+A small Express + Prisma (PostgreSQL) API lives in [`server/`](server/) and is
+separate from the Next.js frontend.
+
+- **Frontend (Next.js):** port **3000** (`npm run dev`)
+- **API (Express):** port **4000** (`npm run server:dev`)
+
+They use different ports so both can run at the same time.
+
+### Database setup
+
+1. Copy the environment template and adjust the connection string for your
+   local Postgres:
+   ```bash
+   cp .env.example .env
+   # then edit DATABASE_URL in .env if your Postgres user/password/db differ
+   ```
+   `.env.example` documents the format:
+   `postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA`.
+
+2. Create the tables and generate the Prisma client:
+   ```bash
+   npx prisma migrate dev --name init
+   npx prisma generate
+   ```
+   This creates the `User` and `CameraPermission` tables.
+
+3. Start the API:
+   ```bash
+   npm run server:dev
+   ```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/health` | Liveness check |
+| `POST` | `/api/users` | Create a user (`email` required, `name` optional) → **201** |
+| `POST` | `/api/users/camera-permission` | Create **or** update a user's camera permission (upsert) → **200** |
+| `GET`  | `/api/users/camera-permission/:userId` | Read a user's camera permission |
+
+`CameraPermission.userId` is a foreign key to `User.id` (both integers), so a
+user must exist before a permission can be set.
+
+### Full flow: zero → create user → set camera permission → read it back
+
+```bash
+API=http://localhost:4000
+
+# 1. Create a user and capture the generated integer id
+USER_ID=$(curl -s -X POST "$API/api/users" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","name":"Alice"}' \
+  | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+
+# 2. Set that user's camera permission
+curl -X POST "$API/api/users/camera-permission" \
+  -H "Content-Type: application/json" \
+  -d "{\"userId\":$USER_ID,\"status\":\"granted\"}"
+
+# 3. Read the permission back
+curl "$API/api/users/camera-permission/$USER_ID"
+```
+
+See [`CURL_EXAMPLES.md`](CURL_EXAMPLES.md) for every endpoint and error case,
+and run [`test-api.sh`](test-api.sh) to exercise the whole suite end-to-end.
+
+---
+
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome! Feel free to open an issue or submit a pull request.

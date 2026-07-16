@@ -1,111 +1,124 @@
 #!/bin/bash
 
-# Camera Permission API - Testing Script
-# This script provides cURL commands to test all endpoints
+# Deafference API - Testing Script
+# Exercises every endpoint and every documented response against the real
+# (integer-keyed) API contract.
+#
+# Prerequisites:
+#   1. A migrated database (see README: `npx prisma migrate dev`)
+#   2. The API running:  `npm run server:dev`   (listens on http://localhost:4000)
 
-API_BASE_URL="http://localhost:3000"
+API_BASE_URL="http://localhost:4000"
 CONTENT_TYPE="application/json"
 
-echo "🧪 Camera Permission API - Test Suite"
+# Unique email per run so the "create user" test always returns 201, and so the
+# script stays re-runnable against a persistent database.
+EMAIL="test-$(date +%s)-$RANDOM@example.com"
+
+echo "🧪 Deafference API - Test Suite"
 echo "========================================"
 echo ""
 
-# Test 1: Health Check
+# Test 1: Health Check (expect 200)
 echo "✅ Test 1: Health Check"
 echo "Command: GET /health"
-curl -X GET "$API_BASE_URL/health" \
+curl -s -X GET "$API_BASE_URL/health" \
   -H "Content-Type: $CONTENT_TYPE" \
   -w "\n\n"
 
-# Test 2: Create New Permission
-echo "✅ Test 2: Create New Permission"
+# Test 2: Create User (expect 201) — capture the generated integer id
+echo "✅ Test 2: Create User"
+echo "Command: POST /api/users"
+CREATE_RESP=$(curl -s -X POST "$API_BASE_URL/api/users" \
+  -H "Content-Type: $CONTENT_TYPE" \
+  -d '{"email":"'"$EMAIL"'","name":"Test User"}')
+echo "$CREATE_RESP"
+USER_ID=$(echo "$CREATE_RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+echo ""
+echo "-> captured userId: $USER_ID"
+echo ""
+
+# Test 3: Duplicate email (expect 409)
+echo "❌ Test 3: Duplicate User (Should Fail - 409)"
+echo "Command: POST /api/users (same email)"
+curl -s -X POST "$API_BASE_URL/api/users" \
+  -H "Content-Type: $CONTENT_TYPE" \
+  -d '{"email":"'"$EMAIL"'"}' \
+  -w "\n\n"
+
+# Test 4: Create Camera Permission (upsert, expect 200)
+echo "✅ Test 4: Create Camera Permission (Upsert)"
 echo "Command: POST /api/users/camera-permission"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
+curl -s -X POST "$API_BASE_URL/api/users/camera-permission" \
   -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }' \
+  -d '{"userId":'"$USER_ID"',"status":"granted"}' \
   -w "\n\n"
 
-# Test 3: Retrieve Permission
-echo "✅ Test 3: Retrieve Permission"
-echo "Command: GET /api/users/user-12345/camera-permission"
-curl -X GET "$API_BASE_URL/api/users/user-12345/camera-permission" \
+# Test 5: Retrieve Permission (expect 200)
+echo "✅ Test 5: Retrieve Permission"
+echo "Command: GET /api/users/camera-permission/$USER_ID"
+curl -s -X GET "$API_BASE_URL/api/users/camera-permission/$USER_ID" \
   -H "Content-Type: $CONTENT_TYPE" \
   -w "\n\n"
 
-# Test 4: Update Existing Permission (Upsert)
-echo "✅ Test 4: Update Permission (Status Changed to Denied)"
+# Test 6: Update Permission (upsert, status -> denied, expect 200)
+echo "✅ Test 6: Update Permission (Status Changed to denied)"
 echo "Command: POST /api/users/camera-permission"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
+curl -s -X POST "$API_BASE_URL/api/users/camera-permission" \
   -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "userId": "user-12345",
-    "status": "denied",
-    "updatedAt": "2024-01-15T11:00:00Z"
-  }' \
+  -d '{"userId":'"$USER_ID"',"status":"denied"}' \
   -w "\n\n"
 
-# Test 5: Create Another User Permission
-echo "✅ Test 5: Create Permission for Another User"
-echo "Command: POST /api/users/camera-permission"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
-  -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "userId": "user-67890",
-    "status": "dismissed",
-    "updatedAt": "2024-01-15T09:15:00Z"
-  }' \
-  -w "\n\n"
-
-# Test 6: Invalid Status (Should Fail - 400)
-echo "❌ Test 6: Invalid Status (Should Fail - 400)"
+# Test 7: Invalid Status (expect 400)
+echo "❌ Test 7: Invalid Status (Should Fail - 400)"
 echo "Command: POST /api/users/camera-permission with invalid status"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
+curl -s -X POST "$API_BASE_URL/api/users/camera-permission" \
   -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "userId": "user-12345",
-    "status": "invalid_status",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }' \
+  -d '{"userId":'"$USER_ID"',"status":"invalid_status"}' \
   -w "\n\n"
 
-# Test 7: Missing Required Field (Should Fail - 400)
-echo "❌ Test 7: Missing userId (Should Fail - 400)"
+# Test 8: Missing userId (expect 400)
+echo "❌ Test 8: Missing userId (Should Fail - 400)"
 echo "Command: POST /api/users/camera-permission without userId"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
+curl -s -X POST "$API_BASE_URL/api/users/camera-permission" \
   -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "status": "granted",
-    "updatedAt": "2024-01-15T10:30:00Z"
-  }' \
+  -d '{"status":"granted"}' \
   -w "\n\n"
 
-# Test 8: Invalid Date Format (Should Fail - 400)
-echo "❌ Test 8: Invalid Date Format (Should Fail - 400)"
-echo "Command: POST /api/users/camera-permission with invalid date"
-curl -X POST "$API_BASE_URL/api/users/camera-permission" \
+# Test 9: Missing status (expect 400)
+echo "❌ Test 9: Missing status (Should Fail - 400)"
+echo "Command: POST /api/users/camera-permission without status"
+curl -s -X POST "$API_BASE_URL/api/users/camera-permission" \
   -H "Content-Type: $CONTENT_TYPE" \
-  -d '{
-    "userId": "user-12345",
-    "status": "granted",
-    "updatedAt": "not-a-date"
-  }' \
+  -d '{"userId":'"$USER_ID"'}' \
   -w "\n\n"
 
-# Test 9: Get Non-Existent User (Should Return 404)
-echo "❌ Test 9: Get Non-Existent User (Should Fail - 404)"
-echo "Command: GET /api/users/non-existent-user/camera-permission"
-curl -X GET "$API_BASE_URL/api/users/non-existent-user/camera-permission" \
+# Test 10: Create User without email (expect 400)
+echo "❌ Test 10: Create User Missing email (Should Fail - 400)"
+echo "Command: POST /api/users without email"
+curl -s -X POST "$API_BASE_URL/api/users" \
+  -H "Content-Type: $CONTENT_TYPE" \
+  -d '{"name":"No Email"}' \
+  -w "\n\n"
+
+# Test 11: GET permission with non-integer userId (expect 400)
+echo "❌ Test 11: GET Permission with non-integer userId (Should Fail - 400)"
+echo "Command: GET /api/users/camera-permission/not-a-number"
+curl -s -X GET "$API_BASE_URL/api/users/camera-permission/not-a-number" \
   -H "Content-Type: $CONTENT_TYPE" \
   -w "\n\n"
 
-# Test 10: Invalid Endpoint (Should Return 404)
-echo "❌ Test 10: Invalid Endpoint (Should Fail - 404)"
+# Test 12: Get Non-Existent Permission (expect 404)
+echo "❌ Test 12: Get Non-Existent Permission (Should Fail - 404)"
+echo "Command: GET /api/users/camera-permission/999999999"
+curl -s -X GET "$API_BASE_URL/api/users/camera-permission/999999999" \
+  -H "Content-Type: $CONTENT_TYPE" \
+  -w "\n\n"
+
+# Test 13: Invalid Endpoint (expect 404)
+echo "❌ Test 13: Invalid Endpoint (Should Fail - 404)"
 echo "Command: GET /api/invalid-endpoint"
-curl -X GET "$API_BASE_URL/api/invalid-endpoint" \
+curl -s -X GET "$API_BASE_URL/api/invalid-endpoint" \
   -H "Content-Type: $CONTENT_TYPE" \
   -w "\n\n"
 

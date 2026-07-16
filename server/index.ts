@@ -1,10 +1,13 @@
 // server/index.ts
+import 'dotenv/config';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cameraPermissionRoutes from './routes/cameraPermissionRoutes';
+import userRoutes from './routes/userRoutes';
 
 const app: Express = express();
-const PORT = process.env.PORT || 3000;
+// Default to 4000 so the API does not collide with the Next.js dev server (3000).
+const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(express.json());
@@ -18,6 +21,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Routes
+app.use('/api/users', userRoutes);
 app.use('/api/users', cameraPermissionRoutes);
 
 // Health check endpoint
