@@ -1,0 +1,1588 @@
+{
+ "schema": "asl-handshape-templates/v1",
+ "date": "2026-08-12",
+ "coord_space": "canonical PALM FRAME: origin at the wrist, x toward the index MCP, z the palm normal (index x pinky), y right-handed; scaled by |wrist->middle MCP| = 1. Right-hand chirality; left-hand samples were reflected in z before averaging.",
+ "z_warning": "z comes from raw MediaPipe relative depth, which is NOT on the same scale as x,y and is much noisier. Compare agreement_xy against agreement_xyz before using the 3D form; prefer template_xy if the 3D agreement is materially worse.",
+ "usage": "For a two-handed ASYMMETRIC sign (class 2a), this file gives the passive hand's HANDSHAPE only. Do NOT place it at the recorded passive wrist \u2014 see placement_warning.",
+ "placement_warning": "SUPERSEDES the original instruction here, which said to place the handshape at the measured passive wrist because 'the wrist POSITION is measured, not synthesized'. That is true and it is the problem. Measured 2026-08-14 over all 35 class-2a words: the passive wrist sits a median 1.56 shoulder widths from the dominant wrist (range 0.80-2.22), i.e. most of an arm away from where a base hand belongs; only 1 of 35 words is even within 1.38 sh.w. The arm is NOT hanging \u2014 the wrist is a median 0.34 sh.w. below its own shoulder and never more than 0.75, so it is raised to chest/waist height but on its own side of the body. Cause: GISLR recorded ONE hand per participant for an isolated-sign task, so on a two-handed asymmetric sign the signer had no reason to form the base and mostly did not; the passive arm is an arm doing nothing, not a badly-placed base. Consequence: a proximity/contact filter strands 35 of 35 words and cannot ship. The base must be placed SYNTHETICALLY relative to the dominant hand from each sign's phonology (a per-word passiveBase field, still to be authored and Deaf-reviewed). Until that exists, treat 2a base POSITION as unsolved and this file as handshape-only.",
+ "review_status": "Anchor words chosen by a hearing developer from ASL phonology. A Deaf reviewer should confirm each anchor forms the handshape claimed before this drives a shipped avatar.",
+ "thresholds": {
+  "min_coverage": 0.6,
+  "min_run": 0.4,
+  "min_takes": 8
+ },
+ "handshapes": {
+  "B": {
+   "description": "flat hand, fingers together and extended, thumb alongside",
+   "anchor_words": [
+    "thankyou",
+    "please",
+    "bad",
+    "white"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 160,
+   "takes_per_word": {
+    "thankyou": 40,
+    "please": 40,
+    "bad": 40,
+    "white": 40
+   },
+   "usable": true,
+   "agreement_xy": 0.131,
+   "agreement_xyz": 0.143,
+   "spread_p90_xy": 0.5552,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.29882,
+     -0.23651
+    ],
+    [
+     0.67023,
+     -0.32055
+    ],
+    [
+     0.95176,
+     -0.38717
+    ],
+    [
+     1.11326,
+     -0.49738
+    ],
+    [
+     1.0056,
+     -0.0
+    ],
+    [
+     1.49909,
+     0.20258
+    ],
+    [
+     1.75677,
+     0.33952
+    ],
+    [
+     1.94012,
+     0.44234
+    ],
+    [
+     0.97386,
+     0.22623
+    ],
+    [
+     1.503,
+     0.44552
+    ],
+    [
+     1.80144,
+     0.59044
+    ],
+    [
+     2.00416,
+     0.6844
+    ],
+    [
+     0.87807,
+     0.43055
+    ],
+    [
+     1.3734,
+     0.62894
+    ],
+    [
+     1.64933,
+     0.74938
+    ],
+    [
+     1.84778,
+     0.82817
+    ],
+    [
+     0.75041,
+     0.60347
+    ],
+    [
+     1.1309,
+     0.76029
+    ],
+    [
+     1.33837,
+     0.85731
+    ],
+    [
+     1.50066,
+     0.92189
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.29882,
+     -0.23651,
+     -0.00154
+    ],
+    [
+     0.67023,
+     -0.32055,
+     0.00418
+    ],
+    [
+     0.95176,
+     -0.38717,
+     -0.00658
+    ],
+    [
+     1.11326,
+     -0.49738,
+     -0.03872
+    ],
+    [
+     1.0056,
+     -0.0,
+     0.0
+    ],
+    [
+     1.49909,
+     0.20258,
+     0.0344
+    ],
+    [
+     1.75677,
+     0.33952,
+     0.06026
+    ],
+    [
+     1.94012,
+     0.44234,
+     0.08732
+    ],
+    [
+     0.97386,
+     0.22623,
+     0.0
+    ],
+    [
+     1.503,
+     0.44552,
+     0.0501
+    ],
+    [
+     1.80144,
+     0.59044,
+     0.08437
+    ],
+    [
+     2.00416,
+     0.6844,
+     0.1169
+    ],
+    [
+     0.87807,
+     0.43055,
+     0.00104
+    ],
+    [
+     1.3734,
+     0.62894,
+     0.05033
+    ],
+    [
+     1.64933,
+     0.74938,
+     0.0825
+    ],
+    [
+     1.84778,
+     0.82817,
+     0.10479
+    ],
+    [
+     0.75041,
+     0.60347,
+     -0.0
+    ],
+    [
+     1.1309,
+     0.76029,
+     0.03741
+    ],
+    [
+     1.33837,
+     0.85731,
+     0.06815
+    ],
+    [
+     1.50066,
+     0.92189,
+     0.10111
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.219,
+    "index": 1.99,
+    "middle": 2.118,
+    "ring": 2.025,
+    "pinky": 1.761
+   }
+  },
+  "A": {
+   "description": "fist with the thumb alongside the index, thumb up",
+   "anchor_words": [
+    "tomorrow",
+    "yesterday",
+    "aunt"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 120,
+   "takes_per_word": {
+    "tomorrow": 40,
+    "yesterday": 40,
+    "aunt": 40
+   },
+   "usable": true,
+   "agreement_xy": 0.1804,
+   "agreement_xyz": 0.2054,
+   "spread_p90_xy": 0.5778,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.42339,
+     -0.30148
+    ],
+    [
+     0.86414,
+     -0.41219
+    ],
+    [
+     1.16987,
+     -0.44108
+    ],
+    [
+     1.40547,
+     -0.48613
+    ],
+    [
+     1.08295,
+     0.0
+    ],
+    [
+     1.40129,
+     -0.03875
+    ],
+    [
+     1.22036,
+     -0.20164
+    ],
+    [
+     0.99845,
+     -0.27306
+    ],
+    [
+     0.97496,
+     0.22147
+    ],
+    [
+     1.29733,
+     0.16092
+    ],
+    [
+     1.03928,
+     -0.04195
+    ],
+    [
+     0.80685,
+     -0.09683
+    ],
+    [
+     0.81879,
+     0.42437
+    ],
+    [
+     1.11246,
+     0.35723
+    ],
+    [
+     0.84556,
+     0.16939
+    ],
+    [
+     0.65041,
+     0.13388
+    ],
+    [
+     0.61097,
+     0.61794
+    ],
+    [
+     0.84856,
+     0.56817
+    ],
+    [
+     0.71536,
+     0.3758
+    ],
+    [
+     0.5943,
+     0.34846
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.42339,
+     -0.30148,
+     0.12259
+    ],
+    [
+     0.86414,
+     -0.41219,
+     0.20622
+    ],
+    [
+     1.16987,
+     -0.44108,
+     0.284
+    ],
+    [
+     1.40547,
+     -0.48613,
+     0.34411
+    ],
+    [
+     1.08295,
+     0.0,
+     -0.0
+    ],
+    [
+     1.40129,
+     -0.03875,
+     0.18742
+    ],
+    [
+     1.22036,
+     -0.20164,
+     0.30281
+    ],
+    [
+     0.99845,
+     -0.27306,
+     0.32257
+    ],
+    [
+     0.97496,
+     0.22147,
+     -0.01306
+    ],
+    [
+     1.29733,
+     0.16092,
+     0.21504
+    ],
+    [
+     1.03928,
+     -0.04195,
+     0.29713
+    ],
+    [
+     0.80685,
+     -0.09683,
+     0.28057
+    ],
+    [
+     0.81879,
+     0.42437,
+     -0.00759
+    ],
+    [
+     1.11246,
+     0.35723,
+     0.22111
+    ],
+    [
+     0.84556,
+     0.16939,
+     0.23698
+    ],
+    [
+     0.65041,
+     0.13388,
+     0.17539
+    ],
+    [
+     0.61097,
+     0.61794,
+     -0.0
+    ],
+    [
+     0.84856,
+     0.56817,
+     0.14641
+    ],
+    [
+     0.71536,
+     0.3758,
+     0.15582
+    ],
+    [
+     0.5943,
+     0.34846,
+     0.10949
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.487,
+    "index": 1.035,
+    "middle": 0.813,
+    "ring": 0.664,
+    "pinky": 0.689
+   }
+  },
+  "S": {
+   "description": "fist with the thumb crossed over the front of the fingers",
+   "anchor_words": [
+    "yes"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 40,
+   "takes_per_word": {
+    "yes": 40
+   },
+   "agreement_scope": "within-word only (single anchor) \u2014 weaker evidence",
+   "fallback_handshape": "A",
+   "fallback_note": "if this template is unusable, substitute A rather than a rig default \u2014 a named approximation, not a silent one",
+   "usable": true,
+   "agreement_xy": 0.1636,
+   "agreement_xyz": 0.2058,
+   "spread_p90_xy": 0.4117,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.36487,
+     -0.24283
+    ],
+    [
+     0.78695,
+     -0.43729
+    ],
+    [
+     0.98733,
+     -0.44794
+    ],
+    [
+     0.99619,
+     -0.2423
+    ],
+    [
+     1.14552,
+     -0.0
+    ],
+    [
+     1.27068,
+     -0.22022
+    ],
+    [
+     1.0752,
+     -0.27141
+    ],
+    [
+     0.94,
+     -0.20355
+    ],
+    [
+     0.95333,
+     0.29129
+    ],
+    [
+     1.05603,
+     0.02205
+    ],
+    [
+     0.80458,
+     -0.0887
+    ],
+    [
+     0.68531,
+     -0.02144
+    ],
+    [
+     0.68849,
+     0.54208
+    ],
+    [
+     0.69866,
+     0.2194
+    ],
+    [
+     0.47066,
+     0.08981
+    ],
+    [
+     0.44051,
+     0.1357
+    ],
+    [
+     0.39497,
+     0.74115
+    ],
+    [
+     0.43058,
+     0.42073
+    ],
+    [
+     0.31388,
+     0.29826
+    ],
+    [
+     0.25907,
+     0.35528
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.36487,
+     -0.24283,
+     0.195
+    ],
+    [
+     0.78695,
+     -0.43729,
+     0.33245
+    ],
+    [
+     0.98733,
+     -0.44794,
+     0.44739
+    ],
+    [
+     0.99619,
+     -0.2423,
+     0.50247
+    ],
+    [
+     1.14552,
+     -0.0,
+     0.0
+    ],
+    [
+     1.27068,
+     -0.22022,
+     0.24284
+    ],
+    [
+     1.0752,
+     -0.27141,
+     0.37603
+    ],
+    [
+     0.94,
+     -0.20355,
+     0.44446
+    ],
+    [
+     0.95333,
+     0.29129,
+     -0.05314
+    ],
+    [
+     1.05603,
+     0.02205,
+     0.2247
+    ],
+    [
+     0.80458,
+     -0.0887,
+     0.30674
+    ],
+    [
+     0.68531,
+     -0.02144,
+     0.27808
+    ],
+    [
+     0.68849,
+     0.54208,
+     -0.04575
+    ],
+    [
+     0.69866,
+     0.2194,
+     0.23373
+    ],
+    [
+     0.47066,
+     0.08981,
+     0.23629
+    ],
+    [
+     0.44051,
+     0.1357,
+     0.18239
+    ],
+    [
+     0.39497,
+     0.74115,
+     -0.0
+    ],
+    [
+     0.43058,
+     0.42073,
+     0.17699
+    ],
+    [
+     0.31388,
+     0.29826,
+     0.21867
+    ],
+    [
+     0.25907,
+     0.35528,
+     0.19883
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.025,
+    "index": 0.962,
+    "middle": 0.686,
+    "ring": 0.461,
+    "pinky": 0.44
+   }
+  },
+  "1": {
+   "description": "index finger extended, remaining fingers closed",
+   "anchor_words": [
+    "think",
+    "nose",
+    "eye",
+    "chin"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 160,
+   "takes_per_word": {
+    "think": 40,
+    "nose": 40,
+    "eye": 40,
+    "chin": 40
+   },
+   "usable": true,
+   "agreement_xy": 0.1496,
+   "agreement_xyz": 0.1699,
+   "spread_p90_xy": 0.3743,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.37055,
+     -0.1467
+    ],
+    [
+     0.77399,
+     -0.06433
+    ],
+    [
+     1.03697,
+     0.14017
+    ],
+    [
+     1.17461,
+     0.35659
+    ],
+    [
+     1.0114,
+     0.0
+    ],
+    [
+     1.48863,
+     0.18673
+    ],
+    [
+     1.73894,
+     0.3046
+    ],
+    [
+     1.9463,
+     0.39386
+    ],
+    [
+     0.97405,
+     0.22593
+    ],
+    [
+     1.30228,
+     0.57807
+    ],
+    [
+     1.13744,
+     0.56348
+    ],
+    [
+     0.99642,
+     0.46976
+    ],
+    [
+     0.86723,
+     0.44943
+    ],
+    [
+     1.138,
+     0.73133
+    ],
+    [
+     0.97399,
+     0.68366
+    ],
+    [
+     0.84713,
+     0.56275
+    ],
+    [
+     0.73698,
+     0.63805
+    ],
+    [
+     0.94293,
+     0.84573
+    ],
+    [
+     0.82207,
+     0.77806
+    ],
+    [
+     0.7055,
+     0.6729
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.37055,
+     -0.1467,
+     0.05356
+    ],
+    [
+     0.77399,
+     -0.06433,
+     0.1039
+    ],
+    [
+     1.03697,
+     0.14017,
+     0.16779
+    ],
+    [
+     1.17461,
+     0.35659,
+     0.21236
+    ],
+    [
+     1.0114,
+     0.0,
+     -0.0
+    ],
+    [
+     1.48863,
+     0.18673,
+     0.06514
+    ],
+    [
+     1.73894,
+     0.3046,
+     0.11843
+    ],
+    [
+     1.9463,
+     0.39386,
+     0.14581
+    ],
+    [
+     0.97405,
+     0.22593,
+     -0.01005
+    ],
+    [
+     1.30228,
+     0.57807,
+     0.10724
+    ],
+    [
+     1.13744,
+     0.56348,
+     0.13194
+    ],
+    [
+     0.99642,
+     0.46976,
+     0.12667
+    ],
+    [
+     0.86723,
+     0.44943,
+     -0.00658
+    ],
+    [
+     1.138,
+     0.73133,
+     0.11845
+    ],
+    [
+     0.97399,
+     0.68366,
+     0.16543
+    ],
+    [
+     0.84713,
+     0.56275,
+     0.16211
+    ],
+    [
+     0.73698,
+     0.63805,
+     -0.0
+    ],
+    [
+     0.94293,
+     0.84573,
+     0.11325
+    ],
+    [
+     0.82207,
+     0.77806,
+     0.16453
+    ],
+    [
+     0.7055,
+     0.6729,
+     0.17575
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.228,
+    "index": 1.986,
+    "middle": 1.102,
+    "ring": 1.017,
+    "pinky": 0.975
+   }
+  },
+  "5": {
+   "description": "all five fingers extended and spread",
+   "anchor_words": [
+    "dad",
+    "mom",
+    "fine",
+    "grandma"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 160,
+   "takes_per_word": {
+    "dad": 40,
+    "mom": 40,
+    "fine": 40,
+    "grandma": 40
+   },
+   "usable": true,
+   "agreement_xy": 0.1525,
+   "agreement_xyz": 0.1956,
+   "spread_p90_xy": 0.4212,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.36797,
+     -0.23959
+    ],
+    [
+     0.74215,
+     -0.33693
+    ],
+    [
+     0.99132,
+     -0.40562
+    ],
+    [
+     1.19329,
+     -0.46327
+    ],
+    [
+     1.05563,
+     0.0
+    ],
+    [
+     1.46536,
+     0.10533
+    ],
+    [
+     1.73554,
+     0.16921
+    ],
+    [
+     1.95095,
+     0.2273
+    ],
+    [
+     0.98039,
+     0.18956
+    ],
+    [
+     1.41847,
+     0.35613
+    ],
+    [
+     1.71572,
+     0.45188
+    ],
+    [
+     1.98082,
+     0.52956
+    ],
+    [
+     0.82621,
+     0.38114
+    ],
+    [
+     1.21748,
+     0.56728
+    ],
+    [
+     1.47824,
+     0.67239
+    ],
+    [
+     1.70876,
+     0.75536
+    ],
+    [
+     0.62994,
+     0.55472
+    ],
+    [
+     0.86514,
+     0.76318
+    ],
+    [
+     1.05884,
+     0.87624
+    ],
+    [
+     1.2272,
+     0.95974
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.36797,
+     -0.23959,
+     0.18745
+    ],
+    [
+     0.74215,
+     -0.33693,
+     0.29919
+    ],
+    [
+     0.99132,
+     -0.40562,
+     0.40084
+    ],
+    [
+     1.19329,
+     -0.46327,
+     0.50953
+    ],
+    [
+     1.05563,
+     0.0,
+     -0.0
+    ],
+    [
+     1.46536,
+     0.10533,
+     -0.00433
+    ],
+    [
+     1.73554,
+     0.16921,
+     0.01224
+    ],
+    [
+     1.95095,
+     0.2273,
+     0.02324
+    ],
+    [
+     0.98039,
+     0.18956,
+     -0.0393
+    ],
+    [
+     1.41847,
+     0.35613,
+     -0.06301
+    ],
+    [
+     1.71572,
+     0.45188,
+     -0.05218
+    ],
+    [
+     1.98082,
+     0.52956,
+     -0.05121
+    ],
+    [
+     0.82621,
+     0.38114,
+     -0.04027
+    ],
+    [
+     1.21748,
+     0.56728,
+     -0.0632
+    ],
+    [
+     1.47824,
+     0.67239,
+     -0.05886
+    ],
+    [
+     1.70876,
+     0.75536,
+     -0.04699
+    ],
+    [
+     0.62994,
+     0.55472,
+     -0.0
+    ],
+    [
+     0.86514,
+     0.76318,
+     -0.01061
+    ],
+    [
+     1.05884,
+     0.87624,
+     -0.0132
+    ],
+    [
+     1.2272,
+     0.95974,
+     -0.01702
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.28,
+    "index": 1.964,
+    "middle": 2.05,
+    "ring": 1.868,
+    "pinky": 1.558
+   }
+  },
+  "C": {
+   "description": "fingers and thumb curved into a C",
+   "anchor_words": [
+    "drink",
+    "hungry",
+    "giraffe"
+   ],
+   "anchor_confidence": "high",
+   "n_takes": 120,
+   "takes_per_word": {
+    "drink": 40,
+    "hungry": 40,
+    "giraffe": 40
+   },
+   "usable": true,
+   "agreement_xy": 0.1981,
+   "agreement_xyz": 0.2237,
+   "spread_p90_xy": 0.6878,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.33999,
+     -0.23907
+    ],
+    [
+     0.72816,
+     -0.30395
+    ],
+    [
+     1.00772,
+     -0.31621
+    ],
+    [
+     1.1983,
+     -0.34674
+    ],
+    [
+     1.02421,
+     0.0
+    ],
+    [
+     1.45095,
+     0.17182
+    ],
+    [
+     1.62964,
+     0.22671
+    ],
+    [
+     1.72231,
+     0.20286
+    ],
+    [
+     0.97443,
+     0.22111
+    ],
+    [
+     1.43946,
+     0.39679
+    ],
+    [
+     1.57939,
+     0.42083
+    ],
+    [
+     1.6165,
+     0.36588
+    ],
+    [
+     0.86017,
+     0.42144
+    ],
+    [
+     1.28023,
+     0.58455
+    ],
+    [
+     1.42482,
+     0.58461
+    ],
+    [
+     1.49454,
+     0.54244
+    ],
+    [
+     0.71188,
+     0.58291
+    ],
+    [
+     1.0424,
+     0.69608
+    ],
+    [
+     1.17013,
+     0.69549
+    ],
+    [
+     1.23368,
+     0.68269
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.33999,
+     -0.23907,
+     0.0955
+    ],
+    [
+     0.72816,
+     -0.30395,
+     0.18293
+    ],
+    [
+     1.00772,
+     -0.31621,
+     0.26418
+    ],
+    [
+     1.1983,
+     -0.34674,
+     0.33481
+    ],
+    [
+     1.02421,
+     0.0,
+     0.0
+    ],
+    [
+     1.45095,
+     0.17182,
+     0.04762
+    ],
+    [
+     1.62964,
+     0.22671,
+     0.13751
+    ],
+    [
+     1.72231,
+     0.20286,
+     0.22477
+    ],
+    [
+     0.97443,
+     0.22111,
+     -0.0163
+    ],
+    [
+     1.43946,
+     0.39679,
+     0.03677
+    ],
+    [
+     1.57939,
+     0.42083,
+     0.12221
+    ],
+    [
+     1.6165,
+     0.36588,
+     0.1953
+    ],
+    [
+     0.86017,
+     0.42144,
+     -0.01448
+    ],
+    [
+     1.28023,
+     0.58455,
+     0.0393
+    ],
+    [
+     1.42482,
+     0.58461,
+     0.12151
+    ],
+    [
+     1.49454,
+     0.54244,
+     0.18504
+    ],
+    [
+     0.71188,
+     0.58291,
+     0.0
+    ],
+    [
+     1.0424,
+     0.69608,
+     0.04936
+    ],
+    [
+     1.17013,
+     0.69549,
+     0.10633
+    ],
+    [
+     1.23368,
+     0.68269,
+     0.16166
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.247,
+    "index": 1.734,
+    "middle": 1.657,
+    "ring": 1.59,
+    "pinky": 1.41
+   }
+  },
+  "O": {
+   "description": "fingertips meeting the thumb in a round O. NO clean anchor exists in this 250-word vocabulary \u2014 all 250 words were checked 2026-08-12: flower and home are flattened-O (a DIFFERENT handshape) and old is dynamic C-to-S. This is unfixable from this vocabulary, not a measurement problem. Emitted for completeness; do not trust it.",
+   "anchor_words": [
+    "flower",
+    "home",
+    "old"
+   ],
+   "anchor_confidence": "low",
+   "n_takes": 120,
+   "takes_per_word": {
+    "flower": 40,
+    "home": 40,
+    "old": 40
+   },
+   "fallback_handshape": "C",
+   "fallback_note": "if this template is unusable, substitute C rather than a rig default \u2014 a named approximation, not a silent one",
+   "usable": false,
+   "agreement_xy": 0.2858,
+   "agreement_xyz": 0.3655,
+   "spread_p90_xy": 0.6994,
+   "template_xy": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.41109,
+     -0.1062
+    ],
+    [
+     0.7781,
+     -0.05144
+    ],
+    [
+     1.04727,
+     0.14025
+    ],
+    [
+     1.23764,
+     0.34326
+    ],
+    [
+     1.04188,
+     0.0
+    ],
+    [
+     1.40327,
+     0.26615
+    ],
+    [
+     1.41449,
+     0.3897
+    ],
+    [
+     1.35114,
+     0.43551
+    ],
+    [
+     0.98696,
+     0.14161
+    ],
+    [
+     1.37527,
+     0.45837
+    ],
+    [
+     1.33255,
+     0.53495
+    ],
+    [
+     1.218,
+     0.53037
+    ],
+    [
+     0.86599,
+     0.30766
+    ],
+    [
+     1.23842,
+     0.58586
+    ],
+    [
+     1.18389,
+     0.67496
+    ],
+    [
+     1.05877,
+     0.59532
+    ],
+    [
+     0.7334,
+     0.48855
+    ],
+    [
+     1.01035,
+     0.68693
+    ],
+    [
+     0.99899,
+     0.74407
+    ],
+    [
+     0.95641,
+     0.66758
+    ]
+   ],
+   "template_xyz": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.41109,
+     -0.1062,
+     0.18572
+    ],
+    [
+     0.7781,
+     -0.05144,
+     0.30144
+    ],
+    [
+     1.04727,
+     0.14025,
+     0.43922
+    ],
+    [
+     1.23764,
+     0.34326,
+     0.53152
+    ],
+    [
+     1.04188,
+     0.0,
+     -0.0
+    ],
+    [
+     1.40327,
+     0.26615,
+     0.2412
+    ],
+    [
+     1.41449,
+     0.3897,
+     0.39683
+    ],
+    [
+     1.35114,
+     0.43551,
+     0.46377
+    ],
+    [
+     0.98696,
+     0.14161,
+     -0.04165
+    ],
+    [
+     1.37527,
+     0.45837,
+     0.25838
+    ],
+    [
+     1.33255,
+     0.53495,
+     0.46259
+    ],
+    [
+     1.218,
+     0.53037,
+     0.48821
+    ],
+    [
+     0.86599,
+     0.30766,
+     -0.03813
+    ],
+    [
+     1.23842,
+     0.58586,
+     0.27229
+    ],
+    [
+     1.18389,
+     0.67496,
+     0.45093
+    ],
+    [
+     1.05877,
+     0.59532,
+     0.48052
+    ],
+    [
+     0.7334,
+     0.48855,
+     0.0
+    ],
+    [
+     1.01035,
+     0.68693,
+     0.26897
+    ],
+    [
+     0.99899,
+     0.74407,
+     0.41205
+    ],
+    [
+     0.95641,
+     0.66758,
+     0.41327
+    ]
+   ],
+   "tip_distances": {
+    "thumb": 1.284,
+    "index": 1.42,
+    "middle": 1.328,
+    "ring": 1.215,
+    "pinky": 1.166
+   }
+  }
+ },
+ "n_usable": 6,
+ "vocabulary_coverage": "On the shipped 250-word vocabulary, the 35 class-2a words require exactly five shapes: B 26, A 3, 1 3, C 2, S 1 = 35. All five are MEASURED templates. Therefore BOTH documented substitutions in 'resolution' below are inert: O->C never fires because no 2a word needs O, and S->A never fires because S was measured (agreement_xy 0.1636, n=40, usable: true) and resolves to itself. Stated explicitly so a reader does not have to cross-reference the assignments to discover that the only documented approximations are dead code. Net: 35/35 on measured templates, zero approximations in play. This holds for THIS vocabulary only — adding words can activate O->C.",
+ "resolution": {
+  "B": {
+   "use": "B",
+   "why": "measured template"
+  },
+  "A": {
+   "use": "A",
+   "why": "measured template"
+  },
+  "S": {
+   "use": "S",
+   "why": "measured template"
+  },
+  "1": {
+   "use": "1",
+   "why": "measured template"
+  },
+  "5": {
+   "use": "5",
+   "why": "measured template"
+  },
+  "C": {
+   "use": "C",
+   "why": "measured template"
+  },
+  "O": {
+   "use": "C",
+   "why": "O not measurable from this vocabulary (takes disagree); C substituted \u2014 documented approximation"
+  }
+ }
+}

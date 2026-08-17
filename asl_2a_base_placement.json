@@ -1,0 +1,93 @@
+{
+  "schema": "asl-2a-base-placement/v1",
+  "date": "2026-08-14",
+  "n_words": 35,
+  "purpose": "WHERE to put the passive base hand of a class-2a sign. handshape_templates.json says WHAT shape it is; this file says where it goes. Both are needed and neither is sufficient.",
+
+  "why_this_exists": "The export carries a real, measured passive wrist from the pose block, and until now the instruction was to place the base handshape there. Measured 2026-08-14 across all 35 class-2a words, that wrist sits a median 1.56 shoulder widths from the dominant wrist (range 0.80-2.22) - most of an arm away from where a base belongs. It is not a badly-placed base; it is an arm doing nothing. GISLR recorded ONE hand per participant for an isolated-sign task, so on a two-handed asymmetric sign the signer had no reason to form the base and mostly did not. Only 1 of 35 words is even within 1.38 sh.w., so a proximity filter strands 35/35 and cannot ship. The base must be synthesized.",
+
+  "coord_space": "Same as the export: shoulder-centered, |L11-L12| = 1.0 = one shoulder width (~40cm on an adult). y is DOWN (image space), so +y is toward the floor. x is RAW CAMERA orientation, NOT selfie-mirrored: the signer's RIGHT shoulder is at SMALLER x. Every exemplar is right-dominant (dominantHand = 'R' on all 250), so the dominant hand lives at smaller x and the passive base at LARGER x - i.e. a positive offset.x moves the base toward the passive side. z is forward/back and is the noisiest axis; offsets here keep |z| small on purpose and a renderer may zero it without much loss.",
+
+  "how_to_apply": [
+    "1. Take the dominant WRIST track for the word (block 54-74, point 0) across the frames where it is present.",
+    "2. Reduce it to one anchor point using the word's `anchor` field (see anchor_modes).",
+    "3. Base wrist position = anchor + `offset` (shoulder widths, in the coord space above).",
+    "4. Hold that position STATIC for the entire clip. A 2a base does not move - that is what makes it a base.",
+    "5. Orient it with `palm` and `fingers`, then apply the handshape from handshape_templates.json.",
+    "6. IGNORE the recorded passive wrist (`passiveWristIndex`) for these 35 words. It is the quantity this file replaces."
+  ],
+
+  "anchor_modes": {
+    "dominant_median": "Component-wise median of the dominant wrist over all tracked frames. The default: robust to dropout and to the stroke overshooting.",
+    "dominant_lowest": "The dominant wrist at its maximum y (lowest point). For signs whose base sits under the dominant hand at the bottom of the stroke.",
+    "dominant_first": "First tracked dominant frame. For signs that BEGIN in contact with the base.",
+    "dominant_last": "Last tracked dominant frame. For signs that END in contact with the base."
+  },
+
+  "orientation_vocabulary": {
+    "palm": "Direction the base palm FACES: up | down | toward_signer | away_from_signer | toward_dominant",
+    "fingers": "Direction the base fingers POINT: forward | toward_dominant | up | toward_signer"
+  },
+
+  "anchor_kinds": {
+    "hand": "The base is the passive HAND - place a handshape as described.",
+    "forearm": "The base is the passive FOREARM, not the hand. The dominant hand acts on the arm itself, so the passive hand's own shape barely matters and the limb pose is what must be right. A handshape-only implementation will look wrong here no matter how good the shape is.",
+    "wrist": "The dominant hand targets the passive WRIST specifically. Position accuracy at the wrist matters more than the handshape."
+  },
+
+  "review_status": "AUTHORED BY A HEARING DEVELOPER FROM ASL PHONOLOGY, NOT BY A DEAF SIGNER, AND NOT VALIDATED AGAINST VIDEO. Same standing as handshape_templates.json's anchor words. `confidence` is the author's own and is not evidence. Every entry marked medium or low should be treated as a placeholder that renders plausibly rather than a claim about the language. A Deaf reviewer must confirm placement, orientation and contact before this drives anything shipped. Where a reviewer disagrees, the fix is this file - it is a lexicon error, not a rig bug.",
+
+  "known_limits": [
+    "The 5 `forearm` and `wrist` entries (arm, table, tree, time, flag) are not really handshape-at-a-point problems. They need the passive LIMB posed, which this schema does not express. They are marked so they are not mistaken for solved.",
+    "Contact is specified as a boolean, not as a contact POINT on the hand. `touch` and `empty` both contact the back of the base hand but at different spots; this file cannot yet say that.",
+    "Offsets are single static vectors. Signs whose base is contacted at two different places during one sign (mitten traces an outline) are approximated by one position.",
+    "No sign here is validated against video. The offsets are internally consistent by construction, which is not the same as correct."
+  ],
+
+  "words": {
+    "after":      {"anchor": "dominant_median", "offset": [0.16, 0.10, 0.0], "palm": "toward_signer", "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "medium", "note": "Flat base held vertically; dominant B starts behind it and sweeps over and away."},
+    "all":        {"anchor": "dominant_last",   "offset": [0.14, 0.16, 0.0], "palm": "toward_signer", "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "medium", "note": "Dominant circles outward and returns into the base palm; base is where it lands."},
+    "arm":        {"anchor": "dominant_median", "offset": [0.30, 0.14, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "forearm", "confidence": "high",   "note": "The dominant hand slides along the passive FOREARM. The base hand's shape is nearly irrelevant; the arm pose is the sign."},
+    "backyard":   {"anchor": "dominant_median", "offset": [0.16, 0.12, 0.0], "palm": "toward_signer", "fingers": "toward_dominant", "contact": false, "kind": "hand", "confidence": "low",    "note": "Compound (back + yard). Placement is a guess; flag for review first."},
+    "before":     {"anchor": "dominant_median", "offset": [0.16, 0.10, 0.0], "palm": "toward_signer", "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "medium", "note": "Mirror of `after` in movement direction: dominant travels back toward the signer."},
+    "beside":     {"anchor": "dominant_median", "offset": [0.30, 0.02, 0.0], "palm": "toward_signer", "fingers": "up",              "contact": false, "kind": "hand", "confidence": "medium", "note": "Base A held upright; dominant moves alongside it. Lateral, not vertical."},
+    "brother":    {"anchor": "dominant_last",   "offset": [0.10, 0.18, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "hand", "confidence": "medium", "note": "Second half of the compound: dominant index comes down onto the horizontal base index."},
+    "chair":      {"anchor": "dominant_lowest", "offset": [0.08, 0.14, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "hand", "confidence": "high",   "note": "Base fingers horizontal, palm down; dominant taps down onto them twice."},
+    "chocolate":  {"anchor": "dominant_median", "offset": [0.10, 0.18, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant C circles on the BACK of the base hand."},
+    "clean":      {"anchor": "dominant_median", "offset": [0.12, 0.16, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant palm wipes across the open base palm. Sustained sliding contact."},
+    "closet":     {"anchor": "dominant_median", "offset": [0.16, 0.12, 0.0], "palm": "toward_signer", "fingers": "up",              "contact": false, "kind": "hand", "confidence": "low",    "note": "Regional variation is wide. Placeholder; review before use."},
+    "dance":      {"anchor": "dominant_median", "offset": [0.12, 0.20, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": false, "kind": "hand", "confidence": "high",   "note": "Dominant V swings over the open base palm without settling."},
+    "empty":      {"anchor": "dominant_median", "offset": [0.10, 0.16, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant middle finger slides across the BACK of the base hand."},
+    "every":      {"anchor": "dominant_median", "offset": [0.24, 0.06, 0.0], "palm": "toward_dominant","fingers": "up",             "contact": true,  "kind": "hand", "confidence": "medium", "note": "Dominant A brushes down the side of the upright base A."},
+    "fall":       {"anchor": "dominant_first",  "offset": [0.12, 0.18, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant V STARTS standing on the base palm, then flips off. Anchor at the start."},
+    "first":      {"anchor": "dominant_last",   "offset": [0.26, 0.04, 0.0], "palm": "toward_dominant","fingers": "up",             "contact": true,  "kind": "hand", "confidence": "medium", "note": "Dominant index taps the extended thumb of the base A."},
+    "flag":       {"anchor": "dominant_lowest", "offset": [0.10, 0.26, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "forearm", "confidence": "medium", "note": "The dominant ELBOW rests on the base hand/forearm while the flag waves. Elbow contact, not hand contact - this schema cannot express that."},
+    "garbage":    {"anchor": "dominant_median", "offset": [0.12, 0.20, 0.0], "palm": "up",            "fingers": "forward",         "contact": false, "kind": "hand", "confidence": "medium", "note": "Base held open as the receptacle; dominant scoops above it."},
+    "helicopter": {"anchor": "dominant_lowest", "offset": [0.06, 0.22, 0.0], "palm": "toward_dominant","fingers": "up",             "contact": true,  "kind": "hand", "confidence": "high",   "note": "Base index vertical is the mast; the dominant 5 hand sits on top of it and shakes."},
+    "hide":       {"anchor": "dominant_last",   "offset": [0.12, 0.14, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": false, "kind": "hand", "confidence": "high",   "note": "Dominant A travels from the mouth to UNDER the base hand. Ends below, not touching."},
+    "into":       {"anchor": "dominant_last",   "offset": [0.14, 0.12, 0.0], "palm": "toward_dominant","fingers": "forward",        "contact": true,  "kind": "hand", "confidence": "high",   "note": "The base C is the container; the dominant hand enters its opening."},
+    "jump":       {"anchor": "dominant_first",  "offset": [0.12, 0.20, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant V stands on the base palm, leaves, returns. Anchor where it starts."},
+    "mitten":     {"anchor": "dominant_median", "offset": [0.14, 0.12, 0.0], "palm": "toward_signer", "fingers": "up",              "contact": true,  "kind": "hand", "confidence": "medium", "note": "Dominant traces the outline of the base hand. One static position approximates a moving contact."},
+    "morning":    {"anchor": "dominant_median", "offset": [0.18, -0.04, 0.0],"palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "forearm", "confidence": "high",   "note": "The base forearm is the HORIZON; the dominant forearm rises from beneath it. Base sits slightly ABOVE the dominant path - note the negative y."},
+    "night":      {"anchor": "dominant_last",   "offset": [0.10, 0.14, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Base forearm horizontal is the horizon; the dominant arcs over and lands on its back."},
+    "on":         {"anchor": "dominant_last",   "offset": [0.08, 0.16, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant palm lands flat on the back of the base hand. The clearest contact sign in the set."},
+    "pen":        {"anchor": "dominant_median", "offset": [0.14, 0.18, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Base palm is the paper; the dominant writes across it."},
+    "pencil":     {"anchor": "dominant_median", "offset": [0.14, 0.18, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "As `pen`; the two differ in the dominant handshape, not the base."},
+    "read":       {"anchor": "dominant_median", "offset": [0.16, 0.14, 0.0], "palm": "toward_signer", "fingers": "up",              "contact": false, "kind": "hand", "confidence": "high",   "note": "Base is the open page held vertically; the dominant V scans down it."},
+    "ride":       {"anchor": "dominant_median", "offset": [0.12, 0.16, 0.0], "palm": "toward_dominant","fingers": "forward",        "contact": true,  "kind": "hand", "confidence": "medium", "note": "Dominant U hooks into the base C and both travel together."},
+    "table":      {"anchor": "dominant_lowest", "offset": [0.14, 0.16, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "forearm", "confidence": "high",   "note": "The dominant forearm rests along the passive FOREARM - the tabletop. Arm-on-arm, not hand-on-hand."},
+    "that":       {"anchor": "dominant_last",   "offset": [0.12, 0.18, 0.0], "palm": "up",            "fingers": "toward_dominant", "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant Y drops onto the open base palm."},
+    "time":       {"anchor": "dominant_last",   "offset": [0.20, 0.10, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "wrist", "confidence": "high",   "note": "The dominant index taps the base WRIST, not the palm. Wrist position matters more than handshape here."},
+    "touch":      {"anchor": "dominant_last",   "offset": [0.10, 0.18, 0.0], "palm": "down",          "fingers": "forward",         "contact": true,  "kind": "hand", "confidence": "high",   "note": "Dominant middle finger contacts the back of the base hand."},
+    "tree":       {"anchor": "dominant_lowest", "offset": [0.16, 0.24, 0.0], "palm": "down",          "fingers": "toward_dominant", "contact": true,  "kind": "forearm", "confidence": "high",   "note": "The passive forearm is the GROUND; the dominant elbow rests on it while the 5 hand twists. Elbow-on-arm contact."}
+  },
+
+  "summary": {
+    "_note": "Counts below are derived from `words` and verified against it; do not hand-edit.",
+    "by_kind":       {"hand": 29, "forearm": 5, "wrist": 1},
+    "by_confidence": {"high": 22, "medium": 11, "low": 2},
+    "contact_true":  28,
+    "not_plain_handshape_placement": ["arm", "flag", "morning", "table", "tree", "time"],
+    "low_confidence_review_first": ["backyard", "closet"]
+  }
+}

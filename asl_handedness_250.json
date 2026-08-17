@@ -1,0 +1,1280 @@
+{
+ "schema": "asl-handedness/v1",
+ "date": "2026-08-11",
+ "author": "Mohammad Salim (data pipeline)",
+ "why": [
+  "Handedness is NOT derivable from the GISLR landmarks. Measured against the raw",
+  "competition data on 2026-08-11: 300 random sequences of known two-handed signs,",
+  "21 participants -> BOTH hands live in 1.7% of clips, frames with both hands mean",
+  "0.1% / max 4.8%, and 14/21 participants have EVERY clip single-handed. The corpus",
+  "records one hand per participant. Four landmark-derived classifiers were tested",
+  "against 40 hand-labelled words and all failed: wrist path-length ratio AUC 0.335",
+  "(inverted), spatial-extent ratio 0.460, passive-wrist-height 0.468, weaker-hand",
+  "presence 0.500. So the classification is supplied here as lexical knowledge."
+ ],
+ "classes": {
+  "1": "One-handed. Only the dominant hand is phonemically required.",
+  "2s": "Two-handed SYMMETRIC (Battison's Symmetry Condition): both hands share the same handshape and both move. The passive hand can be reconstructed EXACTLY by mirroring the dominant hand — no synthesis assumptions needed.",
+  "2a": "Two-handed ASYMMETRIC (Battison's Dominance Condition): the dominant hand acts on a static passive base. The passive hand is restricted to an unmarked handshape (B, A, S, 1, 5, C, O), so it is predictable but is NOT a mirror of the dominant hand."
+ },
+ "renderer_contract": [
+  "For every word not marked '1', the passive hand's landmarks DO NOT EXIST in our",
+  "corpus for any take. The exported clip carries the dominant hand only. The avatar",
+  "must synthesize the passive hand:",
+  "  2s -> mirror the dominant hand across the body midline.",
+  "  2a -> place an unmarked handshape at the base location; do not mirror.",
+  "No exemplar selection can change this, and check-export.py will correctly flag",
+  "'one hand absent' on every 2s/2a word forever. That is the data, not the export."
+ ],
+ "conf": {
+  "high": "Unambiguous in standard ASL; safe to rely on.",
+  "med": "Regional or child-register variation exists, or the sign has both a one- and two-handed form. Prioritise these for Deaf review."
+ },
+ "counts": {
+  "one_handed": 163,
+  "two_handed_symmetric": 52,
+  "two_handed_asymmetric": 35
+ },
+ "review_status": "NOT yet reviewed by a Deaf signer. Written from ASL phonology by a hearing developer. The 'med' entries are where errors are most likely.",
+ "cross_check": {
+  "against": "animation side's independent labelling (Fix/HANDED_1.PY, 96 signs)",
+  "comparable": 92,
+  "agreement": "84/92 = 91%",
+  "both_max_confidence_disagreements": 0,
+  "resolved": {
+   "table": "2s -> 2a, conceded: the passive forearm is a static base (Dominance), not a mirrored hand (Symmetry). Mirroring it would have been a visible renderer error."
+  },
+  "open_disagreements": {
+   "sad": "his ONE(2) vs our 2s(high) — both 5 hands down the face in the form we know; one-handed variants exist",
+   "toy": "his ASYM(1) vs our 2s(high) — two T hands shake, we read it symmetric",
+   "napkin": "his ASYM(1) vs our 1(high) — wipe-the-mouth is one-handed in the form we know",
+   "shower": "his SYM(1) vs our 1(high) — one hand above the head, opening",
+   "cut": "both low confidence",
+   "owie": "both low confidence",
+   "refrigerator": "both low confidence"
+  },
+  "note": "These 7 plus the 45 'med' entries are the Deaf-review priority list. Do not resolve them by argument between two hearing developers."
+ },
+ "words": {
+  "TV": [
+   "1",
+   "high"
+  ],
+  "after": [
+   "2a",
+   "high"
+  ],
+  "airplane": [
+   "1",
+   "high"
+  ],
+  "all": [
+   "2a",
+   "med"
+  ],
+  "alligator": [
+   "2s",
+   "high"
+  ],
+  "animal": [
+   "2s",
+   "high"
+  ],
+  "another": [
+   "1",
+   "high"
+  ],
+  "any": [
+   "1",
+   "high"
+  ],
+  "apple": [
+   "1",
+   "high"
+  ],
+  "arm": [
+   "2a",
+   "high"
+  ],
+  "aunt": [
+   "1",
+   "high"
+  ],
+  "awake": [
+   "2s",
+   "high"
+  ],
+  "backyard": [
+   "2a",
+   "med"
+  ],
+  "bad": [
+   "1",
+   "high"
+  ],
+  "balloon": [
+   "2s",
+   "high"
+  ],
+  "bath": [
+   "2s",
+   "high"
+  ],
+  "because": [
+   "1",
+   "high"
+  ],
+  "bed": [
+   "1",
+   "med"
+  ],
+  "bedroom": [
+   "2s",
+   "med"
+  ],
+  "bee": [
+   "1",
+   "high"
+  ],
+  "before": [
+   "2a",
+   "high"
+  ],
+  "beside": [
+   "2a",
+   "high"
+  ],
+  "better": [
+   "1",
+   "high"
+  ],
+  "bird": [
+   "1",
+   "high"
+  ],
+  "black": [
+   "1",
+   "high"
+  ],
+  "blow": [
+   "1",
+   "high"
+  ],
+  "blue": [
+   "1",
+   "high"
+  ],
+  "boat": [
+   "2s",
+   "high"
+  ],
+  "book": [
+   "2s",
+   "high"
+  ],
+  "boy": [
+   "1",
+   "high"
+  ],
+  "brother": [
+   "2a",
+   "med"
+  ],
+  "brown": [
+   "1",
+   "high"
+  ],
+  "bug": [
+   "1",
+   "high"
+  ],
+  "bye": [
+   "1",
+   "high"
+  ],
+  "callonphone": [
+   "1",
+   "high"
+  ],
+  "can": [
+   "2s",
+   "high"
+  ],
+  "car": [
+   "2s",
+   "high"
+  ],
+  "carrot": [
+   "1",
+   "high"
+  ],
+  "cat": [
+   "1",
+   "high"
+  ],
+  "cereal": [
+   "1",
+   "high"
+  ],
+  "chair": [
+   "2a",
+   "high"
+  ],
+  "cheek": [
+   "1",
+   "high"
+  ],
+  "child": [
+   "1",
+   "med"
+  ],
+  "chin": [
+   "1",
+   "high"
+  ],
+  "chocolate": [
+   "2a",
+   "high"
+  ],
+  "clean": [
+   "2a",
+   "high"
+  ],
+  "close": [
+   "2s",
+   "high"
+  ],
+  "closet": [
+   "2a",
+   "med"
+  ],
+  "cloud": [
+   "2s",
+   "high"
+  ],
+  "clown": [
+   "1",
+   "high"
+  ],
+  "cow": [
+   "1",
+   "high"
+  ],
+  "cowboy": [
+   "1",
+   "high"
+  ],
+  "cry": [
+   "2s",
+   "med"
+  ],
+  "cut": [
+   "1",
+   "med"
+  ],
+  "cute": [
+   "1",
+   "high"
+  ],
+  "dad": [
+   "1",
+   "high"
+  ],
+  "dance": [
+   "2a",
+   "high"
+  ],
+  "dirty": [
+   "1",
+   "high"
+  ],
+  "dog": [
+   "1",
+   "high"
+  ],
+  "doll": [
+   "1",
+   "high"
+  ],
+  "donkey": [
+   "1",
+   "high"
+  ],
+  "down": [
+   "1",
+   "high"
+  ],
+  "drawer": [
+   "2s",
+   "high"
+  ],
+  "drink": [
+   "1",
+   "high"
+  ],
+  "drop": [
+   "2s",
+   "med"
+  ],
+  "dry": [
+   "1",
+   "high"
+  ],
+  "dryer": [
+   "1",
+   "med"
+  ],
+  "duck": [
+   "1",
+   "high"
+  ],
+  "ear": [
+   "1",
+   "high"
+  ],
+  "elephant": [
+   "1",
+   "high"
+  ],
+  "empty": [
+   "2a",
+   "high"
+  ],
+  "every": [
+   "2a",
+   "high"
+  ],
+  "eye": [
+   "1",
+   "high"
+  ],
+  "face": [
+   "1",
+   "high"
+  ],
+  "fall": [
+   "2a",
+   "high"
+  ],
+  "farm": [
+   "1",
+   "high"
+  ],
+  "fast": [
+   "1",
+   "med"
+  ],
+  "feet": [
+   "1",
+   "high"
+  ],
+  "find": [
+   "1",
+   "high"
+  ],
+  "fine": [
+   "1",
+   "high"
+  ],
+  "finger": [
+   "1",
+   "high"
+  ],
+  "finish": [
+   "2s",
+   "high"
+  ],
+  "fireman": [
+   "1",
+   "high"
+  ],
+  "first": [
+   "2a",
+   "high"
+  ],
+  "fish": [
+   "1",
+   "med"
+  ],
+  "flag": [
+   "2a",
+   "high"
+  ],
+  "flower": [
+   "1",
+   "high"
+  ],
+  "food": [
+   "1",
+   "high"
+  ],
+  "for": [
+   "1",
+   "high"
+  ],
+  "frenchfries": [
+   "1",
+   "high"
+  ],
+  "frog": [
+   "1",
+   "high"
+  ],
+  "garbage": [
+   "2a",
+   "med"
+  ],
+  "gift": [
+   "2s",
+   "high"
+  ],
+  "giraffe": [
+   "1",
+   "high"
+  ],
+  "girl": [
+   "1",
+   "high"
+  ],
+  "give": [
+   "1",
+   "med"
+  ],
+  "glasswindow": [
+   "2s",
+   "med"
+  ],
+  "go": [
+   "2s",
+   "med"
+  ],
+  "goose": [
+   "1",
+   "high"
+  ],
+  "grandma": [
+   "1",
+   "high"
+  ],
+  "grandpa": [
+   "1",
+   "high"
+  ],
+  "grass": [
+   "1",
+   "high"
+  ],
+  "green": [
+   "1",
+   "high"
+  ],
+  "gum": [
+   "1",
+   "high"
+  ],
+  "hair": [
+   "1",
+   "high"
+  ],
+  "happy": [
+   "2s",
+   "med"
+  ],
+  "hat": [
+   "1",
+   "high"
+  ],
+  "hate": [
+   "2s",
+   "med"
+  ],
+  "have": [
+   "2s",
+   "high"
+  ],
+  "haveto": [
+   "1",
+   "high"
+  ],
+  "head": [
+   "1",
+   "high"
+  ],
+  "hear": [
+   "1",
+   "high"
+  ],
+  "helicopter": [
+   "2a",
+   "high"
+  ],
+  "hello": [
+   "1",
+   "high"
+  ],
+  "hen": [
+   "1",
+   "high"
+  ],
+  "hesheit": [
+   "1",
+   "high"
+  ],
+  "hide": [
+   "2a",
+   "high"
+  ],
+  "high": [
+   "1",
+   "med"
+  ],
+  "home": [
+   "1",
+   "high"
+  ],
+  "horse": [
+   "1",
+   "high"
+  ],
+  "hot": [
+   "1",
+   "high"
+  ],
+  "hungry": [
+   "1",
+   "high"
+  ],
+  "icecream": [
+   "1",
+   "high"
+  ],
+  "if": [
+   "1",
+   "high"
+  ],
+  "into": [
+   "2a",
+   "high"
+  ],
+  "jacket": [
+   "2s",
+   "high"
+  ],
+  "jeans": [
+   "2s",
+   "high"
+  ],
+  "jump": [
+   "2a",
+   "high"
+  ],
+  "kiss": [
+   "1",
+   "high"
+  ],
+  "kitty": [
+   "1",
+   "high"
+  ],
+  "lamp": [
+   "1",
+   "med"
+  ],
+  "later": [
+   "1",
+   "med"
+  ],
+  "like": [
+   "1",
+   "high"
+  ],
+  "lion": [
+   "1",
+   "high"
+  ],
+  "lips": [
+   "1",
+   "high"
+  ],
+  "listen": [
+   "1",
+   "high"
+  ],
+  "look": [
+   "1",
+   "high"
+  ],
+  "loud": [
+   "2s",
+   "med"
+  ],
+  "mad": [
+   "1",
+   "high"
+  ],
+  "make": [
+   "2s",
+   "high"
+  ],
+  "man": [
+   "1",
+   "high"
+  ],
+  "many": [
+   "2s",
+   "high"
+  ],
+  "milk": [
+   "1",
+   "high"
+  ],
+  "minemy": [
+   "1",
+   "high"
+  ],
+  "mitten": [
+   "2a",
+   "high"
+  ],
+  "mom": [
+   "1",
+   "high"
+  ],
+  "moon": [
+   "1",
+   "high"
+  ],
+  "morning": [
+   "2a",
+   "high"
+  ],
+  "mouse": [
+   "1",
+   "high"
+  ],
+  "mouth": [
+   "1",
+   "high"
+  ],
+  "nap": [
+   "1",
+   "med"
+  ],
+  "napkin": [
+   "1",
+   "high"
+  ],
+  "night": [
+   "2a",
+   "high"
+  ],
+  "no": [
+   "1",
+   "high"
+  ],
+  "noisy": [
+   "2s",
+   "med"
+  ],
+  "nose": [
+   "1",
+   "high"
+  ],
+  "not": [
+   "1",
+   "high"
+  ],
+  "now": [
+   "2s",
+   "high"
+  ],
+  "nuts": [
+   "1",
+   "high"
+  ],
+  "old": [
+   "1",
+   "high"
+  ],
+  "on": [
+   "2a",
+   "high"
+  ],
+  "open": [
+   "2s",
+   "high"
+  ],
+  "orange": [
+   "1",
+   "high"
+  ],
+  "outside": [
+   "1",
+   "high"
+  ],
+  "owie": [
+   "2s",
+   "med"
+  ],
+  "owl": [
+   "2s",
+   "high"
+  ],
+  "pajamas": [
+   "2s",
+   "med"
+  ],
+  "pen": [
+   "2a",
+   "high"
+  ],
+  "pencil": [
+   "2a",
+   "high"
+  ],
+  "penny": [
+   "1",
+   "high"
+  ],
+  "person": [
+   "2s",
+   "high"
+  ],
+  "pig": [
+   "1",
+   "high"
+  ],
+  "pizza": [
+   "1",
+   "med"
+  ],
+  "please": [
+   "1",
+   "high"
+  ],
+  "police": [
+   "1",
+   "high"
+  ],
+  "pool": [
+   "2s",
+   "med"
+  ],
+  "potty": [
+   "1",
+   "high"
+  ],
+  "pretend": [
+   "1",
+   "med"
+  ],
+  "pretty": [
+   "1",
+   "high"
+  ],
+  "puppy": [
+   "1",
+   "med"
+  ],
+  "puzzle": [
+   "2s",
+   "med"
+  ],
+  "quiet": [
+   "2s",
+   "high"
+  ],
+  "radio": [
+   "1",
+   "high"
+  ],
+  "rain": [
+   "2s",
+   "high"
+  ],
+  "read": [
+   "2a",
+   "high"
+  ],
+  "red": [
+   "1",
+   "high"
+  ],
+  "refrigerator": [
+   "1",
+   "med"
+  ],
+  "ride": [
+   "2a",
+   "high"
+  ],
+  "room": [
+   "2s",
+   "high"
+  ],
+  "sad": [
+   "2s",
+   "high"
+  ],
+  "same": [
+   "2s",
+   "med"
+  ],
+  "say": [
+   "1",
+   "high"
+  ],
+  "scissors": [
+   "1",
+   "high"
+  ],
+  "see": [
+   "1",
+   "high"
+  ],
+  "shhh": [
+   "1",
+   "high"
+  ],
+  "shirt": [
+   "1",
+   "med"
+  ],
+  "shoe": [
+   "2s",
+   "high"
+  ],
+  "shower": [
+   "1",
+   "high"
+  ],
+  "sick": [
+   "1",
+   "med"
+  ],
+  "sleep": [
+   "1",
+   "high"
+  ],
+  "sleepy": [
+   "1",
+   "high"
+  ],
+  "smile": [
+   "1",
+   "med"
+  ],
+  "snack": [
+   "1",
+   "med"
+  ],
+  "snow": [
+   "2s",
+   "high"
+  ],
+  "stairs": [
+   "2s",
+   "high"
+  ],
+  "stay": [
+   "1",
+   "high"
+  ],
+  "sticky": [
+   "1",
+   "med"
+  ],
+  "store": [
+   "2s",
+   "high"
+  ],
+  "story": [
+   "2s",
+   "high"
+  ],
+  "stuck": [
+   "1",
+   "high"
+  ],
+  "sun": [
+   "1",
+   "high"
+  ],
+  "table": [
+   "2a",
+   "med"
+  ],
+  "talk": [
+   "1",
+   "med"
+  ],
+  "taste": [
+   "1",
+   "high"
+  ],
+  "thankyou": [
+   "1",
+   "high"
+  ],
+  "that": [
+   "2a",
+   "high"
+  ],
+  "there": [
+   "1",
+   "high"
+  ],
+  "think": [
+   "1",
+   "high"
+  ],
+  "thirsty": [
+   "1",
+   "high"
+  ],
+  "tiger": [
+   "2s",
+   "high"
+  ],
+  "time": [
+   "2a",
+   "high"
+  ],
+  "tomorrow": [
+   "1",
+   "high"
+  ],
+  "tongue": [
+   "1",
+   "high"
+  ],
+  "tooth": [
+   "1",
+   "high"
+  ],
+  "toothbrush": [
+   "1",
+   "high"
+  ],
+  "touch": [
+   "2a",
+   "high"
+  ],
+  "toy": [
+   "2s",
+   "high"
+  ],
+  "tree": [
+   "2a",
+   "high"
+  ],
+  "uncle": [
+   "1",
+   "high"
+  ],
+  "underwear": [
+   "2s",
+   "med"
+  ],
+  "up": [
+   "1",
+   "high"
+  ],
+  "vacuum": [
+   "1",
+   "med"
+  ],
+  "wait": [
+   "2s",
+   "high"
+  ],
+  "wake": [
+   "2s",
+   "high"
+  ],
+  "water": [
+   "1",
+   "high"
+  ],
+  "wet": [
+   "1",
+   "high"
+  ],
+  "weus": [
+   "1",
+   "high"
+  ],
+  "where": [
+   "1",
+   "high"
+  ],
+  "white": [
+   "1",
+   "high"
+  ],
+  "who": [
+   "1",
+   "high"
+  ],
+  "why": [
+   "1",
+   "high"
+  ],
+  "will": [
+   "1",
+   "high"
+  ],
+  "wolf": [
+   "1",
+   "high"
+  ],
+  "yellow": [
+   "1",
+   "high"
+  ],
+  "yes": [
+   "1",
+   "high"
+  ],
+  "yesterday": [
+   "1",
+   "high"
+  ],
+  "yourself": [
+   "1",
+   "high"
+  ],
+  "yucky": [
+   "1",
+   "med"
+  ],
+  "zebra": [
+   "2s",
+   "med"
+  ],
+  "zipper": [
+   "1",
+   "med"
+  ]
+ },
+ "passive_handshape": {
+  "_why": "Which unmarked handshape the passive hand takes on each 2a word, plus WHERE the dominant hand contacts it. The Dominance Condition narrows the choice to a closed 7-item set; it does not pick from it, so without this field the renderer has 35 words it cannot draw.",
+  "_review_status": "NOT DEAF-REVIEWED. Written from published descriptions. Every row is a placeholder that unblocks the rig, not an authority. Review the conf='low' rows and the outside_unmarked_set rows first.",
+  "_contact_values": [
+   "palm",
+   "back_of_hand",
+   "side_of_hand",
+   "forearm",
+   "wrist",
+   "thumb",
+   "fingers",
+   "fingertips",
+   "opening",
+   "under_palm",
+   "outline"
+  ],
+  "_fallback": "If a shape's template is unusable, follow handshape_templates.json's `resolution` map rather than a rig default. CORRECTED 2026-08-14: this field used to name that map as 'S->A, O->C'. It is now S->S and O->C - the S anchor fix landed, S is measured (agreement_xy 0.1636, n=40, usable:true) and resolves to itself. Read the map from that file; do not trust this summary of it. On the shipped 250-word vocabulary NEITHER entry ever fires: the 35 2a words request exactly {B:26, A:3, 1:3, C:2, S:1} and all five of those are measured, so it is 35/35 on measured templates with zero live approximations. Templates '5' and 'O' are never requested at all - only 5 of the 7 exist for a reason on this vocabulary.",
+  "words": {
+   "after": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "all": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "note": "dominant sweeps round to land in the passive palm"
+   },
+   "arm": {
+    "shape": "B",
+    "contact": "forearm",
+    "conf": "med",
+    "note": "the BASE IS THE FOREARM, not the hand"
+   },
+   "backyard": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "low",
+    "note": "compound; passive shape uncertain"
+   },
+   "before": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "beside": {
+    "shape": "A",
+    "contact": "side_of_hand",
+    "conf": "med"
+   },
+   "brother": {
+    "shape": "1",
+    "contact": "side_of_hand",
+    "conf": "low",
+    "note": "compound (boy + same); passive from the SAME element"
+   },
+   "chair": {
+    "shape": "1",
+    "contact": "fingers",
+    "conf": "low",
+    "note": "true passive is an H hand — OUTSIDE the unmarked set",
+    "outside_unmarked_set": true
+   },
+   "chocolate": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "high"
+   },
+   "clean": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "closet": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "low",
+    "note": "passive shape uncertain"
+   },
+   "dance": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high",
+    "note": "dominant V swings over the passive palm"
+   },
+   "empty": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "high"
+   },
+   "every": {
+    "shape": "A",
+    "contact": "side_of_hand",
+    "conf": "high"
+   },
+   "fall": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high",
+    "note": "dominant V (legs) leaves the passive palm"
+   },
+   "first": {
+    "shape": "A",
+    "contact": "thumb",
+    "conf": "med",
+    "note": "dominant 1 taps the passive THUMB"
+   },
+   "flag": {
+    "shape": "B",
+    "contact": "forearm",
+    "conf": "med",
+    "note": "dominant elbow rests on the passive arm"
+   },
+   "garbage": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "low",
+    "note": "passive shape uncertain"
+   },
+   "helicopter": {
+    "shape": "1",
+    "contact": "fingertips",
+    "conf": "low",
+    "note": "true passive is a 3 hand — OUTSIDE the unmarked set",
+    "outside_unmarked_set": true
+   },
+   "hide": {
+    "shape": "B",
+    "contact": "under_palm",
+    "conf": "high",
+    "note": "dominant A passes UNDER the passive hand"
+   },
+   "into": {
+    "shape": "C",
+    "contact": "opening",
+    "conf": "med",
+    "note": "dominant enters the passive C aperture"
+   },
+   "jump": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "mitten": {
+    "shape": "B",
+    "contact": "outline",
+    "conf": "med",
+    "note": "dominant traces around the passive hand"
+   },
+   "morning": {
+    "shape": "B",
+    "contact": "forearm",
+    "conf": "high",
+    "note": "passive arm is the horizon"
+   },
+   "night": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "high",
+    "note": "passive arm is the horizon"
+   },
+   "on": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "high"
+   },
+   "pen": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "pencil": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high"
+   },
+   "read": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high",
+    "note": "dominant V scans the passive palm"
+   },
+   "ride": {
+    "shape": "C",
+    "contact": "opening",
+    "conf": "med",
+    "note": "dominant U hooks into the passive C"
+   },
+   "table": {
+    "shape": "B",
+    "contact": "forearm",
+    "conf": "med",
+    "note": "the BASE IS THE FOREARM, not the hand"
+   },
+   "that": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "high",
+    "note": "dominant Y lands on the passive palm"
+   },
+   "time": {
+    "shape": "S",
+    "contact": "wrist",
+    "conf": "med",
+    "note": "dominant 1 taps the BACK OF THE PASSIVE WRIST"
+   },
+   "touch": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "high"
+   },
+   "tree": {
+    "shape": "B",
+    "contact": "forearm",
+    "conf": "med",
+    "note": "passive forearm is the ground/elbow support"
+   }
+  }
+ }
+}
