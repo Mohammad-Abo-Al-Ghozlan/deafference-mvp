@@ -1,0 +1,251 @@
+word,handedness,requiredHand,travelRatio,requiredCoverage,validFrames,leftCoverage,rightCoverage,nullFrames,verdict
+TV,one-handed,right,0.629,0,64,64,0,0,MISSING
+after,one-handed,right,0.25,37,64,0,37,0,partial
+airplane,two-handed,both hands,0.833,0,64,0,29,0,MISSING
+all,two-handed,both hands,0.95,6,64,31,6,0,partial
+alligator,one-handed,right,0.528,0,64,16,0,0,MISSING
+animal,one-handed,right,0.389,0,64,58,0,0,MISSING
+another,one-handed,right,0.347,0,64,64,0,0,MISSING
+any,one-handed,right,0.303,1,64,31,1,0,partial
+apple,one-handed,right,0.339,38,64,0,38,0,partial
+arm,two-handed,both hands,0.777,9,64,19,9,0,partial
+aunt,one-handed,right,0.54,62,64,0,62,0,ok
+awake,two-handed,both hands,0.852,0,64,0,39,0,MISSING
+backyard,one-handed,right,0.154,0,64,41,0,0,MISSING
+bad,two-handed,both hands,0.713,0,64,64,0,0,MISSING
+balloon,one-handed,right,0.315,0,64,57,0,0,MISSING
+bath,one-handed,right,0.346,1,64,9,1,0,partial
+because,one-handed,right,0.678,0,64,62,0,0,MISSING
+bed,one-handed,right,0.273,0,64,44,0,0,MISSING
+bedroom,two-handed,both hands,0.931,0,64,0,64,0,MISSING
+bee,one-handed,right,0.411,0,64,42,0,0,MISSING
+before,one-handed,left,0.563,64,64,64,0,0,ok
+beside,one-handed,right,0.51,13,49,27,13,15,partial
+better,two-handed,both hands,0.801,11,64,50,11,0,partial
+bird,one-handed,right,0.493,0,64,64,0,0,MISSING
+black,two-handed,both hands,0.805,0,64,64,0,0,MISSING
+blow,one-handed,right,0.188,0,64,56,0,0,MISSING
+blue,one-handed,right,0.397,16,64,0,16,0,partial
+boat,two-handed,both hands,0.744,0,64,60,0,0,MISSING
+book,one-handed,right,0.506,36,64,0,36,0,partial
+boy,one-handed,right,0.195,0,64,64,0,0,MISSING
+brother,one-handed,right,0.692,0,64,43,0,0,MISSING
+brown,one-handed,right,0.554,0,64,39,0,0,MISSING
+bug,one-handed,right,0.104,0,64,64,0,0,MISSING
+bye,one-handed,right,0.237,64,64,0,64,0,ok
+callonphone,one-handed,right,0.498,0,64,44,0,0,MISSING
+can,two-handed,both hands,0.908,0,64,64,0,0,MISSING
+car,one-handed,right,0.516,31,64,0,31,0,partial
+carrot,one-handed,right,0.69,0,64,62,0,0,MISSING
+cat,two-handed,both hands,0.866,0,64,0,64,0,MISSING
+cereal,two-handed,both hands,0.846,0,64,0,51,0,MISSING
+chair,two-handed,both hands,0.957,0,64,30,0,0,MISSING
+cheek,one-handed,right,0.552,0,64,63,0,0,MISSING
+child,one-handed,left,0.659,47,64,47,0,0,ok
+chin,one-handed,right,0.357,45,64,0,45,0,ok
+chocolate,one-handed,right,0.225,0,64,64,0,0,MISSING
+clean,two-handed,both hands,0.781,0,64,35,0,0,MISSING
+close,two-handed,both hands,0.753,0,64,36,0,0,MISSING
+closet,one-handed,right,0.62,49,64,0,49,0,ok
+cloud,one-handed,right,0.37,0,64,64,0,0,MISSING
+clown,one-handed,right,0.132,0,64,64,0,0,MISSING
+cow,one-handed,left,0.441,63,64,63,0,0,ok
+cowboy,one-handed,right,0.36,57,64,0,57,0,ok
+cry,two-handed,both hands,0.85,0,64,64,0,0,MISSING
+cut,two-handed,both hands,0.942,0,64,53,0,0,MISSING
+cute,two-handed,both hands,0.777,0,64,0,62,0,MISSING
+dad,one-handed,right,0.25,0,64,64,0,0,MISSING
+dance,one-handed,right,0.668,0,64,36,0,0,MISSING
+dirty,one-handed,right,0.106,0,64,64,0,0,MISSING
+dog,one-handed,right,0.657,0,64,43,0,0,MISSING
+doll,one-handed,right,0.196,0,64,64,0,0,MISSING
+donkey,two-handed,both hands,0.772,0,64,49,0,0,MISSING
+down,one-handed,right,0.67,25,43,0,25,21,partial
+drawer,one-handed,left,0.449,25,64,25,0,0,partial
+drink,one-handed,right,0.291,1,64,64,1,0,partial
+drop,one-handed,right,0.477,22,48,0,22,16,partial
+dry,one-handed,left,0.649,64,64,64,0,0,ok
+dryer,one-handed,left,0.213,55,64,55,0,0,ok
+duck,one-handed,right,0.455,0,64,64,0,0,MISSING
+ear,one-handed,right,0.42,0,64,35,0,0,MISSING
+elephant,two-handed,both hands,0.786,0,64,48,0,0,MISSING
+empty,one-handed,right,0.213,0,64,41,0,0,MISSING
+every,one-handed,right,0.287,27,64,0,27,0,partial
+eye,two-handed,both hands,0.902,0,64,0,44,0,MISSING
+face,one-handed,right,0.44,39,64,0,39,0,partial
+fall,one-handed,right,0.665,44,61,0,44,3,ok
+farm,one-handed,right,0.495,0,64,40,0,0,MISSING
+fast,one-handed,right,0.207,0,64,49,0,0,MISSING
+feet,one-handed,left,0.657,51,64,51,0,0,ok
+find,one-handed,right,0.14,0,64,64,0,0,MISSING
+fine,one-handed,right,0.62,0,64,64,0,0,MISSING
+finger,one-handed,right,0.359,0,64,64,0,0,MISSING
+finish,one-handed,right,0.287,0,64,64,0,0,MISSING
+fireman,one-handed,right,0.08,58,64,0,58,0,ok
+first,one-handed,right,0.324,0,64,59,0,0,MISSING
+fish,one-handed,right,0.207,0,64,62,0,0,MISSING
+flag,one-handed,right,0.029,0,64,64,0,0,MISSING
+flower,one-handed,right,0.242,0,64,57,0,0,MISSING
+food,one-handed,right,0.196,0,64,64,0,0,MISSING
+for,one-handed,right,0.113,29,64,0,29,0,partial
+frenchfries,one-handed,right,0.42,0,64,64,0,0,MISSING
+frog,two-handed,both hands,0.701,0,64,0,55,0,MISSING
+garbage,two-handed,both hands,0.703,0,64,23,0,0,MISSING
+gift,one-handed,left,0.552,41,64,41,0,0,partial
+giraffe,one-handed,right,0.167,0,64,50,0,0,MISSING
+girl,one-handed,left,0.371,26,61,26,0,3,partial
+give,two-handed,both hands,0.954,0,61,60,0,3,MISSING
+glasswindow,one-handed,right,0.149,0,64,64,0,0,MISSING
+go,two-handed,both hands,0.899,0,61,0,37,3,MISSING
+goose,one-handed,right,0.186,0,64,64,0,0,MISSING
+grandma,one-handed,right,0.541,31,64,0,31,0,partial
+grandpa,one-handed,right,0.137,0,64,62,0,0,MISSING
+grass,one-handed,left,0.52,55,64,55,0,0,ok
+green,one-handed,right,0.624,0,64,64,0,0,MISSING
+gum,two-handed,both hands,0.941,0,64,0,64,0,MISSING
+hair,one-handed,right,0.049,0,64,64,0,0,MISSING
+happy,two-handed,both hands,0.711,0,64,0,22,0,MISSING
+hat,one-handed,right,0.111,0,64,38,0,0,MISSING
+hate,two-handed,both hands,0.709,0,61,0,38,3,MISSING
+have,one-handed,right,0.491,0,64,64,0,0,MISSING
+haveto,one-handed,right,0.343,55,64,0,55,0,ok
+head,one-handed,right,0.536,0,64,38,0,0,MISSING
+hear,one-handed,right,0.656,0,64,64,0,0,MISSING
+helicopter,one-handed,right,0.162,0,64,60,0,0,MISSING
+hello,two-handed,both hands,0.73,0,64,48,0,0,MISSING
+hen,one-handed,right,0.348,0,64,64,0,0,MISSING
+hesheit,one-handed,right,0.586,0,64,61,0,0,MISSING
+hide,two-handed,both hands,0.723,0,64,0,40,0,MISSING
+high,one-handed,right,0.325,0,64,47,0,0,MISSING
+home,one-handed,right,0.493,0,64,53,0,0,MISSING
+horse,one-handed,right,0.485,0,64,64,0,0,MISSING
+hot,one-handed,right,0.329,0,64,57,0,0,MISSING
+hungry,one-handed,right,0.271,0,64,64,0,0,MISSING
+icecream,one-handed,right,0.288,23,64,0,23,0,partial
+if,one-handed,right,0.486,48,64,0,48,0,ok
+into,one-handed,right,0.504,38,64,0,38,0,partial
+jacket,two-handed,both hands,0.857,0,64,0,42,0,MISSING
+jeans,one-handed,right,0.421,30,64,3,30,0,partial
+jump,one-handed,right,0.547,0,64,57,0,0,MISSING
+kiss,one-handed,right,0.378,0,64,63,0,0,MISSING
+kitty,one-handed,left,0.628,35,64,35,0,0,partial
+lamp,one-handed,right,0.349,64,64,0,64,0,ok
+later,one-handed,right,0.601,0,64,17,0,0,MISSING
+like,one-handed,right,0.623,20,53,1,20,11,partial
+lion,one-handed,right,0.194,64,64,0,64,0,ok
+lips,one-handed,right,0.14,8,64,51,8,0,partial
+listen,one-handed,right,0.492,58,64,0,58,0,ok
+look,one-handed,right,0.083,0,64,64,0,0,MISSING
+loud,two-handed,both hands,0.91,0,64,64,0,0,MISSING
+mad,one-handed,right,0.106,0,64,64,0,0,MISSING
+make,two-handed,both hands,0.965,34,64,34,64,0,partial
+man,two-handed,both hands,0.757,0,64,56,0,0,MISSING
+many,one-handed,right,0.503,36,64,0,36,0,partial
+milk,one-handed,right,0.299,0,64,63,0,0,MISSING
+minemy,one-handed,right,0.478,0,64,64,0,0,MISSING
+mitten,two-handed,both hands,0.701,0,64,36,0,0,MISSING
+mom,one-handed,right,0.379,0,64,54,0,0,MISSING
+moon,one-handed,left,0.639,59,64,59,0,0,ok
+morning,one-handed,right,0.666,0,64,64,0,0,MISSING
+mouse,two-handed,both hands,0.949,0,64,64,0,0,MISSING
+mouth,one-handed,right,0.234,19,64,64,19,0,partial
+nap,one-handed,right,0.434,26,64,0,26,0,partial
+napkin,one-handed,left,0.277,32,64,32,0,0,partial
+night,one-handed,right,0.383,0,64,62,0,0,MISSING
+no,one-handed,right,0.33,0,64,64,0,0,MISSING
+noisy,one-handed,right,0.114,0,64,50,0,0,MISSING
+nose,one-handed,right,0.191,25,64,0,25,0,partial
+not,two-handed,both hands,0.904,0,49,35,0,15,MISSING
+now,two-handed,both hands,0.939,0,64,63,0,0,MISSING
+nuts,one-handed,right,0.315,29,64,0,29,0,partial
+old,two-handed,both hands,0.833,0,64,21,0,0,MISSING
+on,one-handed,right,0.661,0,64,44,0,0,MISSING
+open,one-handed,right,0.641,54,64,0,54,0,ok
+orange,one-handed,right,0.182,0,64,64,0,0,MISSING
+outside,two-handed,both hands,0.892,0,64,12,0,0,MISSING
+owie,one-handed,right,0.164,0,64,64,0,0,MISSING
+owl,one-handed,right,0.269,0,64,64,0,0,MISSING
+pajamas,one-handed,left,0.533,46,64,46,0,0,ok
+pen,one-handed,right,0.367,42,64,0,42,0,partial
+pencil,one-handed,left,0.349,48,64,48,0,0,ok
+penny,one-handed,right,0.493,39,64,0,39,0,partial
+person,one-handed,left,0.139,23,64,23,0,0,partial
+pig,one-handed,right,0.18,0,64,64,0,0,MISSING
+pizza,two-handed,both hands,0.835,0,64,64,0,0,MISSING
+please,one-handed,right,0.424,47,64,0,47,0,ok
+police,one-handed,right,0.092,0,64,22,0,0,MISSING
+pool,one-handed,left,0.656,34,64,34,0,0,partial
+potty,one-handed,right,0.387,0,64,64,0,0,MISSING
+pretend,one-handed,right,0.501,0,64,64,0,0,MISSING
+pretty,one-handed,left,0.48,45,64,45,0,0,ok
+puppy,two-handed,both hands,0.801,0,64,41,0,0,MISSING
+puzzle,two-handed,both hands,0.8,0,64,29,0,0,MISSING
+quiet,two-handed,both hands,0.985,15,49,40,15,15,partial
+radio,one-handed,right,0.284,0,64,64,0,0,MISSING
+rain,two-handed,both hands,0.978,0,64,55,0,0,MISSING
+read,one-handed,right,0.145,0,64,47,0,0,MISSING
+red,one-handed,right,0.37,0,64,63,0,0,MISSING
+refrigerator,one-handed,right,0.306,0,64,57,0,0,MISSING
+ride,one-handed,right,0.535,13,64,11,13,0,partial
+room,one-handed,right,0.199,0,64,60,0,0,MISSING
+sad,one-handed,right,0.661,0,64,57,0,0,MISSING
+same,two-handed,both hands,0.885,0,64,64,0,0,MISSING
+say,one-handed,left,0.428,0,64,0,61,0,MISSING
+scissors,two-handed,both hands,0.732,0,64,57,0,0,MISSING
+see,one-handed,right,0.364,0,64,62,0,0,MISSING
+shhh,one-handed,right,0.142,0,64,64,0,0,MISSING
+shirt,one-handed,right,0.142,0,64,59,0,0,MISSING
+shoe,two-handed,both hands,0.943,0,64,64,0,0,MISSING
+shower,one-handed,right,0.192,0,64,64,0,0,MISSING
+sick,one-handed,right,0.51,64,64,0,64,0,ok
+sleep,one-handed,right,0.683,64,64,0,64,0,ok
+sleepy,one-handed,right,0.487,0,64,29,0,0,MISSING
+smile,one-handed,right,0.48,0,64,64,0,0,MISSING
+snack,one-handed,right,0.197,0,64,64,0,0,MISSING
+snow,one-handed,right,0.572,0,64,64,0,0,MISSING
+stairs,one-handed,right,0.198,24,64,0,24,0,partial
+stay,one-handed,right,0.232,0,64,64,0,0,MISSING
+sticky,two-handed,both hands,0.811,0,64,63,0,0,MISSING
+store,one-handed,right,0.13,0,64,64,0,0,MISSING
+story,two-handed,both hands,0.987,0,64,39,0,0,MISSING
+stuck,one-handed,right,0.102,17,64,62,17,0,partial
+sun,one-handed,right,0.369,55,64,0,55,0,ok
+table,one-handed,left,0.667,0,64,0,64,0,MISSING
+talk,one-handed,right,0.524,0,64,64,0,0,MISSING
+taste,one-handed,right,0.197,0,64,64,0,0,MISSING
+thankyou,one-handed,right,0.136,0,64,59,0,0,MISSING
+that,one-handed,left,0.69,61,64,61,0,0,ok
+there,one-handed,right,0.176,0,64,64,0,0,MISSING
+think,one-handed,right,0.045,0,64,62,0,0,MISSING
+thirsty,one-handed,right,0.204,32,64,0,32,0,partial
+tiger,one-handed,right,0.276,0,64,64,0,0,MISSING
+time,one-handed,right,0.25,34,64,0,34,0,partial
+tomorrow,one-handed,right,0.145,42,64,0,42,0,partial
+tongue,one-handed,right,0.557,0,64,64,0,0,MISSING
+tooth,one-handed,left,0.391,64,64,64,0,0,ok
+toothbrush,one-handed,right,0.305,36,64,0,36,0,partial
+touch,one-handed,right,0.21,0,64,36,0,0,MISSING
+toy,one-handed,right,0.353,43,64,0,43,0,partial
+tree,one-handed,right,0.071,0,64,58,0,0,MISSING
+uncle,one-handed,right,0.162,48,64,0,48,0,ok
+underwear,one-handed,left,0.64,64,64,64,0,0,ok
+up,one-handed,right,0.24,34,64,0,34,0,partial
+vacuum,one-handed,right,0.15,0,64,33,0,0,MISSING
+wait,one-handed,left,0.696,13,64,13,0,0,partial
+wake,one-handed,right,0.464,0,64,43,0,0,MISSING
+water,two-handed,both hands,0.813,0,64,64,0,0,MISSING
+wet,one-handed,right,0.371,49,49,0,49,15,ok
+weus,two-handed,both hands,0.791,0,64,48,0,0,MISSING
+where,two-handed,both hands,0.795,0,64,0,64,0,MISSING
+white,one-handed,right,0.214,11,64,64,11,0,partial
+who,one-handed,right,0.539,40,64,0,40,0,partial
+why,one-handed,right,0.064,0,64,64,0,0,MISSING
+will,one-handed,right,0.231,30,64,2,30,0,partial
+wolf,one-handed,right,0.471,31,64,0,31,0,partial
+yellow,two-handed,both hands,0.799,0,64,63,0,0,MISSING
+yes,one-handed,right,0.312,0,64,64,0,0,MISSING
+yesterday,one-handed,right,0.23,0,64,62,0,0,MISSING
+yourself,one-handed,right,0.145,0,64,64,0,0,MISSING
+yucky,one-handed,right,0.148,0,64,64,0,0,MISSING
+zebra,one-handed,right,0.396,0,64,64,0,0,MISSING
+zipper,two-handed,both hands,0.775,0,64,0,29,0,MISSING

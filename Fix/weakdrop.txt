@@ -1,0 +1,54 @@
+
+checked 52 words of class 2s (198 not 2s, skipped)
+frames where the passive ARM performs the symmetric sign: 1066/4123 = 25.9%
+
+Low = the signer dropped the weak hand in that take. This indicts the TAKE.
+Handshape mirroring itself is exact and is verified statically, not here.
+
+WEAK-DROP CANDIDATES — 46 of 52 2s words below 80%:
+   awake            0/ 80 =   0%
+   drawer           0/ 80 =   0%
+   hate             0/ 77 =   0%
+   loud             0/ 80 =   0%
+   pool             0/ 80 =   0%
+   same             0/ 80 =   0%
+   shoe             0/ 80 =   0%
+   stairs           0/ 80 =   0%
+   jeans            1/ 80 =   1%
+   rain             1/ 80 =   1%
+   snow             1/ 80 =   1%
+   bedroom          2/ 80 =   3%
+   gift             3/ 80 =   4%
+   many             3/ 80 =   4%
+   drop             3/ 64 =   5%
+   bath             4/ 80 =   5%
+   close            4/ 80 =   5%
+   toy              5/ 80 =   6%
+   wait             5/ 80 =   6%
+   wake             5/ 80 =   6%
+   jacket           7/ 80 =   9%
+   story            8/ 80 =  10%
+   quiet            8/ 65 =  12%
+   alligator       10/ 80 =  13%
+   pajamas         10/ 80 =  13%
+   noisy           12/ 80 =  15%
+   room            12/ 80 =  15%
+   store           13/ 80 =  16%
+   book            14/ 80 =  18%
+   owl             15/ 80 =  19%
+   go              18/ 77 =  23%
+   tiger           21/ 80 =  26%
+   owie            22/ 80 =  28%
+   happy           24/ 80 =  30%
+   puzzle          24/ 80 =  30%
+   cloud           25/ 80 =  31%
+   make            26/ 80 =  33%
+   person          27/ 80 =  34%
+   finish          28/ 80 =  35%
+   can             30/ 80 =  38%
+   car             34/ 80 =  43%
+   balloon         35/ 80 =  44%
+   animal          43/ 80 =  54%
+   open            49/ 80 =  61%
+   sad             54/ 80 =  68%
+   boat            56/ 80 =  70%

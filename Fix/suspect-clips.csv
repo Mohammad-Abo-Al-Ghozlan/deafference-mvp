@@ -1,0 +1,251 @@
+word,handClass,conf,armRatio,mirrorPct,verdict
+TV,1,high,0.629,,
+after,2a,high,0.25,,WEAK-DROP: passive arm barely moves
+airplane,1,high,0.833,,
+all,2a,med,0.95,,
+alligator,2s,high,0.528,13,WEAK-DROP: passive arm not mirroring
+animal,2s,high,0.389,54,
+another,1,high,0.347,,
+any,1,high,0.303,,
+apple,1,high,0.339,,
+arm,2a,high,0.777,,
+aunt,1,high,0.54,,
+awake,2s,high,0.852,0,WEAK-DROP: passive arm not mirroring
+backyard,2a,med,0.154,,WEAK-DROP: passive arm barely moves
+bad,1,high,0.713,,
+balloon,2s,high,0.315,44,WEAK-DROP: passive arm barely moves
+bath,2s,high,0.346,5,WEAK-DROP: passive arm not mirroring
+because,1,high,0.678,,
+bed,1,med,0.273,,
+bedroom,2s,med,0.931,3,WEAK-DROP: passive arm not mirroring
+bee,1,high,0.411,,
+before,2a,high,0.563,,
+beside,2a,high,0.51,,
+better,1,high,0.801,,
+bird,1,high,0.493,,
+black,1,high,0.805,,
+blow,1,high,0.188,,
+blue,1,high,0.397,,
+boat,2s,high,0.744,70,
+book,2s,high,0.506,18,WEAK-DROP: passive arm not mirroring
+boy,1,high,0.195,,
+brother,2a,med,0.692,,
+brown,1,high,0.554,,
+bug,1,high,0.104,,
+bye,1,high,0.237,,
+callonphone,1,high,0.498,,
+can,2s,high,0.908,38,
+car,2s,high,0.516,43,
+carrot,1,high,0.69,,
+cat,1,high,0.866,,"SUSPECT: one-handed sign, both arms active"
+cereal,1,high,0.846,,
+chair,2a,high,0.957,,
+cheek,1,high,0.552,,
+child,1,med,0.659,,
+chin,1,high,0.357,,
+chocolate,2a,high,0.225,,WEAK-DROP: passive arm barely moves
+clean,2a,high,0.781,,
+close,2s,high,0.753,5,WEAK-DROP: passive arm not mirroring
+closet,2a,med,0.62,,
+cloud,2s,high,0.37,31,
+clown,1,high,0.132,,
+cow,1,high,0.441,,
+cowboy,1,high,0.36,,
+cry,2s,med,0.85,,
+cut,1,med,0.942,,"SUSPECT: one-handed sign, both arms active"
+cute,1,high,0.777,,
+dad,1,high,0.25,,
+dance,2a,high,0.668,,
+dirty,1,high,0.106,,
+dog,1,high,0.657,,
+doll,1,high,0.196,,
+donkey,1,high,0.772,,
+down,1,high,0.67,,
+drawer,2s,high,0.449,0,WEAK-DROP: passive arm not mirroring
+drink,1,high,0.291,,
+drop,2s,med,0.477,5,WEAK-DROP: passive arm not mirroring
+dry,1,high,0.649,,
+dryer,1,med,0.213,,
+duck,1,high,0.455,,
+ear,1,high,0.42,,
+elephant,1,high,0.786,,
+empty,2a,high,0.213,,WEAK-DROP: passive arm barely moves
+every,2a,high,0.287,,WEAK-DROP: passive arm barely moves
+eye,1,high,0.902,,"SUSPECT: one-handed sign, both arms active"
+face,1,high,0.44,,
+fall,2a,high,0.665,,
+farm,1,high,0.495,,
+fast,1,med,0.207,,
+feet,1,high,0.657,,
+find,1,high,0.14,,
+fine,1,high,0.62,,
+finger,1,high,0.359,,
+finish,2s,high,0.287,35,WEAK-DROP: passive arm barely moves
+fireman,1,high,0.08,,
+first,2a,high,0.324,,WEAK-DROP: passive arm barely moves
+fish,1,med,0.207,,
+flag,2a,high,0.029,,WEAK-DROP: passive arm barely moves
+flower,1,high,0.242,,
+food,1,high,0.196,,
+for,1,high,0.113,,
+frenchfries,1,high,0.42,,
+frog,1,high,0.701,,
+garbage,2a,med,0.703,,
+gift,2s,high,0.552,4,WEAK-DROP: passive arm not mirroring
+giraffe,1,high,0.167,,
+girl,1,high,0.371,,
+give,1,med,0.954,,"SUSPECT: one-handed sign, both arms active"
+glasswindow,2s,med,0.149,,WEAK-DROP: passive arm barely moves
+go,2s,med,0.899,23,
+goose,1,high,0.186,,
+grandma,1,high,0.541,,
+grandpa,1,high,0.137,,
+grass,1,high,0.52,,
+green,1,high,0.624,,
+gum,1,high,0.941,,"SUSPECT: one-handed sign, both arms active"
+hair,1,high,0.049,,
+happy,2s,med,0.711,30,
+hat,1,high,0.111,,
+hate,2s,med,0.709,0,WEAK-DROP: passive arm not mirroring
+have,2s,high,0.491,,
+haveto,1,high,0.343,,
+head,1,high,0.536,,
+hear,1,high,0.656,,
+helicopter,2a,high,0.162,,WEAK-DROP: passive arm barely moves
+hello,1,high,0.73,,
+hen,1,high,0.348,,
+hesheit,1,high,0.586,,
+hide,2a,high,0.723,,
+high,1,med,0.325,,
+home,1,high,0.493,,
+horse,1,high,0.485,,
+hot,1,high,0.329,,
+hungry,1,high,0.271,,
+icecream,1,high,0.288,,
+if,1,high,0.486,,
+into,2a,high,0.504,,
+jacket,2s,high,0.857,9,WEAK-DROP: passive arm not mirroring
+jeans,2s,high,0.421,1,WEAK-DROP: passive arm not mirroring
+jump,2a,high,0.547,,
+kiss,1,high,0.378,,
+kitty,1,high,0.628,,
+lamp,1,med,0.349,,
+later,1,med,0.601,,
+like,1,high,0.623,,
+lion,1,high,0.194,,
+lips,1,high,0.14,,
+listen,1,high,0.492,,
+look,1,high,0.083,,
+loud,2s,med,0.91,0,WEAK-DROP: passive arm not mirroring
+mad,1,high,0.106,,
+make,2s,high,0.965,33,
+man,1,high,0.757,,
+many,2s,high,0.503,4,WEAK-DROP: passive arm not mirroring
+milk,1,high,0.299,,
+minemy,1,high,0.478,,
+mitten,2a,high,0.701,,
+mom,1,high,0.379,,
+moon,1,high,0.639,,
+morning,2a,high,0.666,,
+mouse,1,high,0.949,,"SUSPECT: one-handed sign, both arms active"
+mouth,1,high,0.234,,
+nap,1,med,0.434,,
+napkin,1,high,0.277,,
+night,2a,high,0.383,,
+no,1,high,0.33,,
+noisy,2s,med,0.114,15,WEAK-DROP: passive arm not mirroring
+nose,1,high,0.191,,
+not,1,high,0.904,,"SUSPECT: one-handed sign, both arms active"
+now,2s,high,0.939,,
+nuts,1,high,0.315,,
+old,1,high,0.833,,
+on,2a,high,0.661,,
+open,2s,high,0.641,61,
+orange,1,high,0.182,,
+outside,1,high,0.892,,"SUSPECT: one-handed sign, both arms active"
+owie,2s,med,0.164,28,WEAK-DROP: passive arm barely moves
+owl,2s,high,0.269,19,WEAK-DROP: passive arm not mirroring
+pajamas,2s,med,0.533,13,WEAK-DROP: passive arm not mirroring
+pen,2a,high,0.367,,
+pencil,2a,high,0.349,,WEAK-DROP: passive arm barely moves
+penny,1,high,0.493,,
+person,2s,high,0.139,34,WEAK-DROP: passive arm barely moves
+pig,1,high,0.18,,
+pizza,1,med,0.835,,
+please,1,high,0.424,,
+police,1,high,0.092,,
+pool,2s,med,0.656,0,WEAK-DROP: passive arm not mirroring
+potty,1,high,0.387,,
+pretend,1,med,0.501,,
+pretty,1,high,0.48,,
+puppy,1,med,0.801,,
+puzzle,2s,med,0.8,30,
+quiet,2s,high,0.985,12,WEAK-DROP: passive arm not mirroring
+radio,1,high,0.284,,
+rain,2s,high,0.978,1,WEAK-DROP: passive arm not mirroring
+read,2a,high,0.145,,WEAK-DROP: passive arm barely moves
+red,1,high,0.37,,
+refrigerator,1,med,0.306,,
+ride,2a,high,0.535,,
+room,2s,high,0.199,15,WEAK-DROP: passive arm not mirroring
+sad,2s,high,0.661,68,
+same,2s,med,0.885,0,WEAK-DROP: passive arm not mirroring
+say,1,high,0.428,,
+scissors,1,high,0.732,,
+see,1,high,0.364,,
+shhh,1,high,0.142,,
+shirt,1,med,0.142,,
+shoe,2s,high,0.943,0,WEAK-DROP: passive arm not mirroring
+shower,1,high,0.192,,
+sick,1,med,0.51,,
+sleep,1,high,0.683,,
+sleepy,1,high,0.487,,
+smile,1,med,0.48,,
+snack,1,med,0.197,,
+snow,2s,high,0.572,1,WEAK-DROP: passive arm not mirroring
+stairs,2s,high,0.198,0,WEAK-DROP: passive arm not mirroring
+stay,1,high,0.232,,
+sticky,1,med,0.811,,
+store,2s,high,0.13,16,WEAK-DROP: passive arm not mirroring
+story,2s,high,0.987,10,WEAK-DROP: passive arm not mirroring
+stuck,1,high,0.102,,
+sun,1,high,0.369,,
+table,2a,med,0.667,,
+talk,1,med,0.524,,
+taste,1,high,0.197,,
+thankyou,1,high,0.136,,
+that,2a,high,0.69,,
+there,1,high,0.176,,
+think,1,high,0.045,,
+thirsty,1,high,0.204,,
+tiger,2s,high,0.276,26,WEAK-DROP: passive arm barely moves
+time,2a,high,0.25,,WEAK-DROP: passive arm barely moves
+tomorrow,1,high,0.145,,
+tongue,1,high,0.557,,
+tooth,1,high,0.391,,
+toothbrush,1,high,0.305,,
+touch,2a,high,0.21,,WEAK-DROP: passive arm barely moves
+toy,2s,high,0.353,6,WEAK-DROP: passive arm not mirroring
+tree,2a,high,0.071,,WEAK-DROP: passive arm barely moves
+uncle,1,high,0.162,,
+underwear,2s,med,0.64,,
+up,1,high,0.24,,
+vacuum,1,med,0.15,,
+wait,2s,high,0.696,6,WEAK-DROP: passive arm not mirroring
+wake,2s,high,0.464,6,WEAK-DROP: passive arm not mirroring
+water,1,high,0.813,,
+wet,1,high,0.371,,
+weus,1,high,0.791,,
+where,1,high,0.795,,
+white,1,high,0.214,,
+who,1,high,0.539,,
+why,1,high,0.064,,
+will,1,high,0.231,,
+wolf,1,high,0.471,,
+yellow,1,high,0.799,,
+yes,1,high,0.312,,
+yesterday,1,high,0.23,,
+yourself,1,high,0.145,,
+yucky,1,med,0.148,,
+zebra,2s,med,0.396,,
+zipper,1,med,0.775,,
