@@ -256,17 +256,20 @@ export function CameraView() {
               </div>
             )}
 
-            {/* Dev debug toggle — corner button so QA can flip the overlay on/off even in prod builds. */}
-            <button
-              type="button"
-              onClick={() => setDebugOpen((v) => !v)}
-              aria-label="Toggle camera debug overlay"
-              className="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-black/60 text-white/80 transition-colors hover:text-white"
-            >
-              <Bug className="size-3.5" />
-            </button>
+            {/* Dev debug toggle — NON-PRODUCTION ONLY. End users must never see the
+                raw camera-state overlay or the bug button over their video feed. */}
+            {process.env.NODE_ENV !== "production" && (
+              <button
+                type="button"
+                onClick={() => setDebugOpen((v) => !v)}
+                aria-label="Toggle camera debug overlay"
+                className="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-black/60 text-white/80 transition-colors hover:text-white"
+              >
+                <Bug className="size-3.5" />
+              </button>
+            )}
 
-            {debugOpen && (
+            {process.env.NODE_ENV !== "production" && debugOpen && (
               <div className="absolute left-2 top-2 z-10 max-w-[220px] rounded-lg bg-black/75 px-2.5 py-2 font-mono text-[10px] leading-relaxed text-emerald-300 shadow-lg backdrop-blur-sm">
                 <div>
                   state: <span className="text-white">{status}</span>

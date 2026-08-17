@@ -242,6 +242,30 @@ html[data-text-size='xlarge'] {
   transition-duration: 0.001ms !important;
 }
 
+/* Accessibility: large button mode — bigger, easier-to-hit controls */
+.large-buttons button,
+.large-buttons [role='button'] {
+  min-height: 3.25rem;
+  padding-block: 0.85rem;
+  padding-inline: 1.35rem;
+  font-size: 1.05rem;
+}
+
+/* Accessibility: text-only mode — hide purely decorative visuals so content
+   isn't competing with motion/imagery. Mark decorative nodes with
+   data-decorative="true" and they'll be removed in this mode. */
+.text-only [data-decorative='true'] {
+  display: none !important;
+}
+
+/* Accessibility: always-show-captions — force caption regions visible even when
+   they'd otherwise be shown only transiently. Caption nodes opt in with
+   data-caption. */
+.captions-on [data-caption] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

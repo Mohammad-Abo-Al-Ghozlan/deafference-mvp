@@ -143,7 +143,7 @@ export default function YourComponent() {
       <footer className="app-footer">
         <p>
           Gloss Buffer & Stabilization System · Built for Deafference ·{' '}
-          <a href="/docs/GLOSS_BUFFER_GUIDE.md" target="_blank">
+          <a href="/docs/GLOSS_BUFFER_GUIDE.md" target="_blank" rel="noopener noreferrer">
             Full Documentation
           </a>
         </p>

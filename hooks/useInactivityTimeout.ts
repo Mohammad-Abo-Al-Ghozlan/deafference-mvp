@@ -25,6 +25,17 @@ export function useInactivityTimeout({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedRef = useRef(0);
 
+  // Keep the latest callbacks in refs so the interval effect does NOT depend on
+  // them. Callers usually pass inline arrow functions (new identity each render),
+  // which previously tore down and rebuilt the 500ms interval on every tick —
+  // causing timer drift. With refs the interval is created once per enabled span.
+  const onTimeoutRef = useRef(onTimeout);
+  const onTickUpdateRef = useRef(onTickUpdate);
+  useEffect(() => {
+    onTimeoutRef.current = onTimeout;
+    onTickUpdateRef.current = onTickUpdate;
+  }, [onTimeout, onTickUpdate]);
+
   const resetTimer = useCallback(() => {
     elapsedRef.current = 0;
     setRemainingSeconds(timeoutSeconds);
@@ -49,9 +60,7 @@ export function useInactivityTimeout({
       const remaining = Math.max(0, timeoutSeconds - elapsedRef.current);
       setRemainingSeconds(Math.ceil(remaining));
 
-      if (onTickUpdate) {
-        onTickUpdate(Math.ceil(remaining));
-      }
+      onTickUpdateRef.current?.(Math.ceil(remaining));
 
       if (remaining <= 0) {
         setIsTimedOut(true);
@@ -59,9 +68,7 @@ export function useInactivityTimeout({
           clearInterval(timerRef.current);
           timerRef.current = null;
         }
-        if (onTimeout) {
-          onTimeout();
-        }
+        onTimeoutRef.current?.();
       }
     }, 500);
 
@@ -70,7 +77,7 @@ export function useInactivityTimeout({
         clearInterval(timerRef.current);
       }
     };
-  }, [enabled, isTimedOut, timeoutSeconds, onTimeout, onTickUpdate]);
+  }, [enabled, isTimedOut, timeoutSeconds]);
 
   return {
     isTimedOut,

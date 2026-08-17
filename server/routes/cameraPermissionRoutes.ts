@@ -1,6 +1,7 @@
 // routes/cameraPermissionRoutes.ts
 import { Router } from 'express';
 import { validateCameraPermissionPayload } from '../middleware/validators';
+import { requireAuth } from '../middleware/auth';
 import {
   updateCameraPermission,
   getCameraPermission,
@@ -16,6 +17,7 @@ const router = Router();
  */
 router.post(
   '/camera-permission',
+  requireAuth,
   validateCameraPermissionPayload,
   updateCameraPermission
 );
@@ -25,6 +27,6 @@ router.post(
  * Retrieve camera permission status for a specific user
  * @param {number} userId - The user ID
  */
-router.get('/camera-permission/:userId', getCameraPermission);
+router.get('/camera-permission/:userId', requireAuth, getCameraPermission);
 
 export default router;

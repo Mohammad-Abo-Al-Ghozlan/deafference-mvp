@@ -1,11 +1,10 @@
 // controllers/userController.ts
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ValidatedUserRequest } from '../middleware/validators';
 import { UserResponse } from '../types/user';
 import { ApiResponse } from '../types/camera-permission';
-
-const prisma = new PrismaClient();
 
 export const createUser = async (
   req: ValidatedUserRequest,
@@ -49,18 +48,20 @@ export const createUser = async (
   } catch (error) {
     console.error('User creation error:', error);
 
-    // Handle Prisma validation errors
-    if (error instanceof Error) {
-      if (error.message.includes('Unique constraint')) {
-        res.status(409).json({
-          success: false,
-          error: {
-            code: 'CONFLICT',
-            message: 'A user with this email already exists',
-          },
-        });
-        return;
-      }
+    // Detect duplicate-email by Prisma error CODE (P2002), not message text —
+    // message wording is version/locale-dependent and would silently 500.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      res.status(409).json({
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'A user with this email already exists',
+        },
+      });
+      return;
     }
 
     // Generic database error

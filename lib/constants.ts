@@ -15,6 +15,11 @@ export const LANDING_NAV = [
   { label: "How it works", href: "#how-it-works" },
   { label: "Features", href: "#features" },
   { label: "FAQ", href: "#faq" },
+] as const
+
+// Internal QA/debug harnesses — NOT part of the public product. Kept out of the
+// navbar/footer so visitors don't land on debug panels. Reach them by URL only.
+export const DEV_ROUTES = [
   { label: "Mock Demo", href: "/mock-testing-demo" },
   { label: "State Machine Demo", href: "/enhanced-state-machine-demo" },
   { label: "Components Demo", href: "/components-demo" },

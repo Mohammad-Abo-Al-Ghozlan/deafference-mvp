@@ -1,10 +1,9 @@
 // controllers/cameraPermissionController.ts
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ValidatedRequest } from '../middleware/validators';
 import { CameraPermissionResponse, ApiResponse } from '../types/camera-permission';
-
-const prisma = new PrismaClient();
 
 export const updateCameraPermission = async (
   req: ValidatedRequest,
@@ -50,9 +49,22 @@ export const updateCameraPermission = async (
   } catch (error) {
     console.error('Camera permission update error:', error);
 
-    // Handle Prisma validation errors
-    if (error instanceof Error) {
-      if (error.message.includes('Unique constraint')) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // Foreign-key failure (P2003): the userId doesn't reference an existing
+      // user. Previously this fell through to a 500 on perfectly normal input
+      // (a client with a stale userId). Return a clean 404 instead.
+      if (error.code === 'P2003') {
+        res.status(404).json({
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'No user exists for the provided userId',
+          },
+        });
+        return;
+      }
+      // Unique-constraint conflict (P2002) — matched by code, not message text.
+      if (error.code === 'P2002') {
         res.status(409).json({
           success: false,
           error: {
@@ -62,16 +74,6 @@ export const updateCameraPermission = async (
         });
         return;
       }
-
-      // NOTE (BE-5): This endpoint intentionally uses prisma.upsert()
-      // (create-or-update), as documented on the route ("Update or create a
-      // camera permission record") and reflected by its 200 (not 201)
-      // response. Because upsert creates the row when it is absent, Prisma
-      // never throws "Record to update not found" here, so the former 404
-      // branch was unreachable dead code and has been removed.
-      // A strict update-only variant would instead use prisma.update() and
-      // keep the 404; we deliberately keep upsert so a permission can be set
-      // before one exists (e.g. immediately after a user is created).
     }
 
     // Generic database error
@@ -90,8 +92,12 @@ export const getCameraPermission = async (
   res: Response<ApiResponse<CameraPermissionResponse>>
 ): Promise<void> => {
   try {
-    const userIdParam = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
-    const userId = parseInt(userIdParam, 10);
+    // Require the WHOLE param to be digits — parseInt("5abc") would silently
+    // return 5 and query the wrong user.
+    const rawParam = Array.isArray(req.params.userId)
+      ? req.params.userId[0]
+      : req.params.userId;
+    const userId = /^\d+$/.test(rawParam ?? "") ? Number(rawParam) : NaN;
 
     if (!Number.isInteger(userId) || userId <= 0) {
       res.status(400).json({

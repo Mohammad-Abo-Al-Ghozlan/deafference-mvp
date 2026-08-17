@@ -63,6 +63,8 @@ export function SettingsDebugPanel({
         role="dialog"
         aria-modal="true"
         aria-label="Settings and debug panel"
+        aria-hidden={!open}
+        inert={!open}
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-card shadow-2xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",

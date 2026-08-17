@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import {
   Captions,
   Contrast,
+  Moon,
   MousePointerClick,
   RotateCcw,
   Type,
@@ -111,6 +112,8 @@ export function AccessibilityPanel({
         role="dialog"
         aria-modal="true"
         aria-label="Accessibility settings"
+        aria-hidden={!open}
+        inert={!open}
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-card shadow-2xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
@@ -165,6 +168,17 @@ export function AccessibilityPanel({
           </div>
 
           <div className="divide-y divide-border">
+            <Row
+              icon={<Moon className="size-4" />}
+              title="Dark mode"
+              desc="Switch to a dark colour theme"
+            >
+              <Switch
+                label="Dark mode"
+                checked={settings.theme === "dark"}
+                onChange={(v) => update("theme", v ? "dark" : "light")}
+              />
+            </Row>
             <Row
               icon={<Contrast className="size-4" />}
               title="High contrast mode"

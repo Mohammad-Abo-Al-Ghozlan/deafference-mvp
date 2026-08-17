@@ -33,9 +33,9 @@ interface CaptionWord {
  * LiveCaptionDisplay Component
  * Displays recognized words in real-time as an overlay with smooth animations
  *
- * @returns {JSX.Element} Rendered caption display component
+ * @returns {React.JSX.Element} Rendered caption display component
  */
-const LiveCaptionDisplay: React.FC = (): JSX.Element => {
+const LiveCaptionDisplay: React.FC = (): React.JSX.Element => {
   // State management for recognized words
   const [captionWords, setCaptionWords] = useState<CaptionWord[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
@@ -123,7 +123,7 @@ const LiveCaptionDisplay: React.FC = (): JSX.Element => {
         {/* Caption words display */}
         {captionWords.length > 0 && (
           <div className={styles.captionText}>
-            {captionWords.map((word: CaptionWord, index: number): JSX.Element => (
+            {captionWords.map((word: CaptionWord, index: number): React.JSX.Element => (
               <span
                 key={word.id}
                 className={styles.word}
