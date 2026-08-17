@@ -1,0 +1,1276 @@
+# Deafference — Session Handoff (2026-07-20 → **updated 2026-08-04**)
+
+> **Purpose of this file.** A complete, self-contained record of what was built,
+> decided, and discussed across these working sessions. If you are a new
+> assistant/chat: **read [§0.2 CURRENT STATE](#02-current-state-2026-08-04--read-this-first-if-you-are-a-new-chat)
+> FIRST** — it is the live picture, it says how Salim wants to be worked with, and it
+> names the one item that is blocked on him. Then read the rest for background.
+>
+> **Sections §0, §0.1 and §8 are history that has since completed.** They are kept for
+> the reasoning trail, not as current status. Where they conflict with §0.2, §0.2 wins.
+>
+> **Right now the active project is the MEDICAL-DOMAIN MVP** (§0.2) — the general
+> 250-word work is paused, both of its phases being demo-ready.
+> Deeper detail lives in the companion docs, chiefly
+> [`MEDICAL_MVP_PLAN.md`](MEDICAL_MVP_PLAN.md) and [`explanation.md`](explanation.md).
+
+---
+
+## 0. TL;DR — what happened this session
+
+1. **Built and hardened `live_demo.py`** — a standalone Python webcam demo that
+   recognizes the 30 trained ASL signs live, assembles them into a spoken
+   sentence, and speaks it. This was the main deliverable. It exists because the
+   **browser app can't do live recognition yet** (frontend MediaPipe pipeline is
+   unbuilt), and a supervisor wanted to test the 30-word model on camera.
+2. **Solved a painful dependency/loading puzzle** (Windows + Keras version + the
+   model file format + mediapipe version). The working stack is pinned in
+   `requirements_live_demo.txt`.
+3. **Added product-grade UX**: auto-commit sign segmentation, a DONE button to
+   finish a sentence, offline text-to-speech, an UNDO/CLEAR/word-list UI,
+   fullscreen, and an optional AI sentence generator (`--ai`).
+4. **Made key product decisions** (below): continue to 250 words next (data is in
+   hand) rather than chase continuous-signing datasets (data-blocked); the moat is
+   Lebanese Sign Language.
+5. **Rescoped the website backend** (`BACKEND_TASKS.md` Track B) from a
+   camera-permission API to the full backend an actual product needs.
+6. **Planned the speech → sign (reverse) feature** — a teammate is building the
+   avatar/animation now. Wrote the data-hand-off spec `SIGN_ANIMATION_CONTRACT.md`
+   and clarified the recognition-vs-animation split (see §11).
+7. **Wrote the detailed 250-word training plan** → `TRAIN_250_PLAN.md` (see §8).
+
+---
+
+## 0.1 LATEST UPDATE — 250 training in progress (2026-07-22)
+
+**This is the active work. If you're the next chat, this section is where things
+actually stand. The execution doc is [`RESUME_250.md`](RESUME_250.md) — follow it
+to continue.**
+
+### Where the 250 training stands
+- **Backbone measured:** `backbone_250.weights.h5` = **0.7260** test acc (held-out
+  signers 2044/37779/53618) → below 0.80 → proper fold training needed.
+- **fold-0 DONE:** warm-started from the backbone (`--init-from`), trained 80 epochs.
+  Honest **TEST acc = 0.7576** (beats the backbone). Weights on Drive:
+  `/content/drive/MyDrive/asl250_out/weights_all250_fold0_seed42.weights.h5`.
+- **fold-1 PARTIAL:** ~epoch 30 when Colab cut out. Resume-checkpoint safe on Drive
+  (`backup_all250_fold1/`). It early-stops ~epoch 31 (its val signers are easy for
+  the backbone; val peaked at epoch 1, PATIENCE=30) so it barely diverges from the
+  backbone — that's expected, per-fold val is noisy; the **ensemble on test** is the
+  real number.
+- **folds 2–4:** not started. **Goal:** ensemble the folds → **>0.80** on test.
+  fold-0 alone (0.7576) is under target; 3–5-fold ensemble is what clears it.
+
+### 🚨 CRITICAL GOTCHA discovered this session — build/load ONLY in a subprocess
+On Colab (TF 2.17/2.18 + tf-keras), calling `build_model` **inside the notebook
+kernel** decomposes `Dense`/`MultiHeadAttention` into untracked `tf.matmul`/
+`tf.nn.bias_add` ops (loud "Variables used in a Lambda layer... not tracked"
+warnings). Then `load_weights` silently loads a **random** model → **0.004 accuracy
+(= 1/250, pure chance).** The FIX: **always run train / eval / export as a fresh
+`!python` subprocess** (`!TF_USE_LEGACY_KERAS=1 python script.py`), never build+load
+in a notebook cell. A subprocess sets the env var before importing TF and builds
+proper layers. **Confirm with the `>> proper build? classifier: True` line** — if it
+says False, you're in the broken path. (This is why fold-0 first read as 0.004, then
+0.7576 once run via subprocess.)
+
+### `train.py` was PATCHED this session (re-upload the new one to Colab/Kaggle)
+1. **`BackupAndRestore`** callback → snapshots weights+optimizer+epoch to `--out-dir`
+   every epoch. Point `--out-dir` at Drive (Colab) and re-running the SAME fold
+   command **resumes mid-fold** instead of restarting from zero.
+2. **SavedModel export in `--all-words` mode** (it used to skip it) → each fold now
+   auto-exports `savedmodel_fold{N}/` when it finishes. SavedModel is the portable
+   artifact (avoids the load gotcha above).
+
+### Blocker + compute decision
+- **Blocker:** Colab **free-tier GPU usage limit** hit (twice). Colab publishes no
+  quota meter; resets in ~12–24h. Only ~**4 GPU-hours** of work remain.
+- **Salim wants FREE only** — no EC2 (costs ~$5 but needs a G-instance quota
+  increase that can take 1–2 days on a new account), no Colab Pro.
+- **Two free paths:** (a) wait for Colab reset, resume via `RESUME_250.md`; or
+  (b) **Kaggle Notebooks — 30 GPU-hours/week free, less throttling** (recommended if
+  Colab keeps cutting out). Kaggle has no Google Drive → point `--out-dir` at
+  `/kaggle/working` and push results to S3; otherwise the workflow is identical.
+  *(Salim to pick; a `RESUME_250_KAGGLE.md` was offered but not yet written.)*
+
+### Avatar teammate (Ghozlan) — answered his 5 pre-sample questions
+Confirmed against `SIGN_ANIMATION_CONTRACT.md`: (1) sample-files date — deliverable
+fast, export is **CPU-only** (no GPU needed); (2) **animator smooths** at render,
+Salim does NOT pre-smooth; (3) runtime = one **continuous stitched stream** per
+utterance, but the **first samples are per-sign clips** for calibration; (4) MVP z is
+**fake/flat frontal** — agreed, real 3D depth is a v2 `pose_world_landmarks` upgrade;
+(5) wrist offset is his to calibrate — note there are **two wrist points** (Pose
+15/16 vs Hand-block 33/54; anchor the hand to 33/54), calibrate against the neutral
+reference pose. **Pending (CPU-only, can run without the GPU quota):**
+`export_reference_pose.py` + `export_sign_samples.py` — offered, not yet written.
+
+---
+
+## 0.2 STATE AS OF 2026-08-04 — ⚠️ SUPERSEDED BY §0.3, READ THAT FIRST
+
+Everything in §0, §0.1 and §8 below is **history that has since completed**.
+
+> **⚠️ 2026-08-12: this section is no longer the live picture.** Its "Working with Salim"
+> subsection still holds and is still the best summary of how he wants this done — carry it
+> over. But its **Phase 2 status is wrong** (the animation export was shipping the wrong hand
+> on 249 of 250 words; see the corrected block below and §0.3). Where §0.2 and §0.3 conflict,
+> **§0.3 wins.**
+
+### Working with Salim — how he wants it (carry this over)
+
+- He is **team lead + the only frontend dev**; he owns the whole ML/data pipeline and
+  wants the assistant as a **pipeline-oversight partner**, not a code vending machine.
+- **Verify, don't assert.** He has been burned by numbers that turned out to be
+  unmeasured. Run the code, measure it, and quote the real figure — and say plainly
+  when something is *not* measured.
+- **Never break working functionality.** He has said this explicitly during cleanups.
+  When a deletion or refactor risks a working demo, keep the thing and say why.
+- **He presents this work to meetings/supervisors.** Docs and numbers must be
+  meeting-safe: if a figure is an estimate, label it.
+- **Secrets:** only in the gitignored `.env`. Never commit, never paste in chat, never
+  put in `.env.example`. The AWS key, Gemini keys, and Supabase password pasted in
+  chat earlier are **BURNED — still need rotating.**
+- He often writes via voice-to-text, so messages have transcription artifacts —
+  read for intent.
+
+### Phase 1 (sign → speech) — done, demo-ready
+- `python live_demo.py --vocab250 --debug` runs the 250-word model.
+- **Measured accuracy: fold-0 = 0.7576** (`word_acc_250.json` per-word mean 0.7571).
+  ⚠️ The **4-fold ensemble number was never actually measured** —
+  `docs/MODEL_250_MVP_REPORT.md` says "not yet measured", yet
+  `docs/explanation.md:75` claims "≈0.78 (0.7755)". That 0.7755 is an
+  **extrapolation**, not a measurement. The 30-word ensemble did gain +1.1 pt
+  (`artifacts/ensemble_eval.json`: mean single 0.9319 → ensemble 0.9433), which is
+  probably where it came from. **Salim was told; he has not asked to change the line yet.**
+- Retrain 0.757 → 0.82 target is **deferred**, not abandoned.
+
+### Phase 2 (speech → sign) — ⚠️ WAS declared complete; it was not. See §0.3
+> **Corrected 2026-08-12.** "250/250 clean" was measured with a rule that could not fail.
+> The exemplars were selected by maximizing hand-tracking coverage, and coverage is
+> anti-correlated with motion because MediaPipe loses the hand that *moves* — so the
+> selector picked the **resting** hand on **249 of 250 words** with 99.6% consistency. The
+> independent acceptance script scored dominant-hand coverage at **0.4%**. Fixed and
+> re-verified at **76.2%**; details in §0.3 and `docs/MODEL_250_MVP_REPORT.md` §2 (R5).
+- `sign_clips_250.npz` → `animation_handoff/` (250 per-word JSONs +
+  `reference_pose.json`) → an early version was **zipped and sent to Ghozlan** with contract
+  **v4**. That copy carries the wrong hand — **a corrected export must replace it.**
+- Contract v4 decisions: **positions not rotations**, IK targets only, keep z **raw**,
+  per-limb scale from `reference_pose`, animator owns transitions/smoothing, y is DOWN
+  (renderer flips). No confidence channel (data is x,y,z only); no raw videos exist.
+- **Still open:** the Deaf-review pass of the 250 exemplars
+  (`preview_signs.py --review` is built and ready).
+
+### Demo apps built for the meeting (all verified)
+| File | What | Notes |
+|---|---|---|
+| `demo_voice_gui.py` | **The meeting build.** Clickable window: [● Record] → speak → [■ Stop] → transcript + 2D avatar signs it, all in one window | Space toggles, Esc quits |
+| `demo_voice_to_sign.py` | Terminal version. **Press-to-talk by default** (Enter starts, Enter stops); `--fixed --seconds N` = old fixed window | fallback if the GUI misbehaves |
+| `demo_speech_to_sign.py` | **Type** a sentence → 2D avatar signs it. Offline deterministic glossing | safest fallback |
+| `_asr_worker.py` | Runs in **3.14**; `--push` / `--wav` / `--serve` / `--selftest` | see the interpreter split below |
+| `preview_signs.py` | 2D skeleton player + Deaf-review harness | `--review`, `--contact` |
+| `demo/*.mp4` | Pre-rendered fallback videos | if all else fails |
+
+**🚨 THE INTERPRETER SPLIT (most important environment fact):**
+`faster-whisper` is **only in Python 3.14**; `cv2`/`mediapipe` are **only in 3.11**.
+So mic→ASR→display cannot run in one process. Run the demos with `py -3.11`
+(plain `python`), and they shell out to `py -3.14 _asr_worker.py`. Do not try to
+"fix" this by installing everything in one interpreter without checking.
+
+**Performance facts (measured, don't re-derive):**
+- ASR model load ≈2.9 s + transcribe ≈1.9 s. One-shot-per-utterance = **~6 s of dead
+  air**; `--serve` keeps the model loaded → **~2.2 s end-to-end**. The GUI warms the
+  server in a background thread at startup.
+- Whisper `base` is **already cached** on Salim's machine (verified with real TTS
+  speech) — no first-run download left.
+- GUI rendering: Tk **PPM (P6), never PNG** — PNG encode+decode cost ~38 ms/frame
+  (7 fps) vs ~7 ms for PPM. Playback is **wall-clock driven with frame skipping** so a
+  slow machine keeps the correct sign *duration* instead of slow-motion.
+- Tkinter traps already hit: `root.after()` from a worker thread raises
+  `RuntimeError("main thread is not in main loop")` → use a `queue.Queue` drained by a
+  main-thread pump; a focused Tk Button fires its own command on Space → `takefocus=0`
+  or Space double-toggles.
+
+### 🔴 ACTIVE WORK — the MEDICAL-DOMAIN MVP (started 2026-08-01)
+
+Salim **paused everything above** to build a **medical-domain MVP**: same two phases,
+new domain, **a new dataset and vocabulary — explicitly NOT a subset of the 250
+children's words** (he rejected that approach when it was proposed).
+
+**Plan: [`docs/MEDICAL_MVP_PLAN.md`](MEDICAL_MVP_PLAN.md) — read it.** Findings:
+
+1. **There is no medical ASL dataset.** Medical SL datasets exist only for other
+   languages: SignTalk-Gh (Ghanaian, 9,879 videos, 4,031 doctor–patient sentences, on
+   Kaggle — but non-commercial, *continuous*, only 5 signers), Mexican MSL/LSM,
+   Italian LIS, Brazilian Libras, Arabic ArSL. **For ASL the medical vocabulary must be
+   assembled from a general isolated-sign dataset.**
+2. **Measured feasibility (real data, not guesswork):** downloaded the actual Sem-Lex
+   metadata (91,148 videos, 9,953 labels, **44 signers**) and scored a 145-concept
+   clinical vocabulary against it. **130/145 (90%) are trainable** (≥8 videos and ≥3
+   signers), **8,324 videos**, **0 absent**. Strong: `hurt` 248v/36s, `sick` 207/37,
+   `help` 136/28, `doctor` 115/31, `medicine` 95/29, `breathe` 75/30, `pain` 52/22.
+3. **15 thin words, and they matter clinically:** `fever`(6v) `chest`(4v) `stomach`(5v)
+   `nausea`(2v) `rash`(2v) `cramp`(2v) `infection`(5v) `sneeze`(4v) `neck`(7v)
+   `shot`(6v) `wheelchair`(7v) `patient`(2v) `stand`(5v) `very`(3v) `never`(7v).
+   Must be supplemented from **ASL Citizen** (a different 2,731-sign selection) or
+   recorded with a Deaf signer. Treat as required, not optional.
+4. **Two numbers that will shape training:** class imbalance is **51×** (8 → 408
+   videos/class, median 39) → needs class weighting/capping; and **~64 videos/class vs
+   GISLR's ~376**, so **expect accuracy below 0.7576 at first** — but 44 signers vs
+   GISLR's 21 is *better* for unseen-signer generalization. Do not promise 0.78.
+
+**Artifacts created (all in the repo):**
+| File | What |
+|---|---|
+| `docs/MEDICAL_MVP_PLAN.md` | The staged plan, dataset comparison table, risks, sources |
+| `vocab_medical.json` | The **130 trainable clinical words** |
+| `vocab_medical_analysis.json` | Per-word video/signer counts + tier A/B/C |
+| `training/medical/build_vocab.py` | Reproduces the coverage analysis from Sem-Lex metadata |
+| `training/medical/semlex_med.py` | The trainability scan |
+| `training/medical/extract_landmarks.py` | **video → (64,75,3) landmark tensors** |
+| `training/medical/test_parity.py` | **Proves the extractor matches `live_demo.py` bit-for-bit** |
+
+**`extract_landmarks.py` — the thing that de-risks this.** It copies
+`extract_75` / `normalize` / `time_resize` and the MediaPipe settings from
+`live_demo.py` verbatim. `test_parity.py` proves **0.000e+00 difference** across all
+functions, constants and edge cases (including the drop-frame and all-NaN paths).
+**Run it after ANY change to either file** — this is the guard against the silent
+drift that would otherwise wreck a trained model.
+Also: the quality gate rejects a clip with a hand in <35% of frames
+(`HANDPRESENCE_MIN`, same bar as live_demo). A first version only rejected
+*zero*-hand clips and accepted a clip with a hand in 1 of 280 frames — that would
+have trained the model on noise. Don't loosen it.
+
+**Confirmed by reading the code (don't re-derive):** `train.py`'s `PreprocessLayer`
+does **NOT** normalize — it masks NaN, drops z, and computes velocity/handshape
+features. Normalization therefore happens **outside** the model (which is why
+`live_demo.normalize()` exists and why the extractor pre-normalizes). This is correct
+and consistent — no double-normalization.
+
+**🚧 NEXT STEPS, in order:**
+1. **BLOCKED — needs Salim, not the assistant:** resolve licensing. Sem-Lex has a
+   **terms-of-use gate** (the HuggingFace mirror is tagged `apache-2.0` but *a
+   mirror's tag is not the original licence*); ASL Citizen needs
+   `ASL_Citizen@microsoft.com` for **commercial** use. Salim rejected How2Sign over
+   exactly this, so settle it **before** the data shapes the product.
+2. **Write the adapter** `extraction .npz → train.py`'s expected layout:
+   `by_word/<word>/sequences.npz` (keys `"{participant_id}_{sequence_id}"`) plus
+   `split_manifest.parquet` with columns `word, participant_id, sequence_id, split,
+   fold, is_outlier`. Folds must be **signer-disjoint** (group by `signer_id`).
+   ⚠️ *Unverified:* whether this environment has `pandas`/`pyarrow`/`sklearn` — the
+   check was interrupted. Confirm before relying on parquet.
+3. Download only the 130 Tier-A classes (~8,324 clips), not all 91k.
+4. Extract landmarks (MediaPipe over ~8,300 videos = hours, not minutes).
+5. Train with `train.py` (vocab-size agnostic) + class weighting for the 51× imbalance.
+6. Wire Phase 1 (`live_demo.py` + clinical grammar) and Phase 2
+   (`build_sign_clips` → `sign_clips_medical.npz` → `gloss_to_motion --per-word`).
+7. **Clinical safety gates (non-negotiable):** critical terms (pain, severity,
+   negation, body part) **never auto-commit** — force the L2 confirm path even at high
+   confidence; **always show the recognized gloss for correction before speaking it**;
+   the grammar layer must be **constrained to recognized glosses** so an LLM can never
+   invent clinical content that wasn't signed.
+
+**Scope limits to state out loud:** no fingerspelling (drug names/conditions are
+fingerspelled — an isolated-sign classifier cannot read them); no diagnosis, consent,
+or dosage; **not a replacement for a qualified medical interpreter.**
+
+---
+
+## 0.3 STATE AS OF 2026-08-12 — ⚠️ SUPERSEDED IN PART BY §0.4, READ THAT FIRST
+
+Everything in this section about the **animation export** is current and correct. Everything
+about the **recognition model** — the `0.7590` headline and the masking lever — was overtaken
+on 2026-08-13; see **§0.4**. §0.2's "Working with Salim" subsection is still accurate and still
+worth reading.
+
+**Full write-up: `docs/MODEL_250_MVP_REPORT.md`.** Outgoing letter to the animation side:
+`Fix/FROM-SALIM-v7.md`. Do not re-derive what those two contain.
+
+### The one thing to understand about this session
+
+The recognition model and the animation export are **two separate products off one corpus**,
+and only one of them was broken. Recognition is fine at **0.7590 top-1** on a
+participant-held-out split. The animation export was shipping the **resting hand** — the hand
+that is *not* doing the sign — on **249 of 250 words**.
+
+Cause chain (root cause **R5**, all measured):
+
+1. MediaPipe preferentially loses the hand that **moves** (median wrist speed 0.0317
+   sh.w./frame in hand-missing frames vs 0.0208 in hand-present ones).
+2. So the populated 21-point block is disproportionately the **still** hand.
+3. `extract_canonical.canonicalize()` chose dominance from hand-block frame counts →
+   canonicalized on the resting hand.
+4. The exemplar selector then **maximized hand coverage**, and coverage is anti-correlated
+   with motion: `r = −0.464`, negative for **100%** of 250 words. Maximizing coverage *is*
+   selecting for stillness.
+5. Net: the wrong hand chosen with **99.6% precision against a 44.9% base rate**.
+
+The evidence was in the export all along — every word's meta had `"required_hand": "R"` next
+to `"dominant": "L"` and nothing compared them. What settled it was **geometry**: hand
+landmark 0 *is* a wrist, so co-location with a pose wrist identifies the limb regardless of
+naming — median **0.088** shoulder-widths to its own limb vs **1.783** to the other.
+
+**The corpus was never the problem.** 55.1% of takes have the tracked hand on the moving arm
+and all 250 words have ≥55 such takes (median 178). Selection bug, selection fix, no retraining.
+
+### Verified fixed
+
+| criterion (their `Fix/check-export3.py`) | before | now |
+|---|---|---|
+| dominant-hand coverage | 0.4% FAIL | **76.2% PASS** |
+| words missing the dominant hand | 249 | **1** (`finish`, a tie-break artifact — not a hole) |
+| exemplars carrying the signing hand | 0.4% | **250/250** |
+| exemplars carrying the resting hand | 96.9% | **0.1%** |
+| tracker-drop ratio | 4.06× | 1.52× |
+
+`finish` is fine: its right hand is present in 10 of 22 frames. The two sides derive dominance
+differently (absolute wrist travel vs shoulder-relative with an elbow gate) and disagree on
+**exactly 1 of 250 words**, whose travel ratio is **1.00** — a perfect tie. The export now
+asserts `dominantHand: "R"` so it is never re-derived.
+
+### The remaining ceiling is two-handed words only
+
+| class | n | dominant coverage | valid takes (median) |
+|---|---|---|---|
+| one-handed | 163 | **0.829** | 138 |
+| 2s | 52 | 0.412 | **3** |
+| 2a | 35 | 0.422 | 5 |
+
+One-handed signs are done. The 87 two-handed words are limited by **pool size, not
+selection**: validity passes 48% of one-handed candidates but **1% of 2s** and 2% of 2a. 20
+words have ≤2 valid takes, 7 have exactly one, 6 exemplars are under 0.53 s. Structural — a
+two-handed take needs both motion and coverage, and those trade against each other. **The
+lever is at the render layer** (declared hold/interpolate via `dominantCoverage`), not better
+selection. Loosening validity buys coverage by re-admitting hanging arms: worse, and harder to
+detect.
+
+### What changed in the code (all tested)
+
+- **`sign_landmarks.hand_arm_alignment()`** — the geometric signing-hand test.
+- **`build_sign_clips.py --require-signing-hand`** (default `on`) — gate 0, before every class
+  rule. Warns on words with no aligned take anywhere; **aborts** only if it picked an unaligned
+  take when an aligned one existed (that would be a selector bug, not a data limit).
+- **`gloss_to_motion.py`** — each segment now carries a `synthesis` block: class, rule,
+  `dominantHand`, `passiveWristIndex`, the assigned `passiveHandshape` for 2a words, and
+  `dominantCoverage`. Purely additive: verified 0 words with changed motion data.
+- **`train.py --mask-resting-hand {off,train,all}`** (default `off`) — was expected to be the
+  next accuracy lever. **It is not. The A/B ran 2026-08-13 and masking LOSES on both
+  yardsticks — see §0.4.** The flag stays in the code as documented negative evidence; do not
+  enable it. It NaNs the hand block on the ~42% of clips where the alignment rule says the
+  tracked hand sits on the still arm.
+- **`build_handshape_templates.py`** — S anchor fixed (dropped the dynamic `milk`/`orange`);
+  added a `resolution` map so all 7 unmarked shapes resolve. Corrected 2026-08-13 against the
+  shipped file: it carries **7** handshape entries with `n_usable: 6` — `S` IS measured (the
+  anchor fix landed), and only `O` falls back, to `C`. There is no `S→A` fallback.
+- **`asl_handedness_250.json`** — new `passive_handshape` block: all 35 `2a` words assigned a
+  shape *and* a contact target. **35/35** land on a measured template. **NOT DEAF-REVIEWED.**
+  *(Corrected 2026-08-14: read "34/35" until then — the same stale fact the bullet two lines above
+  had already refuted, surviving inside the block that corrected it. Two lines apart.)*
+- **`docs/SIGN_ANIMATION_CONTRACT.md` §6.1** — the full renderer spec for the above.
+- **`docs/HANDEDNESS_REVIEW_SHEET.md` Part 2** — the 35 passive handshapes, ordered so the
+  doubtful rows come first.
+
+### Immediate next actions
+
+1. **Upload `~/Downloads/asl250_code.zip` as `asl250-code-v16`.** (v13 is what last ran on
+   Kaggle; v14/v15 were superseded before upload. `train.py` changed, so the number moved.)
+2. **Kaggle CPU notebook: re-run Cell 0 first** — staging lives there, and re-running only the
+   later cells silently reuses old code. That already cost one wasted run. Then Cells 3, 4, 5.
+   Cell 2 is skippable *only* while `build_sign_clips.py` is unchanged — check
+   `/kaggle/working/out/sign_clips_250.npz` survived the kernel restart first.
+3. ~~**GPU: the masking A/B**~~ — **DONE 2026-08-13. Masking lost. See §0.4.** The one note
+   from this item that still matters: `CosineDecay(decay_steps=epochs*steps − warmup)` ties the
+   whole LR schedule to `--epochs`, so changing the epoch count is a *different experiment*,
+   not a continuation. Any two arms being compared must be passed the same `--epochs`.
+4. **Send `Fix/FROM-SALIM-v7.md`** plus the corrected `animation_handoff/`,
+   `handshape_templates.json` and `asl_handedness_250.json` to Ghozlan. The copy he has now
+   carries the wrong hand.
+5. **Still outstanding from earlier sessions:** rotate the burned AWS/Gemini/Supabase keys;
+   free disk on C: (was 1.1 GB of 237 GB free).
+
+### Two methodological rules this session earned
+
+**A check that cannot fail is indistinguishable from a check that passes.** It happened three
+times: the original `pres > best` selector could never fire; a corpus-layout probe compared two
+corpora that had the *same* layout and reported "no regression"; a staleness guard listed only
+symbols the *old* code also contained, so a stale build ran and produced byte-identical output
+that read as a successful re-run. Run every new assertion once against the case it is meant to
+catch.
+
+**Prefer geometry to labels.** Every naming-convention question here — which hand is dominant,
+which block is left, whether the image is mirrored — collapsed the moment someone measured a
+distance instead of trusting a field name.
+
+---
+
+## 0.4 STATE AS OF 2026-08-13 — ⚠️ SUPERSEDED IN PART BY §0.5, READ THAT FIRST
+
+Wins over §0.3 and everything below **for the recognition model**. §0.3 remains correct for the
+animation export. Two results, and the second one is much bigger than the first.
+
+> **§0.5 (2026-08-14) overturns the *conclusion* of item 2 below.** The per-signer measurements
+> in the table are correct and still stand. The *causal* claim — that hand-block layout produces
+> the spread — was tested directly and **refuted**. Read §0.5 before acting on item 2 or on the
+> next actions in item 6.
+
+### 1. The resting-hand mask is refuted. Do not revisit it.
+
+Both arms, one commit, legacy corpus, one variable (`epochs=120 run=120 seed=42` on both;
+`masked_clips=0` vs `39369`):
+
+| arm | TEST (13,998 clips, signer-disjoint) | val fold 0 (16,202) | train acc |
+|---|---|---|---|
+| control `mask=off` | **0.7658** | 0.5791 | 0.7673 |
+| masked `mask=train` | 0.7346 | 0.5376 | 0.4983 |
+| delta | **−0.0312 (−6.0σ)** | −0.0415 (−7.5σ) | −0.269 |
+
+`train`-only masking creates a train/eval mismatch, so the val and test deltas alone do not
+prove information loss. **The train-accuracy column does**: 0.767 → 0.498 on the distribution
+the model actually trained on. The deleted block carries class-discriminative signal.
+
+Mechanism, from the per-arm confusion matrices: predictions collapse onto signs sharing a **body
+location**, because the handshape that separated them is gone. `tongue` → `say` (both at the
+mouth); `awake` → `wake` + `moon` (all at the eyes); `water` → `fine` (W-at-chin vs 5-at-chest,
+a handshape-only distinction); `mouse` → `toothbrush`/`doll` (all at the nose).
+
+**There is no selective version to salvage.** Per-word: 48 helped / 177 hurt / 25 tied, but at
+2σ only **3 helped** against **~6 expected from chance** across 250 tests — below the noise
+floor. Every apparent winner is either noise or the other half of a zero-sum shift inside a
+confusion cluster (`wake` +0.197 *is* `awake` −0.250). Damage is broad and shallow: ~66 clips
+per word makes a −0.04 shift −0.67σ per word and invisible, yet −7.5σ pooled.
+
+### 2. Per-signer variance dwarfs everything, and it is handedness
+
+The fold-0 control model over its **7 honest held-out signers** (4 val-fold + 3 test):
+
+| pid | L-block | R-block | acc | layout |
+|---|---|---|---|---|
+| 26734 (val) | 0.02 | 1.00 | **0.823** | pure R |
+| 2044 (test) | 0.01 | 1.00 | 0.806 | pure R |
+| 37779 (test) | 0.00 | 1.00 | 0.780 | pure R |
+| 53618 (test) | 0.13 | 0.88 | 0.707 | R + contamination |
+| 32319 (val) | **1.00** | 0.04 | 0.614 | pure **L** |
+| 34503 (val) | **1.00** | 0.08 | 0.577 | pure **L** |
+| 29302 (val) | **0.48** | **0.99** | **0.314** | **both blocks** |
+
+**Spread 0.509.** Both pooled numbers reconcile exactly from these rows (val 0.5791, test
+0.7658), so this is arithmetic, not an artifact. Two distinct failure modes:
+
+- **Recorded on the left → ~−20 points** (0.577, 0.614 vs 0.78–0.82).
+- **Both blocks populated → −50 points.** 29302 has R in 99% of clips *and* L in 48%. The model
+  trained on clips carrying essentially one hand block; this input has a different shape.
+  Accuracy is flat ~0.80 while L-contamination ≤0.02, then 0.13 → 0.707, 0.48 → 0.314.
+
+### 3. The consequence: the test split cannot see the problem
+
+Test holds only R-dominant signers (0.13 / 0.00 / 0.01) — **not one left-recorded signer.** val
+fold 0 holds three of the four pathological ones. So:
+
+- **`0.7658` is structurally optimistic**, not merely lucky. It measures the layout the model
+  already handles.
+- **The honest new-signer estimate is `0.666` pooled over all 7**, median 0.707, with an
+  observed 1-in-7 chance of ~0.31. And that is if anything generous — the val fold was used for
+  model selection (EMA keeps best-`val_acc` weights), so those four are not pristine.
+- **Canonicalization was never refuted.** §0.3 and `MODEL_250_MVP_REPORT.md` §1.1 said arm B's
+  canonical 0.7590 vs shipped 0.7576 proved the layout "did not buy accuracy." That comparison
+  was **blind by construction**: the test split had no left-recorded and no both-blocks signer,
+  so canonicalization had nothing to fix there and paid only its preprocessing cost. It is now
+  the highest-value lever, aimed at a 20–50 point hole rather than a 2-point one.
+- **val fold 0 is the sensitive endpoint, pooled test is the blind one.** Judge any future
+  layout A/B per-signer on **34503, 32319, 29302**. Never on pooled test accuracy.
+
+### 4. Also closed: epochs
+
+Control's val_acc is flat from ~epoch 93 (0.5781 / 0.5786 / 0.5788 / 0.5783 / **0.5791** peak
+at 99) and drifts to 0.5774 by 120. 120 epochs is enough; more buys nothing. Arm B's
+best-at-115-of-120 was a canonical-corpus artifact, not a general signal.
+
+### 5. The animation export was only fixed ON KAGGLE — that got closed 2026-08-13
+
+§0.3 recorded the export as fixed and verified at 76.2%. It was — **in the Kaggle CPU
+notebook.** The corrected artifacts were downloaded to `~/Downloads/cpu_session_out_v16/` on
+2026-08-12 and never copied into the repo, so for a day the repo held the *broken* export and
+`demo_voice_gui.py` rendered it. Measured on disk before the fix:
+
+| | on disk (repo) | after copying the corrected clips |
+|---|---|---|
+| dominant-hand coverage | 28.8% FAIL | **76.2% PASS** |
+| words missing the dominant hand | **137** | **1** (`finish`, the documented tie) |
+| signing / resting hand | 28.8% / **51.5%** | **76.2% / 0.1%** |
+| native clip duration | FAIL — all 250 forced to 64 frames | **PASS — 9 to 116 frames** |
+| no limb longer than itself | FAIL, 2 words | **PASS** |
+| synthesis blocks | 0/250 | **250/250** |
+
+Root cause was mundane and worth remembering: **`sign_clips_250.npz` in the repo was the Jul 30
+build**, carrying the resting hand on 150/250 words (40% signing). The corrected npz existed
+only in Downloads. Two independent runs of `gloss_to_motion.py` — one on Kaggle, one local —
+produced **byte-identical** word files from it, so the exporter is deterministic and the only
+variable was which npz was on disk.
+
+Also added 2026-08-13: **`synthesis.sourceQuality`** per word — `validTakes` (corpus median
+114), `thin` (≤2 takes: 20 words, 7 of them single-take), `brief` (<0.53 s: 6 words), and
+`sourceClip` for provenance. `tiger` is both thin and brief: one take, nine frames. Verified
+purely additive — frames and segment timing byte-identical with and without the metadata.
+
+The send bundle is built at `_send/` and zipped as `deafference_handoff_v7_CORRECTED.zip`
+(7.3 MB, 250 word files + 8 support files). `Fix/FROM-SALIM-v7.md` gained a "read first" block
+covering the three rig changes Ghozlan must make (variable clip length is the breaking one),
+plus the `finish` tie-break proposal and a request to drop per-landmark confidence from the
+contract.
+
+### 6. Next actions (decided 2026-08-13)
+
+1. ~~**Rebuild the canonical corpus and retrain.**~~ ✅ **RUN 2026-08-14 — REFUTED, see §0.5.**
+   The bar below was not met: mean delta on the affected signers was **−0.0064**. Do not re-run
+   this, and do not try `--unaligned hand` — §0.5 explains why that retry is not worth 3 h 45 m.
+   Original plan text kept for provenance: — run it per
+   **`docs/KAGGLE_CANONICAL_REBUILD.md`** (~3 h 45 m, one commit, no AWS/S3 needed: raw from the
+   `asl-signs` competition mount, manifest from `asl250-mask-ab-v1`).
+   - `extract_canonical.canonicalize()` now takes `--dominance geometric` (default): the signing
+     block is the one whose landmark 0 co-locates with the **moving** arm's pose wrist.
+     `--dominance frames` keeps the old frame-count rule for comparison only.
+   - 29302's both-blocks case has an explicit policy: `--unaligned {moving,hand}`, default
+     `moving`. Keeping the resting hand rather than dropping it is not a guess — dropping it is
+     what §0.4 §1 measured and refuted.
+   - `training/test_canonical_geometry.py` — 41 checks incl. the R5 ablation (asserts the OLD
+     rule picks the resting hand) and a branch-reachability test. Run it as a Kaggle preflight.
+   - `training/per_signer.py` — the acceptance test, with the legacy per-signer baseline
+     hard-coded so a regression is visible without hunting the old log. **Bar: mean delta on
+     34503 / 32319 / 29302 above +0.02.** Judge on that, never on pooled test accuracy.
+2. **Deploy recipe is `--mask-resting-hand off`.** Unchanged.
+3. 5-fold CV + ensemble (`--fold all`, `ensemble_eval.py`) is worth ~+1.5–3 pooled points and is
+   **blind to the handedness holes** — do it after the layout question, not before.
+4. Everything in §0.3's "Immediate next actions" items 2, 4 and 5 still stands (CPU re-export,
+   send `Fix/FROM-SALIM-v7.md` to Ghozlan, rotate the burned keys).
+
+Run artifacts: Kaggle dataset **`asl250-mask-ab-v1`** (Private) — both arms' weights,
+savedmodels, `eval_all250_fold0.json` with `per_word_acc`, confusion matrices, histories, and
+`data/split_manifest.parquet`. Splits verified signer-disjoint: **18 cv / 3 test / 0 overlap**,
+`0 / 14245` test clips from a cv participant.
+
+### The methodological rule this session earned
+
+**A pooled metric can be blind to the failure it is supposed to measure.** 0.7658 looked like a
+new best — it is the best *single-fold* test number, though the 4-fold ensemble measured 0.7755
+on 2026-08-06 (`explanation.md`), so it is not the best number overall. It was also incapable of
+detecting a 50-point per-signer collapse, because the
+split that produced it contained none of the affected configuration. This is the same lesson as
+"a check that cannot fail is indistinguishable from a check that passes," one level up: before
+trusting an aggregate, ask which subpopulations it contains — and disaggregate by the variable
+you suspect. Three under-powered checks were shipped this session before the per-clip
+set-identity test finally discriminated; the per-signer breakdown is that test's equivalent for
+accuracy.
+
+---
+
+## 0.5 CURRENT STATE (2026-08-14) — READ THIS FIRST IF YOU ARE A NEW CHAT
+
+**The handedness/layout theory is refuted. The recognition track is closed. The shipping number
+is the 4-fold ensemble at 0.7755 pooled test, unchanged since 2026-08-06.**
+
+### 1. Canonicalization was tested properly and it does not work
+
+Ran per `KAGGLE_CANONICAL_REBUILD.md`, one commit, geometric dominance, `--unaligned moving`.
+The corpus itself was clean: `left_dead 1.000`, `hand_nan 0.307`, `aligned 60.0%` (vs a ~55%
+expectation), `both_blocks 4.2%`, all 41 geometry checks green on Kaggle, smoke line
+`layout = CANONICAL | hflip swaps hands = False | hand-drop blocks = 1`. So this is not a
+plumbing failure — the intervention was applied exactly as designed.
+
+`per_signer.py` on fold-0 weights, all 7 honest held-out signers:
+
+| pid | legacy | canonical | delta | |
+|---|---|---|---|---|
+| 29302 | 0.3141 | 0.3139 | **−0.0002** | affected, both-blocks |
+| 34503 | 0.5774 | 0.5692 | −0.0082 | affected, pure L |
+| 32319 | 0.6143 | 0.6035 | −0.0108 | affected, pure L |
+| 53618 | 0.7069 | 0.7022 | −0.0047 | |
+| 37779 | 0.7796 | 0.7653 | −0.0143 | |
+| 2044 | 0.8062 | 0.8056 | −0.0006 | |
+| 26734 | 0.8231 | 0.8158 | −0.0073 | |
+
+**Affected signers −0.0064. Unaffected signers −0.0067.** That single comparison is the result:
+an intervention built to help three specific signers hurt all seven by the same amount. There is
+no differential effect — not a weak one, none. Pooled 0.6591 vs 0.6656 (−0.0065). Spread
+0.5019 vs 0.5090, and it narrowed only because everything drifted down together.
+
+**The sharpest number is 29302's −0.0002.** That signer is why the run existed: 0.48 L-block *and*
+0.99 R-block, 50 points below the pure-R signers. Canonicalization put his signing hand in one
+block on every clip, and `both_aligned_tie_by_distance` fired on only 138 of 94,198 clips
+corpus-wide — so the picker was not hedging on his data, it was making confident unambiguous
+choices. It made them, and he did not move measurably.
+
+**Conclusion: hand-block layout is a *proxy* for whatever drives the 0.31–0.82 spread, not its
+cause.** Both correlate with something about how those sessions were recorded. Remove the layout
+difference and the spread survives intact.
+
+**The confound, stated honestly:** this was not a clean single-variable A/B. On canonical data
+`hflip` no longer swaps hands and hand-drop has 1 block instead of 2, so augmentation changed
+too; train acc fell 0.767 → 0.710, so the corpus also genuinely lost fittable signal (the 33–53
+block was carrying something). Either explains the uniform −0.0066. **Neither can manufacture a
+differential gain, and the differential gain is what was on trial.** The refutation holds.
+
+### 2. What this cancels
+
+| item | status |
+|---|---|
+| Face landmarks into the freed 33–53 block | **cancelled** — `per_signer.py`'s coded verdict says so |
+| Folds 1–3 + ensemble on the canonical corpus | **cancelled** — do not ensemble a corpus 0.0065 worse |
+| `--unaligned hand` retry | **cancelled** — see below |
+| Any further recognition GPU work | none queued; quota free |
+
+`KAGGLE_CANONICAL_REBUILD.md`'s decision table pre-committed to trying `--unaligned hand` if the
+affected signers went down. **That pre-commitment assumed some differential signal to chase.**
+Zero was measured. The flag only re-orients the 39.8% `unaligned_orient_by_moving` clips and
+barely touches 29302 at all. Overridden deliberately, by the author of that line.
+
+### 3. ⚠️ What was NOT refuted — do not over-generalize this
+
+Two separate claims were on trial and only one died:
+
+- *"Canonicalizing the training corpus raises recognition accuracy"* → **dead.**
+- *"The geometric rule identifies the correct signing hand"* → **alive, and independently
+  verified by direct measurement, not by an accuracy proxy.** The animation export went from
+  137/250 words rendering the **resting** hand to 1 (`finish`), signing/resting coverage
+  28.8/51.5 → **76.2/0.1**.
+
+**The animation export is correct and is now FINAL.** No new corpus is coming. Anyone reading
+§0.5 as "the handedness work was wrong" would be discarding a verified product fix on the
+strength of an unrelated null result.
+
+### 4. Per-user variance is a product fact now, not a bug to chase
+
+0.31–0.82 across seven held-out signers is a measured property of this model that layout
+canonicalization does not fix. Quote **0.6–0.8** for a single new user. The remaining lever on
+sign quality is the Deaf review sheets, not GPU.
+
+One cheap lead survives, unpursued: 29302 may have the tracker switching hands *within* a clip,
+while `limb_assignment` takes one median distance and picks one block per clip — wrong
+granularity if so. ~20 min locally, no GPU. It is diagnosis, not a fix.
+
+### 5. Code fixes shipped 2026-08-14
+
+**`gloss_to_motion.blend_len()` — the 2.13 s constant, on our side.** Ghozlan warned that
+anything calibrated when every clip was 64 frames needed re-checking. Ours was
+`DEFAULT_TRANSITION = 8`, inserted between signs by `stitch()`. At 64 frames that is 12% of a
+clip; with native durations, `tiger` (9 frames) with a neighbour on each side got 16 blend frames
+around 9 sign frames — **64% of the word's span was morph**. Nothing raised. Now scaled:
+`max(1, min(cap, round(0.15 × min(len_a, len_b))))`. `tiger` 64% → 18.2%; `puppy` (116f)
+unchanged at 12.1%; returns `cap` unchanged for any pair ≥ ~53 frames, so it is a no-op on
+everything that was already fine. `--transition 0` still disables blending. **One fix covers five
+entry points** — `preview_signs.py`, `demo_speech_to_sign.py`, `demo_voice_gui.py`,
+`demo_voice_to_sign.py` and `gloss_to_motion.py` all route through `stitch()`.
+
+**A bug in Ghozlan's `retarget.mjs`, verified before reporting.** The 2s branch (line 990) is
+guarded by `e[other(s)].hpts` — the other side must have data. The 2a branch (line 1042) has no
+such guard, so on a frame where the *dominant* hand is untracked, `!H` is true for the dominant
+side too and it receives the **passive** base handshape. Measured from
+`animation_handoff/words/`: the dominant hand is absent on **666 of 1374 frames across the 35 2a
+words (48.5%)** — worst are `arm` (18.2% present), `chocolate` (22.2%), `hide` (25.6%),
+`night` (28.6%). Falsifiable prediction he can check in one line: his `report.templateHands`
+counter should read **1374**; if it reads ~**2040** the dominant side is being templated. Patch:
+add `&& s !== DOM_SIDE` (derive `DOM_SIDE` from `DOMINANT` at line 567) so the dominant side
+falls through to the relax branch at 1081.
+
+### 5.5 The avatar track, where all the remaining headroom now is
+
+With recognition closed, this is the whole product surface. Quality tiers on dominant-hand
+coverage, measured over the shipped 250:
+
+| class | words | 🟢 A ≥80% | 🟡 B 50–80% | 🔴 C <50% |
+|---|---|---|---|---|
+| 1 one-handed | 163 | **144** | 19 | **0** |
+| 2s symmetric | 52 | 3 | 26 | 23 |
+| 2a asymmetric | 35 | **0** | 19 | 16 |
+
+**One-handed words work. The 87 two-handed words are the entire problem.** Same R5 mechanism:
+the tracker loses the hand that moves, and two-handed signs are where the hands occlude. Measured
+on this export, median wrist speed is 0.0208 sh.w./frame when the hand block is present vs 0.0317
+when missing — **1.52×**.
+
+**🔴 The biggest single finding, and it is not the 2a contact problem.** The dominant hand is
+missing on 2595 of 10956 frames (23.7%) in **776 gaps, 751 of them interior**. But **550 of 776
+gaps are 1–3 frames** — 33–100 ms of tracker dropout where the hand did not go anywhere.
+`retarget.mjs`'s relax branch (line 1081) sets the hand to a relaxed pose there, so the handshape
+visibly collapses and re-forms **550 times across the vocabulary**. Contract §6 already says a
+null landmark is the renderer's to hold. **1177 frames (45.4% of all missing frames) are
+recoverable by holding across gaps ≤4.** This is a third instance of the 2.13 s pattern: the relax
+branch was written against the *broken* export where the signing hand was often absent entirely.
+
+**🟠 The 2a contact problem — confirmed, larger than reported, and the diagnosis inverts.** Measured
+over all 35 2a words: the passive wrist sits a median **1.56 shoulder widths** from the dominant
+wrist (range 0.80–2.22); only 1 of 35 is inside the 45–55 cm band the animation side reported. But
+the arm is **not hanging** — median 0.34 sh.w. below its own shoulder, never past 0.75, versus
+~1.1–1.3 for a hanging arm. It is raised and on its own side of the body. So a proximity filter
+strands **35/35** and cannot ship. Fix: `asl_2a_base_placement.json` (new), anchoring the base to
+the dominant hand's own trajectory then holding static. Hearing-authored, unreviewed, 22 high /
+11 medium / 2 low, and 6 words (`arm`, `table`, `tree`, `flag`, `morning`, `time`) act on the
+forearm or wrist rather than a hand — flagged `kind`, not solved.
+
+**🟠 Exemplar selection is starved by its own validity filter.** `require_passive_up` is the sole
+cause, and class 1 returns before it: class 1 keeps **49.0%** of takes (median 138 valid), 2s keeps
+**1.2%** (median 3), 2a **2.1%** (median 5). `corr(valid_candidates, coverage) = +0.804` over 250
+words — 0 of 163 words with >60 valid takes are degraded, vs 22 of 38 with ≤3. **For 2a the gate
+is pure loss**: it sacrifices ~98% of the pool to protect a passive wrist position that
+`asl_2a_base_placement.json` now overwrites. `--require-passive-up 2s-only` added; **untested —
+see §6.**
+
+**Also shipped:** `quality` block on all 250 word files (tier + gap runs; frames byte-identical,
+verified by diff); `check-export3.py` now **reads** `dominantHand` instead of deriving it from
+wrist travel — which is what `finish` had been failing on all along, with a zero-counter guard so
+it cannot regress silently; the "per-landmark confidence present" criterion retired by both sides
+(null *is* not-visible, so a 4th component was a constant function of the first three — a check
+that could not fail, failing a clean export); `preview_signs.build_sequence` now passes the
+lexicon, so the Deaf-review overlay can show class, tier and passive handshape.
+
+**🔵 A 2a shape claim that was WITHDRAWN the same day it was written.** An earlier version of
+`docs/AVATAR_LIMITS.md` accepted the animation side's ~0.150 "shape fidelity floor" and concluded
+~26 words render a cupped hand instead of a flat B. An independent reproduction — their rig and all
+250 clips extracted from the base64 in `Fix/avatar-player.html`, `template-check.mjs` reimplemented
+from scratch, their exact numbers reproduced — found that in **bone-direction space, the space the
+retargeter actually solves for, the error is 0.00° for B, C, `1` and A**, with a rest-hand negative
+control that fails. Their 0.150 and their 0.206 template gap were also computed on **different
+landmark sets** (20 vs the 14 the rig can fill; the real gap is 0.124), the "half the gap so it
+flips" arithmetic fails in simulation at 4000 trials, and effective n is **5, not 35** (the rendered
+pose is float-identical across all words of a shape). Do not quote ~0.15 as a floor. **Caveat: that
+reproduction's own adversarial reviewers died on a session limit, so it is one strong pass, not
+settled.** It also turned up a defect nobody had seen: **0 of 35 2a clips key the distal finger
+bones, while 52 of 52 2s clips do.**
+
+**🟢 Four files were carrying a dead `S→A` fallback**, two of them shipped: the contract told the
+animation side that `time` needs a substitution it does not, and `asl_handedness_250.json`'s
+`_fallback` misdescribed its own sibling's `resolution` map. It is **35/35 on measured templates**,
+both map entries inert, and only **5 of 7 templates reachable** (`5` and `O` are requested by no
+word). Corrected in `SIGN_ANIMATION_CONTRACT.md`, `asl_handedness_250.json`,
+`MODEL_250_MVP_REPORT.md`, `HANDEDNESS_REVIEW_SHEET.md` and §0.4 of this file — where "34/35" had
+been sitting **two lines below** the bullet that already refuted it.
+
+### 6. Next actions (2026-08-14)
+
+**Ours, and the only open experiment:**
+
+1. **Run `docs/KAGGLE_EXEMPLAR_RESELECT.md`** — `build_sign_clips.py --require-passive-up 2s-only`.
+   **CPU, ~30 min, does NOT consume GPU quota.** Tests whether the 39 tier-C words are recoverable.
+   Acceptance: 2a median valid candidates 5 → ~130 and coverage following. It would change the 35
+   2a word files, so decide before or after the animation side acts on the current bundle.
+   The same doc carries a second cheap cell for the 29302 intra-clip question (§4 below).
+2. **Send the bundle** — `deafference_handoff_FINAL.zip`. Frame arrays byte-identical to the copy
+   already processed; what is new is the `quality` block, `asl_2a_base_placement.json`,
+   `AVATAR_LIMITS.md` and `Fix/REPLY-TO-GHOZLAN-v9.md`.
+
+**Theirs (in the letter, ranked):** the 2a side-guard bug (666 of 1374 frames give the dominant hand
+the passive handshape); hold across short gaps instead of relaxing (1177 frames); the distal-bone
+defect on the 2a path; re-run `template-check.mjs` in direction space with the negative control.
+
+**Salim's:** Deaf review — and it is **three** reviews, not one: (a) the 250 exemplars *(sheets
+ready)*, (b) the 7 handshape template anchors *(never done; the file itself asks for it)*, (c) the
+35 2a base placements *(new, never reviewed)*. Plus rotate the burned AWS / Gemini / Supabase keys,
+outstanding since 2026-08-12.
+
+**Not fixable, and now written down** — `docs/AVATAR_LIMITS.md`. Headline: the export carries 75
+points, 33 pose + 42 hand, and **no face**. ASL grammar lives in eyebrows, mouth morphemes, head
+tilt and gaze. For isolated words that is acceptable; for sentences it is a correctness gap, not a
+polish item, and it should block any claim that the system "produces ASL" rather than "plays ASL
+signs."
+
+### The methodological rule this session earned
+
+**A correlation strong enough to explain every data point is still not a cause.** The layout
+table in §0.4 was clean: three pure-R signers on top, two pure-L in the middle, the both-blocks
+signer alone at the bottom. It reconciled arithmetically with both pooled numbers. It predicted
+the right intervention. And the intervention moved the target signer by −0.0002. The table was
+never wrong — the inference from it was. §0.4's rule was "disaggregate before trusting an
+aggregate"; this one is its sequel: **once disaggregation hands you a mechanism, the next step is
+an intervention that would fail if the mechanism were false, not more description of it.**
+
+---
+
+## 1. The project in one page
+
+**Deafference** is a sign-language → speech product. Pipeline:
+
+`camera → MediaPipe landmark extraction → normalize → sliding window / sign
+segmentation → sequence model (classifies ONE isolated sign) → confidence gate →
+gloss buffer → grammar/AI turns glosses into a sentence → captions + text-to-speech`
+
+- **Phase 1 = ASL** (current): ~30-word MVP vocabulary, being expanded to 250.
+- **Phase 2 = LSL** (Lebanese Sign Language): reuses the architecture; the real
+  differentiator/moat (no big-tech competition, RTL/Arabic).
+- **Privacy stance:** sign recognition runs **client-side** (TF.js in the browser).
+  Video/landmarks are **biometric and never leave the device.** Only the recognized
+  *words* (glosses — plain text, not biometric) may go to a cloud LLM for sentence
+  generation. This is the core architectural constraint — respect it everywhere.
+
+**Critical nuance the model has:** it recognizes **one isolated sign per window.**
+It is NOT continuous sentence recognition. The "sentence" comes entirely from a
+post-processing layer (grammar rules, or an AI) that takes the ordered list of
+recognized words and phrases them. This is why the AI sentence step matters.
+
+---
+
+## 2. Team & roles
+
+- **Salim** (`salim@deafference.com`) — team lead + backend/ML + dataset owner. Ran
+  the train→validate→export pipeline. Drives the demo and the strategic calls.
+- One other backend teammate (owns Clean+Preprocess and the Track B website API
+  tasks BE-1…BE-9).
+- Two frontend devs (the camera→speech browser app).
+
+---
+
+## 3. `live_demo.py` — the main deliverable (full detail)
+
+### 3.1 What it is
+A single standalone Python script at the repo root. Opens the webcam, runs
+MediaPipe Holistic, and does the whole pipeline **without the browser/frontend**.
+It is the bridge for demoing the model until the browser pipeline is built.
+
+### 3.2 How it works (pipeline inside the script)
+1. **Threaded camera** (`Camera` class) grabs the freshest frame (no capture lag).
+2. **Mirror + MediaPipe Holistic** → landmarks.
+3. **`extract_75()`** builds the 75-point layout: pose 0–32, left hand 33–53,
+   right hand 54–74 (NaN for anything undetected).
+4. **`normalize()`** — shoulder-midpoint centered + shoulder-width scaled on x,y
+   (MUST match training preprocessing; see §7). Returns `None` if both shoulders
+   aren't visible (frame dropped rather than mis-scaled).
+5. **Sign segmentation (auto-commit)** — see §3.4. Collects a sign's frames.
+6. **`classify_segment()`** — resamples the collected frames to exactly 64
+   (`time_resize`, matching training) → runs the model → softmax. With `USE_TTA`
+   it also averages the mirror of the clip (the model was trained with hflip).
+7. **Confidence gate (0.50)** → append the word to the gloss buffer.
+8. **DONE** → `finalize()` turns the gloss buffer into a sentence (rules or AI) →
+   **speaks it** (Windows SAPI).
+
+### 3.3 The model it loads — and WHY SavedModel
+It loads the **exported TF SavedModels** from `artifacts/savedmodel_fold{0..4}/`
+via `tf.saved_model.load(...)`, and averages their softmax (5-fold ensemble).
+
+> ⚠️ **Do NOT switch to the `.weights.h5` files.** They were saved on Linux and do
+> **not load on Windows** (a tf-keras path-separator bug: it looks up
+> `layers\stem_dense` with a backslash and finds 0 variables). SavedModel is a
+> pure-TF format with no Keras-version dependency and sidesteps this entirely.
+> Also: `train.build_model` uses raw `tf.matmul` on symbolic tensors, which only
+> works under the **Keras 2 API (tf-keras)**, NOT Keras 3 — another reason we load
+> the SavedModel graph directly instead of rebuilding the architecture.
+
+Input `[1,64,75,3]` (raw x,y,z), output `[1,30]` **logits** → we apply softmax.
+The z channel and motion features are handled by the model's embedded
+`PreprocessLayer` (see §7).
+
+### 3.4 Sign segmentation & the "make it fast" work
+The naive approach (a rolling 64-frame window fed continuously) was **slow**: a new
+sign had to "outvote" ~4–5 seconds of stale history before it dominated. We
+replaced it with **segment-then-classify**, which also matches training (each
+training clip was one isolated sign resampled to 64 frames):
+
+- **Start a sign** when hands appear (after a cooldown). A **pre-roll** of the last
+  8 frames *before* hands are detected is prepended — critical for signs performed
+  **at the face** (e.g. `hello` = forehead salute) where MediaPipe's hand detector
+  kicks in late but the pose still tracks the arm.
+- **End a sign** when hands lower (`END_FRAMES`) or hold still (`STILL_FRAMES` +
+  `MOTION_EPS`), then classify + commit.
+- **Early commit** — while signing, a cheap single-model preview runs every
+  `PREVIEW_STRIDE` frames; if it's confident (`EARLY_CONF=0.80`) about the same
+  word twice in a row, the word commits **instantly, mid-sign** (this is what makes
+  strong signs feel snappy). Live guess shows as `~ word (0.87)`.
+- **Flicker tolerance** — if hand detection drops mid-sign, capture keeps going
+  (those frames just have NaN hands, exactly like training padding).
+- **Guards:** a post-commit `COOLDOWN` and same-word suppression within
+  `DUP_SECONDS` prevent one held sign from committing twice.
+- Below-gate segments show **"not sure (word 0.42) — try again"** instead of
+  silently doing nothing.
+- Every committed segment prints a diagnostic to the terminal:
+  `[seg]  28 frames (19 with hand) -> hello:0.91  bye:0.04  wait:0.02` — use this
+  to tell whether a failure is capture (too few frames/hands) or the model.
+
+### 3.5 Sentence generation: rules vs AI
+- **Default (`python live_demo.py`)** — offline **rule engine** (`grammar_rules.json`,
+  copied self-contained into the script as `render_sentence`). Instant, can't fail,
+  but only knows the ~44 authored gloss combos. Shows a live preview while signing.
+- **`--ai`** — the sentence is built **entirely by the AI** (Gemini by default),
+  **no rules fallback** (Salim's explicit choice: prove the AI is doing the work).
+  Runs off-thread so the video never freezes. On error it shows the error, not a
+  rules sentence. In `--ai` mode there is no rules preview — the sentence only
+  appears on DONE.
+
+### 3.6 Text-to-speech
+Uses the **Windows SAPI voice directly via `win32com`** (from pywin32), NOT
+pyttsx3. Reason: pyttsx3's `runAndWait()` in a background thread **only fires once**
+("speaks the first time, then silent" — the bug we hit). SAPI's `Speak()` works
+every time. Runs in a worker thread with `pythoncom.CoInitialize()`.
+
+### 3.7 UI / controls
+Fullscreen canvas: camera centered, top bar shows the sentence + `signs:` list,
+bottom bar has buttons, right margin shows the optional word list.
+
+| Control | Key | Does |
+|---|---|---|
+| DONE | Enter | finish sentence → build + speak it |
+| UNDO | Backspace | remove last committed word |
+| CLEAR | c | reset the sentence |
+| SPEAK | s | toggle live per-word speech (also speaks on DONE regardless) |
+| WORDS | w | toggle the on-screen 30-word list (on by default) |
+| say now | space | speak the current sentence immediately |
+| quit | q | exit |
+
+DONE/UNDO/CLEAR/SPEAK/WORDS are also **clickable buttons** (mouse works because the
+canvas is rendered 1:1 at screen resolution with `SetProcessDPIAware`).
+
+### 3.8 Flags & modes
+- `python live_demo.py --selftest` — **no camera**; loads the model and predicts on
+  random input. Proves the model half works. Prints latency (ensemble ~46 ms warm).
+- `--single` — fold-0 only (faster, 0.9386 vs 0.9433).
+- `--fast` — MediaPipe pose complexity 0 (~2× fps, but weaker hand detection near
+  the face — `hello` may suffer). Default is complexity 1.
+- `--ai` — AI sentence generation (see §3.5).
+
+### 3.9 Config knobs (top of the file, all commented)
+`MAX_LEN=64`, `CONF_GATE=0.50`, `USE_TTA=True`, `MIN_SEG=6`, `MAX_SEG=84`,
+`END_FRAMES=10`, `STILL_FRAMES=7`, `MOTION_EPS=0.02`, `PRE_ROLL=8`,
+`MIN_HAND_FR=4`, `PREVIEW_STRIDE=6`, `EARLY_MIN=14`, `EARLY_CONF=0.80`,
+`COOLDOWN=12`, `DUP_SECONDS=2.0`, `MP_COMPLEXITY=1`.
+Raise `EARLY_CONF` if early commits feel trigger-happy; lower it if slow. Raise
+`CONF_GATE` for fewer wrong words, lower to surface more.
+
+The full end-user run guide is **`RUN_LIVE_DEMO.md`**.
+
+---
+
+## 4. Environment (the hard-won stack — do not "upgrade" casually)
+
+Windows / Python 3.11. Pinned in **`requirements_live_demo.txt`**. The constraints
+interlock:
+
+| Package | Version | Why this exact version |
+|---|---|---|
+| tensorflow | **2.17.1** | Reads the SavedModels AND keeps **protobuf 4.x**. TF ≥2.18 forces protobuf 5 → breaks mediapipe. |
+| tf-keras | 2.17.0 | Installed for compatibility; live_demo loads SavedModels so Keras version is moot at runtime. |
+| mediapipe | **0.10.14** | Has the legacy **Holistic** solution (75-point pose+hands). **0.10.35 REMOVED it.** |
+| numpy | **1.26.4** | TF needs `<2.0`; scipy (pulled by mediapipe) needs `>=1.26.4`. Only 1.26.4 satisfies both. |
+| ml-dtypes | 0.3.2 | TF 2.17 needs `<0.5`. |
+| protobuf | 4.25.9 | mediapipe needs 4.x. |
+| opencv-python | 4.11 | — |
+| pandas | any | `train.py` imports it at module top. |
+| pywin32 | (with pyttsx3) | provides `win32com` for SAPI TTS. |
+
+> ⚠️ **After installing, you MUST `pip uninstall -y jax jaxlib`.** mediapipe pulls
+> them in, but they require numpy ≥2 and break TF's tflite import path. They are
+> not needed for Holistic.
+
+Rebuild from scratch:
+```
+pip install -r requirements_live_demo.txt
+pip uninstall -y jax jaxlib
+```
+
+---
+
+## 5. Bugs found & fixed this session
+
+1. **`.weights.h5` won't load on Windows** ("expected N variables, received 0") —
+   tf-keras path-separator bug on the Linux-saved file → **load SavedModel instead.**
+2. **Keras 3 can't build the model** (raw `tf.matmul` on symbolic KerasTensors) —
+   moot once we load SavedModel directly (no `build_model`).
+3. **mediapipe 0.10.35 has no `solutions.holistic`** → downgraded to 0.10.14.
+4. **jax → numpy 2 → TF import crash** → uninstall jax/jaxlib.
+5. **TTS spoke once then went silent** (pyttsx3 `runAndWait` in a thread) → switched
+   to Windows SAPI via win32com.
+6. **Window too small / bottom buttons cut off by taskbar / overlapping text** →
+   full-screen canvas rendered at screen resolution, camera centered, bars sized.
+7. **Recognition slow** → segment-then-classify + early-commit + resample-to-64.
+8. **`hello` never detected** — hand-at-forehead defeats MediaPipe's hand detector;
+   the sign got chopped → **pre-roll** (keep frames before hands appear) + longer
+   `END_FRAMES` + back to pose complexity 1.
+
+---
+
+## 6. Key decisions taken this session
+
+- **Model loading = SavedModel**, not weights (Windows + Keras reasons above).
+- **Ensemble (5-fold) is the default** (~46 ms warm, best accuracy 0.9433);
+  `--single`/`--fast` are the speed options.
+- **DONE button stays** — it lets the *signer* decide when a sentence is finished,
+  which is the clean solution to "when does a sentence end?". Not a throwaway.
+- **`--ai` is AI-only** (no rules fallback) — Salim wants it to prove the AI itself
+  works; the default (no flag) stays fully on the offline rules/script.
+- **AI provider:** **Gemini 2.5-flash-lite** (free) for testing; **Claude Haiku
+  4.5** (paid) is the production alternative. Same guardrailed prompt; switch via
+  `SENTENCE_PROVIDER=anthropic`. Guardrails validated: 25-case suite, zero
+  fabrications after prompt hardening.
+- **Next ML milestone = expand to 250 words** (data already in S3, low risk, reuses
+  everything) — NOT continuous-signing recognition (see §8, §9).
+- **Continuous signing is a post-funding, LSL-focused bet**, unblocked now only by a
+  licensing email — not a build.
+- **Track B backend rescoped** to the full website backend (see §10).
+
+---
+
+## 7. The 30-word model — facts a new session needs
+
+- **Architecture:** 1D CNN + Transformer on landmarks (own code, hoyso-style).
+- **Input:** `[1,64,75,3]` raw x,y,z. Embedded `PreprocessLayer` (first layer):
+  builds a NaN mask keyed off pose point 0 (nose), **drops z**, adds velocity
+  (dx) + acceleration (dx2), masks padding. Output = **logits `[1,30]`** (consumer
+  applies softmax).
+- **Normalization is NOT baked into the model.** The training `.npz` were already
+  **shoulder-midpoint centered + shoulder-width scaled** by the preprocessing
+  teammate. So `live_demo.normalize()` must replicate that (and does, per
+  `MODEL_CONTRACT.md §3`). Only x,y matter (z is dropped in-model). ⚠️ This is the
+  #1 silent-failure risk (frontend #22/#26 too) — the exact preprocessing code is
+  NOT in the repo; live_demo reproduces the documented spec. If live signs read as
+  random across the board, suspect this first.
+- **75-point layout:** pose 0–32, left hand 33–53, right hand 54–74.
+- **Window:** 64 frames. **Confidence gate:** start 0.60 in the contract (live_demo
+  uses 0.50 to surface more). Mirror = `x → -x` (shoulder-centered space); FLIP_MAP
+  is in `train.py` and copied into `live_demo.py`.
+- **Accuracy:** 5-fold CV **0.882** (honest headline), ensemble on 3 held-out test
+  signers **0.9433**, best single fold-0 **0.9386**.
+- **Per-word accuracy (test):** look **0.70**, go **0.74**, dog 0.84, book/hot 0.86,
+  car/cat 0.89, the other 23 words 0.93–1.00. `look`/`go` are genuinely hard — no
+  camera setting fixes a 70% sign. Lead demos with the strong 23.
+- **Vocab order is load-bearing:** `words[i]` must equal class `i`. Frozen in
+  `vocab_30.json`. (For 250, this ordering MUST be frozen on the training machine —
+  see §8.)
+- Full contract: **`MODEL_CONTRACT.md`**. Training code: **`training/train.py`**.
+
+---
+
+## 8. The 250-word expansion — the agreed plan
+
+Goal: same deliverables as the 30-word model (trained model, per-word eval JSON,
+exported SavedModels, wired into `live_demo.py`), target **>0.8** (accuracy will
+drop from 0.94 — more classes, more confusable pairs; Kaggle top solutions ~0.87–
+0.89 on 250, which is fine).
+
+Data is already in S3 (`s3://asl-mvp-dataset/preprocessed/`, `split_manifest.parquet`,
+`by_word/<word>/sequences.npz`), and a **250-class backbone already exists**
+(`backbone_250.weights.h5`, from `train.py --all-words`).
+
+**Where work runs:** training/eval/export on **Colab or EC2 GPU (Linux)** — required
+for GPU and because `.weights.h5` export/load must happen on Linux. Salim's Windows
+machine only *runs* the exported SavedModel.
+
+- **Phase 1 — measure the existing backbone first (fast).** Eval `backbone_250` on
+  the held-out test signers. If **>0.8 → skip to export.** (`ensemble_eval.py`
+  hardcodes the 30-word vocab; needs an `--all-words` variant — small script to write
+  on Colab.)
+- **Phase 2 — only if <0.8:** proper 5-fold training
+  (`train.py --all-words --fold all --init-from artifacts/backbone_250.weights.h5`).
+- **Phase 3 — export + FREEZE THE VOCAB.** Export `savedmodel_fold*/` (250-class;
+  `train.py` currently skips SavedModel export in `--all-words` mode — add it) AND
+  **dump `vocab_250.json` on the training machine at the same time** — the model's
+  output index → word map is `sorted(manifest words)`; regenerating it later from a
+  different manifest would silently mislabel everything.
+- **Phase 4 — wire into `live_demo.py`:** add a `--vocab250` flag pointing at the
+  250 SavedModels + `vocab_250.json`. The recognition pipeline is class-count-
+  agnostic (`words[idx]`), so no other changes. **Sentences:** rules only cover the
+  30 words → for 250, `--ai` is the real path.
+- **Phase 5 — verify:** `--selftest` (output shape `[250]`), then live.
+
+> 📋 **Full step-by-step (commands, gotchas, deliverables) is in
+> [`TRAIN_250_PLAN.md`](TRAIN_250_PLAN.md).** Read that for the overall plan.
+>
+> ⚡ **STATUS (2026-07-22): this plan is mid-execution — see §0.1.** Phase 1 done
+> (backbone = 0.726), Phase 2 in progress (fold-0 = **0.7576** test, folds 1–4
+> pending), blocked on free Colab GPU quota. **The live execution doc is
+> [`RESUME_250.md`](RESUME_250.md)** (exact resume commands, the subprocess gotcha,
+> the ensemble-eval script). Follow RESUME_250.md, not the abstract plan, to
+> continue.
+
+---
+
+## 9. Dataset research — continuous / sentence-level signing
+
+Full detail in **`DATASET_RESEARCH.md`**. Headline: **commercially-licensed
+continuous-signing data barely exists** — which is why the "isolated words → AI
+sentence" approach is a reasonable workaround, not a hack.
+
+- **How2Sign** (80h ASL, sentence-aligned) — **CC BY-NC, non-commercial, unusable.**
+- **YouTube-ASL** (984h) — per-video licensing murky for commercial.
+- **ArabSign / Isharah** (continuous Arabic) — relevant to the LSL/Arabic wedge;
+  **license needs confirming** (email `hluqman@kfupm.edu.sa`).
+- **Recommendation:** don't chase commercial continuous ASL (lose to big tech). The
+  moat is **Arabic → LSL**; collect your own LSL data (with consent). Continuous
+  recognition is a different, harder ML paradigm (seq2seq/CTC) — a post-funding bet.
+
+---
+
+## 10. Website backend (Track B) — rescope
+
+`BACKEND_TASKS.md` Track B was scoped to just the camera-permission API. Rescoped
+this session to the full website backend. **Architecture guardrail:** recognition
+is client-side → **no inference endpoint on the server.** The backend does: (1) AI
+sentence service, (2) identity + persistence, (3) deployment/security/privacy.
+
+New tasks **BE-10…BE-30**, priority-tagged. MVP-critical path:
+- **BE-10…BE-13** — `POST /api/sentence` (the AI sentence endpoint — the core
+  feature, currently has NO server; port `grammar_eval.py` into Express, keys
+  server-side, never-silent rules fallback, return glosses).
+- **BE-14…BE-16** — identity (recommend anonymous device IDs for MVP; resolves BE-7).
+- **BE-20** — serve + version the TF.js model (frontend #25 is blocked on this).
+- **BE-21…BE-25** — deployment/infra (the API only runs on `localhost:4000` today).
+- **BE-6** — wire the frontend camera-permission flow.
+
+Done + verified earlier: BE-1…BE-5 (Prisma↔Supabase, server boots on :4000,
+`/health` ok). Fresh-clone gotcha: run `prisma generate` (generated client not
+committed).
+
+---
+
+## 11. Speech → Sign (the reverse pipeline — the next big feature)
+
+The product's other half: a hearing person speaks, a Deaf person sees signing.
+This closes the loop to **two-way communication.** A backend teammate is building it
+**now** — specifically the **avatar and its animation** — while Salim finishes 250,
+after which Salim builds the steps *before* the animation.
+
+**Pipeline (mirror of the recognition side):**
+```
+speech → [ASR: audio→text] → [text→gloss sequence, LLM] → [gloss→motion data]  (Salim)
+       → ─── SIGN_ANIMATION_CONTRACT.md (the hand-off) ───
+       → [render motion onto an avatar]  (teammate)
+```
+
+**Division of labor:**
+- **Salim (pre-animation):** ASR (off-the-shelf — Web Speech API / Whisper),
+  text→gloss (reuse the LLM, reversed prompt), curate one clean canonical landmark
+  clip per word, resolve glosses→clips + stitch transitions → emit the keyframe
+  stream.
+- **Teammate (animation):** the avatar model + rig (fingers, shoulders, hands, and
+  a facial-expression rig) + the retarget/render.
+
+**The hand-off is specified in [`SIGN_ANIMATION_CONTRACT.md`](SIGN_ANIMATION_CONTRACT.md)** —
+what the animation consumes: a time-ordered sequence of **75-point landmark frames**
+(same layout as recognition), shoulder-centered coords, fps, NaN convention, plus an
+optional **468-point face block**. Key points captured there:
+- The animation **replays landmark motion — it does NOT use the recognition model.**
+- Data is **point POSITIONS, not bone rotations** → the rig is position-driven (place
+  joints / IK targets), y is **down** (flip for the avatar).
+- To **build the avatar/rig now**, the teammate needs only: the contract + **one
+  neutral reference pose** (a static frame) + that "positions-not-rotations" fact.
+  He does NOT need the motion pipeline or dataset to build the avatar.
+
+**Facial expression — the key clarification:**
+- The 75 points have **no usable facial expression** (only ~11 coarse face
+  *positions*). The **30/250 recognition models are trained face-free on purpose** —
+  words are identified by the hands; the Kaggle winner dropped face too. Do **not**
+  retrain the 250 with face.
+- Real expression needs MediaPipe's **468-point FaceMesh**, which preprocessing
+  dropped — **but it still exists in the raw Kaggle source + S3 `cleaned/`.** So the
+  teammate's face rig is fed by **extracting the 468 face points from the source
+  (a data task) — NOT by retraining.** Caveat: the dataset's isolated-word clips have
+  **neutral/non-grammatical** faces, so the face moves but won't sign grammar until
+  fed intentionally-expressive clips.
+
+**Full-MVP reality:** fluent conversation = continuous signing = the hard,
+data-blocked, post-funding/LSL bet. The legitimate **near-term MVP** is isolated
+words + AI sentences, **both directions** — genuinely useful for real exchanges.
+
+**Next artifact to unblock the teammate:** `export_reference_pose.py` (+ a few motion
+samples) — pulls a neutral pose (75, optionally +468 face) from the data in the
+contract format. Not written yet; write it when starting this.
+
+---
+
+## 12. Security notes (important)
+
+- **Secrets live only in the local, gitignored `.env`** — never in code, never in
+  `.env.example`, never committed. Verified `.env` is gitignored.
+- `.env` contains: the shared **Supabase `DATABASE_URL`** (password percent-encoded:
+  `&`→`%26`, `!`→`%21`), and **`GEMINI_API_KEYS`** (comma-separated, rotated on 429).
+- `live_demo.py` reads `.env` via a tiny built-in loader (`_load_dotenv`) so `--ai`
+  picks up the keys.
+- ⚠️ **The Gemini keys (and the DB password) were pasted in chat this session →
+  treat them as burned. Rotate before any production use** (new Gemini keys:
+  https://aistudio.google.com/apikey). This is noted inline in `.env`.
+- ⚠️ **AWS S3 access key exposed in chat (2026-07-20)** while setting up Colab for
+  the 250 training → **rotate it** (IAM → delete the old key, create a new one) and
+  set a billing alarm on the AWS account.
+
+---
+
+## 13. Open items / suggested next steps
+
+- [ ] **Rehearse the live demo** with the strong 23 words; treat `look`/`go` as
+      known-hard. Read `[seg]` terminal lines if a word fails.
+- [ ] **Rotate the exposed secrets: Gemini keys, DB password, AND the AWS S3 access
+      key** (all pasted in chat) + set an AWS billing alarm.
+- [ ] **250-word model — IN PROGRESS (see §0.1 + [`RESUME_250.md`](RESUME_250.md)).**
+      Backbone measured (0.726), fold-0 done (**0.7576** test). Next: finish folds
+      1–4 + ensemble → >0.80. Blocked on free GPU (Colab quota / consider Kaggle).
+      Remember: **run train/eval/export as a `!python` subprocess** (notebook-kernel
+      build → chance accuracy). `train.py` already patched (BackupAndRestore +
+      SavedModel export) — re-upload it.
+- [ ] **(optional) write `RESUME_250_KAGGLE.md`** if Salim moves to Kaggle for free
+      GPU (30h/week; `--out-dir=/kaggle/working`, push to S3, no Drive).
+- [ ] **Email ArabSign/Isharah** (`hluqman@kfupm.edu.sa`) re: commercial licensing.
+- [ ] **BE-10** — build `/api/sentence` (highest-value backend item; mostly porting
+      `grammar_eval.py` into the running Express server).
+- [ ] Get `grammar_rules.json` + `GRAMMAR_CONTRACT.md` and the `web_model/` TF.js
+      files onto `main` for the frontend (currently on a branch / in Drive).
+- [ ] Demo-signer review of the grammar rules (A9.5b).
+- [ ] **Speech→sign:** write `export_reference_pose.py` to unblock the teammate's
+      avatar/rig build (needs: body-only 75, or 75+468 face?).
+
+---
+
+## 14. File map
+
+| File | What |
+|---|---|
+| `live_demo.py` | **The live camera demo** (this session's main work). |
+| `RUN_LIVE_DEMO.md` | End-user run guide for the demo. |
+| `requirements_live_demo.txt` | Pinned, verified dependency stack (+ the jax uninstall note). |
+| `DATASET_RESEARCH.md` | Continuous-signing dataset options + licensing. |
+| `SIGN_ANIMATION_CONTRACT.md` | Speech→sign hand-off spec (what the avatar/animation consumes). |
+| `TRAIN_250_PLAN.md` | Overall plan to train + ship the 250-word model. |
+| `RESUME_250.md` | **Live execution doc for the 250 training** — exact resume commands, the subprocess-build gotcha, ensemble-eval script. Follow this to continue (see §0.1). |
+| `SESSION_HANDOFF.md` | **This file.** |
+| `vocab_30.json` | The 30-word list; index = class id (load-bearing order). |
+| `artifacts/savedmodel_fold{0..4}/` | The 5-fold SavedModels the demo loads. |
+| `artifacts/weights_mvp30_fold*_seed42.weights.h5` | The weights (⚠️ don't load on Windows — use the SavedModels). |
+| `grammar_rules.json` | A9 grammar data (templates/rules/fallback). |
+| `GRAMMAR_CONTRACT.md` | `render()` spec + 15 test vectors + demo script. |
+| `grammar_eval.py` | Standalone rules+AI eval; `--ai` in live_demo imports its `ai_generate`. |
+| `MODEL_CONTRACT.md` | Frontend handoff contract (input/normalization/output/gate). |
+| `training/train.py` | Model + training script (30-word and `--all-words`/250). |
+| `training/ensemble_eval.py` | Ensemble eval (30-word; needs `--all-words` variant for 250). |
+| `BACKEND_TASKS.md` | Backend plan (Track A pipeline done; Track B rescoped). |
+| `FRONTEND_TASKS.md` | Frontend plan (live-demo critical path). |
+| `.env` | **Local secrets (gitignored):** Supabase URL, Gemini keys. |
+
+**Added since 2026-07-22 (see §0.2):**
+
+| Path | Purpose |
+| --- | --- |
+| `docs/explanation.md` | Meeting doc: both phases explained technically, with real numbers. |
+| `docs/MEDICAL_MVP_PLAN.md` | **The active project.** Medical MVP plan, dataset comparison, risks. |
+| `vocab_medical.json` | The 130 trainable clinical words. |
+| `vocab_medical_analysis.json` | Per-word video/signer counts, tiers A/B/C. |
+| `training/medical/extract_landmarks.py` | video → `(64,75,3)` tensors, live_demo-parity. |
+| `training/medical/test_parity.py` | **Run after touching the extractor or live_demo.** |
+| `training/medical/build_vocab.py` | Rebuilds the vocabulary from Sem-Lex metadata. |
+| `training/medical/semlex_med.py` | Trainability scan of the clinical word list. |
+| `demo_voice_gui.py` | Clickable Record/Stop speech→sign window (the meeting build). |
+| `demo_voice_to_sign.py` | Terminal press-to-talk speech→sign. |
+| `demo_speech_to_sign.py` | Typed sentence → 2D avatar. |
+| `_asr_worker.py` | 3.14 ASR worker: `--push` / `--wav` / `--serve` / `--selftest`. |
+| `preview_signs.py` | 2D skeleton player + Deaf-review harness. |
+| `sign_clips_250.npz` · `animation_handoff/` | Phase-2 motion dictionary + the 250-word handoff sent to Ghozlan. |
+| `demo/*.mp4` | Pre-rendered fallback demo videos. |
+
+---
+
+*Written 2026-07-20; updated 2026-07-22 (250 training — §0.1); updated **2026-08-04**
+(both phases demo-ready, demo apps built, and the **medical-domain MVP** started — §0.2).*
+
+*If anything here conflicts with the current code, **the code wins** — verify against the
+file before asserting. Salim would rather hear "I checked and it's X" than a confident
+guess.*
+
+**Quick starts:**
+- General demos — `python live_demo.py --vocab250 --debug` (sign→speech) ·
+  `python demo_voice_gui.py` (speech→sign, clickable)
+- Sanity checks with no camera/mic — `python live_demo.py --selftest` ·
+  `python demo_voice_to_sign.py --selftest`
+- **Medical MVP (active)** — read [`MEDICAL_MVP_PLAN.md`](MEDICAL_MVP_PLAN.md), then
+  `python training/medical/test_parity.py` to confirm the extractor is still in sync.
+  The next real move is **licensing (Salim's call)**, then the `train.py` adapter.
+- 250-word retrain (deferred) — [`RESUME_250.md`](RESUME_250.md)
