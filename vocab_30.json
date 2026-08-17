@@ -1,0 +1,21 @@
+{
+  "vocab_version": "v1",
+  "locked_on": "2026-07-14",
+  "num_classes": 30,
+  "source": "MVP 30-word subset of the Kaggle asl-signs 250-word vocabulary.",
+  "note": "Index = training label (0-29), i.e. position in the `words` array. All 30 verified present in s3://asl-mvp-dataset/preprocessed/by_word/. The training script filters splits/split_manifest.parquet to these words and re-maps to 0-29 via word_to_index below. The no-sign/background class, when added (Phase 6), becomes index 30.",
+  "words": [
+    "hello", "bye", "yes", "no", "please", "thankyou",
+    "go", "store", "home", "wait",
+    "water", "milk", "drink", "food", "hungry", "thirsty",
+    "mom", "dad", "happy", "sad", "sick", "hot", "sleepy", "potty",
+    "book", "dog", "cat", "car", "like", "look"
+  ],
+  "word_to_index": {
+    "hello": 0, "bye": 1, "yes": 2, "no": 3, "please": 4, "thankyou": 5,
+    "go": 6, "store": 7, "home": 8, "wait": 9,
+    "water": 10, "milk": 11, "drink": 12, "food": 13, "hungry": 14, "thirsty": 15,
+    "mom": 16, "dad": 17, "happy": 18, "sad": 19, "sick": 20, "hot": 21, "sleepy": 22, "potty": 23,
+    "book": 24, "dog": 25, "cat": 26, "car": 27, "like": 28, "look": 29
+  }
+}

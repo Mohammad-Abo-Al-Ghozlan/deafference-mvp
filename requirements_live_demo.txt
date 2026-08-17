@@ -1,0 +1,27 @@
+# Pinned dependency set for live_demo.py — this EXACT combination is verified to
+# work together on Windows / Python 3.11 (2026-07-17). The constraints interlock;
+# don't bump one without checking the others:
+#
+#   • mediapipe 0.10.14  — later builds (0.10.35) REMOVED the legacy Holistic
+#     solution that produces the 75-point layout the model was trained on.
+#   • tensorflow 2.17.1  — reads the exported SavedModels AND keeps protobuf 4.x.
+#     TF >= 2.18 forces protobuf 5, which breaks mediapipe.
+#   • numpy 1.26.4       — TF needs <2.0; scipy (pulled by mediapipe) needs
+#     >=1.26.4. 1.26.4 is the one version that satisfies both.
+#   • ml-dtypes 0.3.2    — TF 2.17 needs <0.5.
+#   • jax/jaxlib         — mediapipe pulls them in, but they REQUIRE numpy>=2 and
+#     break TF's tflite import path. They are NOT needed for Holistic.
+#     UNINSTALL them:  pip uninstall -y jax jaxlib
+#
+# Install:
+#   pip install -r requirements_live_demo.txt
+#   pip uninstall -y jax jaxlib
+#
+tensorflow==2.17.1
+tf-keras==2.17.0
+mediapipe==0.10.14
+opencv-python==4.11.0.86
+numpy==1.26.4
+ml-dtypes==0.3.2
+protobuf==4.25.9
+pandas

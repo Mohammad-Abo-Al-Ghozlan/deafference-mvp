@@ -1,0 +1,10 @@
+# Training environment (Colab already ships most of this)
+# TF pinned to 2.15.x: train.py's custom AWP train_step + the tfjs converter
+# both target Keras 2. TF >=2.16 defaults to Keras 3 and BREAKS both.
+# (On Colab, if only TF 2.16+ is available: pip install tf-keras and set
+#  TF_USE_LEGACY_KERAS=1 before importing tensorflow.)
+tensorflow==2.15.1
+tensorflowjs==4.17.0
+pandas>=2.0
+pyarrow>=14.0
+numpy>=1.24

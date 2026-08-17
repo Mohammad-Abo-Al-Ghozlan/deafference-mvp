@@ -1,0 +1,89 @@
+{
+  "grammar_version": "v1",
+  "vocab_version": "v1",
+  "authored": "2026-07-16",
+  "status": "DRAFT — pending review by the demo signer (frontend #30) before the live demo",
+  "voice": "first_person",
+  "note": "Gloss buffer -> display string rules for the 30-word MVP vocab. The app speaks AS the deaf user (first person). Engine spec + test vectors: GRAMMAR_CONTRACT.md. Data only — no logic lives here; frontend loads this via task #23.",
+
+  "display": {
+    "thankyou": "thank you",
+    "bye": "goodbye"
+  },
+
+  "categories": {
+    "feeling": ["hungry", "thirsty", "happy", "sad", "sick", "hot", "sleepy"],
+    "drinkable": ["water", "milk"],
+    "likeable": ["water", "milk", "food", "book", "dog", "cat", "car"],
+    "lookable": ["book", "dog", "cat", "car"],
+    "requestable": ["water", "milk", "food", "book"]
+  },
+
+  "templates": [
+    { "glosses": ["thirsty", "drink", "water"], "text": "I am thirsty. I want to drink water." },
+
+    { "glosses": ["go", "store"],    "text": "I will go to the store." },
+    { "glosses": ["store", "go"],    "text": "I will go to the store." },
+    { "glosses": ["go", "home"],     "text": "I am going home." },
+    { "glosses": ["home", "go"],     "text": "I am going home." },
+    { "glosses": ["go", "potty"],    "text": "I need to go to the potty." },
+    { "glosses": ["potty", "go"],    "text": "I need to go to the potty." },
+    { "glosses": ["mom", "home"],    "text": "Mom is home." },
+    { "glosses": ["dad", "home"],    "text": "Dad is home." },
+    { "glosses": ["mom", "car"],     "text": "Mom is in the car." },
+    { "glosses": ["dad", "car"],     "text": "Dad is in the car." },
+    { "glosses": ["hungry", "food"], "text": "I am hungry. I want some food." },
+    { "glosses": ["thirsty", "water"], "text": "I am thirsty. I want some water." },
+    { "glosses": ["food", "hot"],    "text": "The food is hot." },
+    { "glosses": ["water", "hot"],   "text": "The water is hot." },
+    { "glosses": ["milk", "hot"],    "text": "The milk is hot." },
+    { "glosses": ["thankyou", "bye"], "text": "Thank you. Goodbye!" },
+    { "glosses": ["hello", "mom"],   "text": "Hello, Mom!" },
+    { "glosses": ["hello", "dad"],   "text": "Hello, Dad!" },
+    { "glosses": ["bye", "mom"],     "text": "Goodbye, Mom!" },
+    { "glosses": ["bye", "dad"],     "text": "Goodbye, Dad!" },
+
+    { "glosses": ["hello"],    "text": "Hello!" },
+    { "glosses": ["bye"],      "text": "Goodbye!" },
+    { "glosses": ["yes"],      "text": "Yes." },
+    { "glosses": ["no"],       "text": "No." },
+    { "glosses": ["please"],   "text": "Please." },
+    { "glosses": ["thankyou"], "text": "Thank you." },
+    { "glosses": ["wait"],     "text": "Please wait." },
+    { "glosses": ["go"],       "text": "I want to go." },
+    { "glosses": ["potty"],    "text": "I need to go to the potty." },
+    { "glosses": ["drink"],    "text": "I want a drink." },
+    { "glosses": ["like"],     "text": "I like that." },
+    { "glosses": ["look"],     "text": "Look!" },
+    { "glosses": ["food"],     "text": "I want some food." },
+    { "glosses": ["water"],    "text": "Water." },
+    { "glosses": ["milk"],     "text": "Milk." },
+    { "glosses": ["book"],     "text": "The book." },
+    { "glosses": ["dog"],      "text": "The dog." },
+    { "glosses": ["cat"],      "text": "The cat." },
+    { "glosses": ["car"],      "text": "The car." },
+    { "glosses": ["store"],    "text": "The store." },
+    { "glosses": ["home"],     "text": "Home." },
+    { "glosses": ["mom"],      "text": "Mom." },
+    { "glosses": ["dad"],      "text": "Dad." }
+  ],
+
+  "rules": [
+    { "pattern": ["feeling", "feeling"],   "text": "I am {0} and {1}." },
+    { "pattern": ["feeling"],              "text": "I am {0}." },
+    { "pattern": ["drink", "drinkable"],   "text": "I want to drink {1}." },
+    { "pattern": ["drinkable", "drink"],   "text": "I want to drink {0}." },
+    { "pattern": ["like", "likeable"],     "text": "I like the {1}." },
+    { "pattern": ["likeable", "like"],     "text": "I like the {0}." },
+    { "pattern": ["look", "lookable"],     "text": "Look at the {1}!" },
+    { "pattern": ["lookable", "look"],     "text": "Look at the {0}!" },
+    { "pattern": ["requestable", "please"], "text": "{0}, please." },
+    { "pattern": ["please", "requestable"], "text": "{1}, please." }
+  ],
+
+  "fallback": {
+    "unknown_word_text": "{word}.",
+    "clause_join": " ",
+    "capitalize_clauses": true
+  }
+}

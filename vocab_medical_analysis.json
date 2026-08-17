@@ -1,0 +1,1168 @@
+{
+ "tier_A_trainable": {
+  "head": {
+   "labels": [
+    "head"
+   ],
+   "videos": 43,
+   "signers": 16,
+   "category": "body"
+  },
+  "face": {
+   "labels": [
+    "face"
+   ],
+   "videos": 38,
+   "signers": 15,
+   "category": "body"
+  },
+  "eye": {
+   "labels": [
+    "eyes"
+   ],
+   "videos": 56,
+   "signers": 23,
+   "category": "body"
+  },
+  "ear": {
+   "labels": [
+    "ear"
+   ],
+   "videos": 24,
+   "signers": 13,
+   "category": "body"
+  },
+  "nose": {
+   "labels": [
+    "nose"
+   ],
+   "videos": 34,
+   "signers": 16,
+   "category": "body"
+  },
+  "mouth": {
+   "labels": [
+    "mouth"
+   ],
+   "videos": 26,
+   "signers": 13,
+   "category": "body"
+  },
+  "teeth": {
+   "labels": [
+    "teeth"
+   ],
+   "videos": 79,
+   "signers": 26,
+   "category": "body"
+  },
+  "tongue": {
+   "labels": [
+    "tongue"
+   ],
+   "videos": 12,
+   "signers": 8,
+   "category": "body"
+  },
+  "throat": {
+   "labels": [
+    "throat"
+   ],
+   "videos": 18,
+   "signers": 13,
+   "category": "body"
+  },
+  "shoulder": {
+   "labels": [
+    "shoulder"
+   ],
+   "videos": 9,
+   "signers": 7,
+   "category": "body"
+  },
+  "arm": {
+   "labels": [
+    "arm"
+   ],
+   "videos": 22,
+   "signers": 12,
+   "category": "body"
+  },
+  "hand": {
+   "labels": [
+    "hands"
+   ],
+   "videos": 55,
+   "signers": 22,
+   "category": "body"
+  },
+  "heart": {
+   "labels": [
+    "heart"
+   ],
+   "videos": 23,
+   "signers": 18,
+   "category": "body"
+  },
+  "lungs": {
+   "labels": [
+    "lungs"
+   ],
+   "videos": 13,
+   "signers": 10,
+   "category": "body"
+  },
+  "back": {
+   "labels": [
+    "back"
+   ],
+   "videos": 43,
+   "signers": 20,
+   "category": "body"
+  },
+  "leg": {
+   "labels": [
+    "leg"
+   ],
+   "videos": 8,
+   "signers": 6,
+   "category": "body"
+  },
+  "knee": {
+   "labels": [
+    "knee",
+    "knees"
+   ],
+   "videos": 8,
+   "signers": 5,
+   "category": "body"
+  },
+  "feet": {
+   "labels": [
+    "feet"
+   ],
+   "videos": 23,
+   "signers": 14,
+   "category": "body"
+  },
+  "skin": {
+   "labels": [
+    "skin"
+   ],
+   "videos": 36,
+   "signers": 16,
+   "category": "body"
+  },
+  "bone": {
+   "labels": [
+    "bone"
+   ],
+   "videos": 29,
+   "signers": 16,
+   "category": "body"
+  },
+  "blood": {
+   "labels": [
+    "blood"
+   ],
+   "videos": 53,
+   "signers": 26,
+   "category": "body"
+  },
+  "muscle": {
+   "labels": [
+    "muscle"
+   ],
+   "videos": 30,
+   "signers": 16,
+   "category": "body"
+  },
+  "hurt": {
+   "labels": [
+    "hurt"
+   ],
+   "videos": 248,
+   "signers": 36,
+   "category": "symptom"
+  },
+  "pain": {
+   "labels": [
+    "pain"
+   ],
+   "videos": 52,
+   "signers": 22,
+   "category": "symptom"
+  },
+  "sick": {
+   "labels": [
+    "sick"
+   ],
+   "videos": 207,
+   "signers": 37,
+   "category": "symptom"
+  },
+  "headache": {
+   "labels": [
+    "headache"
+   ],
+   "videos": 11,
+   "signers": 8,
+   "category": "symptom"
+  },
+  "hot": {
+   "labels": [
+    "hot"
+   ],
+   "videos": 208,
+   "signers": 33,
+   "category": "symptom"
+  },
+  "cold": {
+   "labels": [
+    "cold"
+   ],
+   "videos": 229,
+   "signers": 35,
+   "category": "symptom"
+  },
+  "cough": {
+   "labels": [
+    "cough"
+   ],
+   "videos": 31,
+   "signers": 19,
+   "category": "symptom"
+  },
+  "vomit": {
+   "labels": [
+    "vomit"
+   ],
+   "videos": 9,
+   "signers": 7,
+   "category": "symptom"
+  },
+  "dizzy": {
+   "labels": [
+    "dizzy"
+   ],
+   "videos": 16,
+   "signers": 6,
+   "category": "symptom"
+  },
+  "tired": {
+   "labels": [
+    "tired"
+   ],
+   "videos": 149,
+   "signers": 31,
+   "category": "symptom"
+  },
+  "weak": {
+   "labels": [
+    "weak"
+   ],
+   "videos": 35,
+   "signers": 14,
+   "category": "symptom"
+  },
+  "bleed": {
+   "labels": [
+    "bleed"
+   ],
+   "videos": 29,
+   "signers": 17,
+   "category": "symptom"
+  },
+  "itch": {
+   "labels": [
+    "itch"
+   ],
+   "videos": 10,
+   "signers": 9,
+   "category": "symptom"
+  },
+  "burn": {
+   "labels": [
+    "burn"
+   ],
+   "videos": 12,
+   "signers": 9,
+   "category": "symptom"
+  },
+  "breathe": {
+   "labels": [
+    "breathe"
+   ],
+   "videos": 75,
+   "signers": 30,
+   "category": "symptom"
+  },
+  "choke": {
+   "labels": [
+    "choke"
+   ],
+   "videos": 21,
+   "signers": 16,
+   "category": "symptom"
+  },
+  "faint": {
+   "labels": [
+    "faint"
+   ],
+   "videos": 8,
+   "signers": 6,
+   "category": "symptom"
+  },
+  "bad": {
+   "labels": [
+    "bad"
+   ],
+   "videos": 120,
+   "signers": 31,
+   "category": "severity"
+  },
+  "worse": {
+   "labels": [
+    "worse"
+   ],
+   "videos": 15,
+   "signers": 9,
+   "category": "severity"
+  },
+  "better": {
+   "labels": [
+    "better"
+   ],
+   "videos": 35,
+   "signers": 19,
+   "category": "severity"
+  },
+  "big": {
+   "labels": [
+    "big"
+   ],
+   "videos": 224,
+   "signers": 33,
+   "category": "severity"
+  },
+  "much": {
+   "labels": [
+    "much"
+   ],
+   "videos": 36,
+   "signers": 19,
+   "category": "severity"
+  },
+  "strong": {
+   "labels": [
+    "strong"
+   ],
+   "videos": 78,
+   "signers": 25,
+   "category": "severity"
+  },
+  "light": {
+   "labels": [
+    "light"
+   ],
+   "videos": 16,
+   "signers": 15,
+   "category": "severity"
+  },
+  "sharp": {
+   "labels": [
+    "sharp"
+   ],
+   "videos": 10,
+   "signers": 6,
+   "category": "severity"
+  },
+  "when": {
+   "labels": [
+    "when"
+   ],
+   "videos": 38,
+   "signers": 16,
+   "category": "time"
+  },
+  "today": {
+   "labels": [
+    "today"
+   ],
+   "videos": 49,
+   "signers": 16,
+   "category": "time"
+  },
+  "yesterday": {
+   "labels": [
+    "yesterday"
+   ],
+   "videos": 22,
+   "signers": 15,
+   "category": "time"
+  },
+  "tomorrow": {
+   "labels": [
+    "tomorrow"
+   ],
+   "videos": 43,
+   "signers": 19,
+   "category": "time"
+  },
+  "now": {
+   "labels": [
+    "now"
+   ],
+   "videos": 58,
+   "signers": 20,
+   "category": "time"
+  },
+  "morning": {
+   "labels": [
+    "morning"
+   ],
+   "videos": 82,
+   "signers": 24,
+   "category": "time"
+  },
+  "afternoon": {
+   "labels": [
+    "afternoon"
+   ],
+   "videos": 19,
+   "signers": 11,
+   "category": "time"
+  },
+  "night": {
+   "labels": [
+    "night"
+   ],
+   "videos": 106,
+   "signers": 27,
+   "category": "time"
+  },
+  "day": {
+   "labels": [
+    "day"
+   ],
+   "videos": 93,
+   "signers": 28,
+   "category": "time"
+  },
+  "week": {
+   "labels": [
+    "week"
+   ],
+   "videos": 68,
+   "signers": 21,
+   "category": "time"
+  },
+  "month": {
+   "labels": [
+    "month"
+   ],
+   "videos": 42,
+   "signers": 22,
+   "category": "time"
+  },
+  "year": {
+   "labels": [
+    "year"
+   ],
+   "videos": 35,
+   "signers": 20,
+   "category": "time"
+  },
+  "hour": {
+   "labels": [
+    "hour"
+   ],
+   "videos": 16,
+   "signers": 12,
+   "category": "time"
+  },
+  "minute": {
+   "labels": [
+    "minute"
+   ],
+   "videos": 18,
+   "signers": 13,
+   "category": "time"
+  },
+  "long": {
+   "labels": [
+    "long"
+   ],
+   "videos": 109,
+   "signers": 26,
+   "category": "time"
+  },
+  "always": {
+   "labels": [
+    "always"
+   ],
+   "videos": 22,
+   "signers": 16,
+   "category": "time"
+  },
+  "sometimes": {
+   "labels": [
+    "sometimes"
+   ],
+   "videos": 14,
+   "signers": 7,
+   "category": "time"
+  },
+  "start": {
+   "labels": [
+    "start"
+   ],
+   "videos": 45,
+   "signers": 19,
+   "category": "time"
+  },
+  "doctor": {
+   "labels": [
+    "doctor"
+   ],
+   "videos": 115,
+   "signers": 31,
+   "category": "people"
+  },
+  "nurse": {
+   "labels": [
+    "nurse"
+   ],
+   "videos": 33,
+   "signers": 21,
+   "category": "people"
+  },
+  "hospital": {
+   "labels": [
+    "hospital"
+   ],
+   "videos": 60,
+   "signers": 22,
+   "category": "people"
+  },
+  "dentist": {
+   "labels": [
+    "dentist"
+   ],
+   "videos": 37,
+   "signers": 18,
+   "category": "people"
+  },
+  "mother": {
+   "labels": [
+    "mother"
+   ],
+   "videos": 41,
+   "signers": 21,
+   "category": "people"
+  },
+  "father": {
+   "labels": [
+    "father"
+   ],
+   "videos": 37,
+   "signers": 17,
+   "category": "people"
+  },
+  "family": {
+   "labels": [
+    "family"
+   ],
+   "videos": 200,
+   "signers": 35,
+   "category": "people"
+  },
+  "baby": {
+   "labels": [
+    "baby"
+   ],
+   "videos": 199,
+   "signers": 30,
+   "category": "people"
+  },
+  "child": {
+   "labels": [
+    "child"
+   ],
+   "videos": 9,
+   "signers": 8,
+   "category": "people"
+  },
+  "man": {
+   "labels": [
+    "man"
+   ],
+   "videos": 97,
+   "signers": 29,
+   "category": "people"
+  },
+  "woman": {
+   "labels": [
+    "woman"
+   ],
+   "videos": 86,
+   "signers": 29,
+   "category": "people"
+  },
+  "interpreter": {
+   "labels": [
+    "interpreter"
+   ],
+   "videos": 15,
+   "signers": 13,
+   "category": "people"
+  },
+  "help": {
+   "labels": [
+    "help"
+   ],
+   "videos": 136,
+   "signers": 28,
+   "category": "action"
+  },
+  "need": {
+   "labels": [
+    "need"
+   ],
+   "videos": 86,
+   "signers": 25,
+   "category": "action"
+  },
+  "want": {
+   "labels": [
+    "want"
+   ],
+   "videos": 84,
+   "signers": 27,
+   "category": "action"
+  },
+  "take": {
+   "labels": [
+    "take"
+   ],
+   "videos": 38,
+   "signers": 21,
+   "category": "action"
+  },
+  "give": {
+   "labels": [
+    "give"
+   ],
+   "videos": 72,
+   "signers": 22,
+   "category": "action"
+  },
+  "eat": {
+   "labels": [
+    "eat"
+   ],
+   "videos": 29,
+   "signers": 15,
+   "category": "action"
+  },
+  "drink": {
+   "labels": [
+    "drink"
+   ],
+   "videos": 200,
+   "signers": 34,
+   "category": "action"
+  },
+  "sleep": {
+   "labels": [
+    "sleep"
+   ],
+   "videos": 211,
+   "signers": 35,
+   "category": "action"
+  },
+  "sit": {
+   "labels": [
+    "sit"
+   ],
+   "videos": 66,
+   "signers": 28,
+   "category": "action"
+  },
+  "walk": {
+   "labels": [
+    "walk"
+   ],
+   "videos": 55,
+   "signers": 24,
+   "category": "action"
+  },
+  "move": {
+   "labels": [
+    "move"
+   ],
+   "videos": 116,
+   "signers": 26,
+   "category": "action"
+  },
+  "stop": {
+   "labels": [
+    "stop"
+   ],
+   "videos": 66,
+   "signers": 25,
+   "category": "action"
+  },
+  "wait": {
+   "labels": [
+    "wait"
+   ],
+   "videos": 125,
+   "signers": 28,
+   "category": "action"
+  },
+  "come": {
+   "labels": [
+    "come"
+   ],
+   "videos": 40,
+   "signers": 16,
+   "category": "action"
+  },
+  "go": {
+   "labels": [
+    "go"
+   ],
+   "videos": 74,
+   "signers": 19,
+   "category": "action"
+  },
+  "look": {
+   "labels": [
+    "look"
+   ],
+   "videos": 24,
+   "signers": 14,
+   "category": "action"
+  },
+  "show": {
+   "labels": [
+    "show"
+   ],
+   "videos": 86,
+   "signers": 25,
+   "category": "action"
+  },
+  "tell": {
+   "labels": [
+    "tell"
+   ],
+   "videos": 35,
+   "signers": 15,
+   "category": "action"
+  },
+  "understand": {
+   "labels": [
+    "understand"
+   ],
+   "videos": 133,
+   "signers": 32,
+   "category": "action"
+  },
+  "ask": {
+   "labels": [
+    "ask"
+   ],
+   "videos": 71,
+   "signers": 21,
+   "category": "action"
+  },
+  "feel": {
+   "labels": [
+    "feel"
+   ],
+   "videos": 123,
+   "signers": 26,
+   "category": "action"
+  },
+  "touch": {
+   "labels": [
+    "touch"
+   ],
+   "videos": 25,
+   "signers": 16,
+   "category": "action"
+  },
+  "open": {
+   "labels": [
+    "open"
+   ],
+   "videos": 103,
+   "signers": 29,
+   "category": "action"
+  },
+  "close": {
+   "labels": [
+    "close"
+   ],
+   "videos": 25,
+   "signers": 15,
+   "category": "action"
+  },
+  "medicine": {
+   "labels": [
+    "medicine"
+   ],
+   "videos": 95,
+   "signers": 29,
+   "category": "object"
+  },
+  "pill": {
+   "labels": [
+    "pill"
+   ],
+   "videos": 34,
+   "signers": 18,
+   "category": "object"
+  },
+  "needle": {
+   "labels": [
+    "needle"
+   ],
+   "videos": 8,
+   "signers": 7,
+   "category": "object"
+  },
+  "water": {
+   "labels": [
+    "water"
+   ],
+   "videos": 408,
+   "signers": 38,
+   "category": "object"
+  },
+  "food": {
+   "labels": [
+    "food"
+   ],
+   "videos": 10,
+   "signers": 7,
+   "category": "object"
+  },
+  "bathroom": {
+   "labels": [
+    "bathroom"
+   ],
+   "videos": 38,
+   "signers": 19,
+   "category": "object"
+  },
+  "bed": {
+   "labels": [
+    "bed"
+   ],
+   "videos": 50,
+   "signers": 21,
+   "category": "object"
+  },
+  "glasses": {
+   "labels": [
+    "glasses"
+   ],
+   "videos": 24,
+   "signers": 14,
+   "category": "object"
+  },
+  "test": {
+   "labels": [
+    "test"
+   ],
+   "videos": 82,
+   "signers": 23,
+   "category": "object"
+  },
+  "surgery": {
+   "labels": [
+    "surgery"
+   ],
+   "videos": 31,
+   "signers": 18,
+   "category": "object"
+  },
+  "yes": {
+   "labels": [
+    "yes"
+   ],
+   "videos": 66,
+   "signers": 22,
+   "category": "core"
+  },
+  "no": {
+   "labels": [
+    "no"
+   ],
+   "videos": 76,
+   "signers": 24,
+   "category": "core"
+  },
+  "not": {
+   "labels": [
+    "not"
+   ],
+   "videos": 51,
+   "signers": 14,
+   "category": "core"
+  },
+  "please": {
+   "labels": [
+    "please"
+   ],
+   "videos": 27,
+   "signers": 18,
+   "category": "core"
+  },
+  "thankyou": {
+   "labels": [
+    "thank_you"
+   ],
+   "videos": 36,
+   "signers": 20,
+   "category": "core"
+  },
+  "sorry": {
+   "labels": [
+    "sorry"
+   ],
+   "videos": 39,
+   "signers": 17,
+   "category": "core"
+  },
+  "again": {
+   "labels": [
+    "again"
+   ],
+   "videos": 78,
+   "signers": 27,
+   "category": "core"
+  },
+  "more": {
+   "labels": [
+    "more"
+   ],
+   "videos": 39,
+   "signers": 16,
+   "category": "core"
+  },
+  "finish": {
+   "labels": [
+    "finish"
+   ],
+   "videos": 251,
+   "signers": 34,
+   "category": "core"
+  },
+  "all": {
+   "labels": [
+    "all"
+   ],
+   "videos": 37,
+   "signers": 17,
+   "category": "core"
+  },
+  "some": {
+   "labels": [
+    "some"
+   ],
+   "videos": 31,
+   "signers": 17,
+   "category": "core"
+  },
+  "maybe": {
+   "labels": [
+    "maybe"
+   ],
+   "videos": 41,
+   "signers": 17,
+   "category": "core"
+  },
+  "where": {
+   "labels": [
+    "where"
+   ],
+   "videos": 130,
+   "signers": 25,
+   "category": "core"
+  },
+  "what": {
+   "labels": [
+    "what"
+   ],
+   "videos": 27,
+   "signers": 12,
+   "category": "core"
+  },
+  "why": {
+   "labels": [
+    "why"
+   ],
+   "videos": 37,
+   "signers": 16,
+   "category": "core"
+  },
+  "how": {
+   "labels": [
+    "how"
+   ],
+   "videos": 15,
+   "signers": 10,
+   "category": "core"
+  },
+  "who": {
+   "labels": [
+    "who"
+   ],
+   "videos": 85,
+   "signers": 27,
+   "category": "core"
+  },
+  "which": {
+   "labels": [
+    "which"
+   ],
+   "videos": 28,
+   "signers": 12,
+   "category": "core"
+  },
+  "can": {
+   "labels": [
+    "can"
+   ],
+   "videos": 53,
+   "signers": 18,
+   "category": "core"
+  }
+ },
+ "tier_B_thin": {
+  "neck": {
+   "labels": [
+    "neck"
+   ],
+   "videos": 7,
+   "signers": 7,
+   "category": "body"
+  },
+  "chest": {
+   "labels": [
+    "chest"
+   ],
+   "videos": 4,
+   "signers": 3,
+   "category": "body"
+  },
+  "stomach": {
+   "labels": [
+    "stomach"
+   ],
+   "videos": 5,
+   "signers": 4,
+   "category": "body"
+  },
+  "fever": {
+   "labels": [
+    "fever"
+   ],
+   "videos": 6,
+   "signers": 5,
+   "category": "symptom"
+  },
+  "nausea": {
+   "labels": [
+    "nausea"
+   ],
+   "videos": 2,
+   "signers": 2,
+   "category": "symptom"
+  },
+  "rash": {
+   "labels": [
+    "rash"
+   ],
+   "videos": 2,
+   "signers": 2,
+   "category": "symptom"
+  },
+  "cramp": {
+   "labels": [
+    "cramp"
+   ],
+   "videos": 2,
+   "signers": 2,
+   "category": "symptom"
+  },
+  "infection": {
+   "labels": [
+    "infection"
+   ],
+   "videos": 5,
+   "signers": 4,
+   "category": "symptom"
+  },
+  "sneeze": {
+   "labels": [
+    "sneeze"
+   ],
+   "videos": 4,
+   "signers": 3,
+   "category": "symptom"
+  },
+  "very": {
+   "labels": [
+    "very"
+   ],
+   "videos": 3,
+   "signers": 3,
+   "category": "severity"
+  },
+  "never": {
+   "labels": [
+    "never"
+   ],
+   "videos": 7,
+   "signers": 7,
+   "category": "time"
+  },
+  "patient": {
+   "labels": [
+    "patient"
+   ],
+   "videos": 2,
+   "signers": 2,
+   "category": "people"
+  },
+  "stand": {
+   "labels": [
+    "stand"
+   ],
+   "videos": 5,
+   "signers": 3,
+   "category": "action"
+  },
+  "shot": {
+   "labels": [
+    "shot"
+   ],
+   "videos": 6,
+   "signers": 5,
+   "category": "object"
+  },
+  "wheelchair": {
+   "labels": [
+    "wheelchair"
+   ],
+   "videos": 7,
+   "signers": 7,
+   "category": "object"
+  }
+ },
+ "tier_C_absent": []
+}
