@@ -177,9 +177,13 @@ def main():
                          "'2s-only': skip the gate for 2a. MEASURED 2026-08-14: this gate is the "
                          "sole reason two-handed words are starved — class 1 returns before it "
                          "and keeps 49.0%% of takes (median 138 valid), while 2s keeps 1.2%% "
-                         "(median 3) and 2a keeps 2.1%% (median 5). corr(valid_candidates, "
-                         "dominant coverage) = +0.804 over 250 words: 0/163 words with >60 valid "
-                         "takes are degraded, vs 22/38 of those with <=3. For 2a the gate "
+                         "(median 3) and 2a keeps 2.1%% (median 5). Do NOT read the pooled "
+                         "corr(valid_candidates, coverage) = +0.804 as causal: WITHIN class it is "
+                         "only +0.218 (class 1, n=163), +0.244 (2s), +0.443 (2a), so the pooled "
+                         "figure is mostly the between-class contrast. Class-1 words never fall "
+                         "below 73 valid takes yet still span 0.56-1.00 coverage, so pool size "
+                         "alone does not buy coverage. This flag rests on MECHANISM, not on that "
+                         "correlation: for 2a the gate "
                          "protects the recorded passive WRIST POSITION, which is measured at a "
                          "median 1.56 shoulder widths from the dominant wrist and is therefore "
                          "replaced synthetically by the passiveBase lexicon — so on 2a it "
@@ -525,7 +529,10 @@ def main():
                 "This gate is the sole cause of the two-handed candidate starvation measured "
                 "2026-08-14: class 1 returns before it and keeps 49.0% of takes (median 138 "
                 "valid); 2s keeps 1.2% (median 3) and 2a keeps 2.1% (median 5). "
-                "corr(valid_candidates, dominant coverage) = +0.804 across 250 words."),
+                "Pooled corr(valid_candidates, coverage) = +0.804 across 250 words, but that is "
+                "mostly between-class: within class it is +0.218 / +0.244 / +0.443 for 1 / 2s / 2a, "
+                "and class-1 words span 0.56-1.00 coverage while never dropping below 73 valid "
+                "takes. Pool size is not established as the cause of low coverage."),
             "sym_min_ratio": args.sym_min_ratio,
             "one_max_ratio": args.one_max_ratio,
             "require_passive_up": args.require_passive_up,

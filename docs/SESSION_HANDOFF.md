@@ -706,11 +706,25 @@ forearm or wrist rather than a hand — flagged `kind`, not solved.
 
 **🟠 Exemplar selection is starved by its own validity filter.** `require_passive_up` is the sole
 cause, and class 1 returns before it: class 1 keeps **49.0%** of takes (median 138 valid), 2s keeps
-**1.2%** (median 3), 2a **2.1%** (median 5). `corr(valid_candidates, coverage) = +0.804` over 250
-words — 0 of 163 words with >60 valid takes are degraded, vs 22 of 38 with ≤3. **For 2a the gate
-is pure loss**: it sacrifices ~98% of the pool to protect a passive wrist position that
-`asl_2a_base_placement.json` now overwrites. `--require-passive-up 2s-only` added; **untested —
-see §6.**
+**1.2%** (median 3), 2a **2.1%** (median 5). **For 2a the gate is pure loss**: it sacrifices ~98% of
+the pool to protect a passive wrist position that `asl_2a_base_placement.json` now overwrites.
+`--require-passive-up 2s-only` added; **untested — see §6.**
+
+⚠️ **A correction to this same section, made the same day.** It first cited a pooled
+`corr(valid_candidates, coverage) = +0.804` as evidence that starvation *causes* the low coverage.
+Disaggregated, that collapses: **+0.218** within class 1 (n=163), **+0.244** within 2s, **+0.443**
+within 2a. Class-1 words never fall below **73** valid takes and still span **0.56–1.00** coverage,
+so pool size does not buy coverage; 2a's valid range is **2–9**, which cannot extrapolate to 130.
+The pooled figure mostly restates "two-handed signs have fewer valid takes *and* worse coverage" —
+both consequences of two-handedness. **The re-selection run is justified by mechanism (the gate
+cannot be buying anything on 2a), not by that correlation, and its outcome is a genuine unknown.**
+
+This is the **third** time a pooled metric has misled this project in the same direction: §0.4's
+per-signer collapse invisible in pooled test accuracy, the masking A/B, and now this — and this one
+was written into four files and a commit message *in the same session that documented the rule
+against it*. The rule is not "distrust aggregates when you remember to"; it is **disaggregate by the
+grouping variable before quoting any correlation**, because between-group contrast masquerades as
+within-group causation every time.
 
 **Also shipped:** `quality` block on all 250 word files (tier + gap runs; frames byte-identical,
 verified by diff); `check-export3.py` now **reads** `dominantHand` instead of deriving it from

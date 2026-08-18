@@ -76,12 +76,22 @@ a sign from that; there is nothing to interpolate between.
 
 **One avenue is open and untested.** The validity filter that selects exemplars rejects **98.8% of
 candidate takes for two-handed words** (class 1 keeps 49.0%, median 138 valid takes; 2s keeps
-1.2%, median 3; 2a keeps 2.1%, median 5), and `corr(valid_candidates, coverage) = +0.804`. Words
-with >60 valid takes: 0 of 163 degraded. Words with ≤3: 22 of 38 degraded. So these words may be
-degraded because the *pool was starved*, not because the corpus lacks a good take.
+1.2%, median 3; 2a keeps 2.1%, median 5). So these words *may* be degraded because the pool was
+starved rather than because the corpus lacks a good take.
 
-`build_sign_clips.py --require-passive-up 2s-only` tests this. Until it runs, treat tier C as
-provisional-but-real: **some** of the 39 are probably recoverable, and some certainly are not.
+> **Do not overstate this.** An earlier version of this section cited a pooled
+> `corr(valid_candidates, coverage) = +0.804` as if starvation were the demonstrated cause. **That
+> correlation is mostly a between-class artifact** — within class it is only **+0.218** (class 1),
+> **+0.244** (2s), **+0.443** (2a). Class-1 words never fall below **73** valid takes and still span
+> **0.56–1.00** coverage, so pool size does not buy coverage; and 2a's valid range is **2–9**, which
+> cannot predict behaviour at 130. The pooled number largely restates "two-handed signs have fewer
+> valid takes *and* worse coverage" — two consequences of two-handedness, not one causing the other.
+> Third time this project has been caught by a pooled metric (see §0.4 of `SESSION_HANDOFF.md`).
+
+`build_sign_clips.py --require-passive-up 2s-only` tests it, and the justification for testing is
+**mechanism rather than correlation**: on 2a the gate protects a recorded passive wrist that
+`asl_2a_base_placement.json` now discards, so it cannot be buying anything there. Until it runs,
+treat tier C as real, and treat the outcome as a **genuine unknown** — not a likely recovery.
 
 ---
 

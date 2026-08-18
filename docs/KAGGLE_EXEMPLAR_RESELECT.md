@@ -20,9 +20,33 @@ Exemplar selection is starved by its own validity filter. Measured 2026-08-14:
 | 2s symmetric | 274 | **3** | **1.2%** | 50.0% |
 | 2a asymmetric | 254 | **5** | **2.1%** | 51.4% |
 
-`corr(valid_candidates, coverage) = +0.804` across all 250 words. Of words with >60 valid takes,
-**0 of 163 are degraded**; of those with ≤3, **22 of 38 are**. So the tier-C words may be bad
-because the *pool was starved*, not because the corpus lacks a good take.
+### ⚠️ Read this before deciding the run is likely to succeed
+
+An earlier version of this doc quoted `corr(valid_candidates, coverage) = **+0.804**` across all
+250 words and treated it as evidence that starvation *causes* low coverage. **It is mostly a
+between-class artifact.** Disaggregated:
+
+| | pooled | class 1 | class 2s | class 2a |
+|---|---|---|---|---|
+| corr(valid_candidates, coverage) | **+0.804** | +0.218 | +0.244 | +0.443 |
+| valid-take range | — | 73–214 | 1–8 | 2–9 |
+| coverage range | — | 0.56–1.00 | 0.10–0.82 | 0.15–0.75 |
+
+Within class the relationship is weak. **Class-1 words never fall below 73 valid takes and still
+span 0.56–1.00 coverage**, so a large pool does not buy good coverage. And 2a's valid range is only
+**2–9** — a 7-take span cannot tell you what happens at 130. The pooled figure is largely
+restating "two-handed signs have both fewer valid takes and worse coverage", which is two
+consequences of two-handedness rather than one causing the other.
+
+This is the same pooled-metric trap this project has now hit three times (§0.4's per-signer
+collapse hidden by pooled test accuracy; the masking A/B; this). It is recorded here rather than
+quietly fixed because the run's expected value changed with it.
+
+**So why run it at all?** Because the justification is **mechanism, not correlation**: on 2a the
+gate protects the recorded passive wrist, and `asl_2a_base_placement.json` now *discards* that
+wrist. The gate cannot be buying anything on 2a, so dropping it is free — the only question is
+whether a bigger pool happens to contain a better-tracked take. **Treat the outcome as a genuine
+unknown, not a likely win.** It is 35 CPU-minutes and it is the only way to find out.
 
 `--require-passive-up` is the sole cause. Class 1 returns at
 [`build_sign_clips.py:336`](../training/build_sign_clips.py#L336) *before* the gate is reached,
