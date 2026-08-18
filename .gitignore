@@ -55,3 +55,6 @@ SPLIT_TRAIN_VALIDATE.md
 
 # Sample/demo video renders
 *.mp4
+
+# Generated driving videos for the demo stopgap (regenerate with export_driving_video.py)
+driving_video/
