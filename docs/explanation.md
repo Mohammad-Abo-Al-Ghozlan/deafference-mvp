@@ -222,11 +222,35 @@ Agreed division of labor with the animator:
   lengths — which is why depth-heavy signs render correctly in 3D even though `z` is noisy.
 - **The animator also owns** transition-blending between signs and motion smoothing.
 
-### Status
+### Status (updated 2026-08-14)
 
-**Our side is DONE and handed off** (dictionary built, 250 JSONs + reference pose exported,
-contract v4 sent). The animator is building the 3D avatar. Remaining joint step: connect
-our runtime gloss list to his finished avatar.
+**"Our side is DONE and handed off" — which is what this section used to say — was wrong**, and it
+is worth knowing why: the check that produced "250/250 clean" could not fail. The export actually
+carried the **resting** hand on **137 of 250 words**, because MediaPipe preferentially loses the
+hand that *moves* (median wrist speed 0.0208 sh.w./frame when the hand is tracked vs **0.0317** when
+it is missing), so selecting exemplars on tracking coverage was selecting for stillness. Fixed:
+wrong-hand words **137 → 1**, coverage **28.8% → 76.2%**, and native clip durations restored (they
+had all been padded to 64 frames; the real range is **9–116**).
+
+Where it actually stands, by handedness class — dominant-hand coverage, measured:
+
+| class | words | 🟢 good | 🟡 marginal | 🔴 degraded |
+|---|---|---|---|---|
+| one-handed | 163 | **144** | 19 | **0** |
+| two-handed (symmetric + asymmetric) | 87 | **3** | 45 | **39** |
+
+**The 163 one-handed words work. The 87 two-handed words are the entire problem**, and the cause is
+the source data rather than our pipeline: GISLR records **one hand per participant**, so the passive
+hand is absent from every take of every word and has to be synthesized — and the tracker drops the
+dominant hand worst precisely where two hands cross and occlude.
+
+Open on our side: the 35 asymmetric base placements (`asl_2a_base_placement.json`, authored
+2026-08-14, **not yet Deaf-reviewed**), and three separate review passes — the 250 exemplars, the 7
+handshape templates, and those 35 placements. Open on the animator's side: a verified bug where the
+dominant hand receives the passive handshape on 666 of 1374 asymmetric-word frames, and holding the
+handshape through short tracker gaps instead of relaxing (**1177 frames** recoverable).
+
+Full ceiling, measured: **`docs/AVATAR_LIMITS.md`**.
 
 ---
 
@@ -286,9 +310,19 @@ Those are **three separate tasks**, not a training ladder:
    **0.6–0.8**: per-signer accuracy spans 0.314–0.823 depending on how the tracker recorded
    their hands, and the 3-signer test split only contains the easy configuration. Quoting
    77.5% as a per-user number is the one claim in this deck that would not survive a demo.
-3. **Speech → Sign:** Whisper → gloss → replay per-word landmark clips → 3D avatar. **Our
-   side done + handed off; animator building the rig.**
+3. **Speech → Sign:** Whisper → gloss → replay per-word landmark clips → 3D avatar. Say
+   **"163 one-handed words render well; the 87 two-handed ones are the open work."** Not "done" —
+   that claim came from a check that could not fail, and the export was carrying the *resting* hand
+   on 137 of 250 words until it was caught. Cause is the corpus: GISLR records one hand per
+   participant, so every two-handed sign's passive hand must be synthesized.
 4. **Sentences today** = isolated words + grammar assembly (the validated pragmatic
    approach). **True continuous ASL is Phase-2**, blocked by data, solved by fine-tuning a
    pose foundation model on gloss-free ASL translation corpora — **not** by a
    characters→words→sentences ladder.
+5. **Volunteer this before anyone asks:** the avatar has **no face**. The export is 75 landmarks —
+   33 body + 42 hand. ASL grammar lives substantially in the face: eyebrows mark questions, head
+   tilt marks conditionals and topics, mouth morphemes modify verbs, and negation is often a
+   headshake with no manual sign at all. For **isolated word playback this is fine**; for
+   **sentences it is a correctness gap, not a polish item.** So the honest framing is that the
+   system *plays ASL signs* and does not yet *produce ASL*. Saying it first lands far better than
+   conceding it under questioning — and the fix is a data-acquisition project, not a sprint.
