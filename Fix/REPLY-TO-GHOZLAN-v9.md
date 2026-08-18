@@ -374,15 +374,55 @@ mis-assignment on `time` (err 0.248). You never saw it because the output does
 `rows.slice(0, 14)`, which hides 21 of 35 rows. Also your stated mechanism is refuted: the rendered
 B's PIP flexion is **3.7°, identical to template B's 3.7°** — clamping is not curling B toward C.
 
-**⑤ And one real defect found in passing, unrelated to all of the above: 0 of 35 `2a` clips key the
-distal finger bones, while 52 of 52 `2s` clips do.** The fingertips aren't being posed on the
-asymmetric path. Please check that one directly — it is the kind of thing that would quietly cap
-2a quality no matter what the templates say.
+**⑤ 🔴 A separate defect, and it is much larger than it first looked. I verified this one myself.**
 
-**Provenance, stated plainly:** this whole section is one independent reproduction whose own
-adversarial reviewers died on a session limit before they ran. It reproduced your numbers exactly
-and carries a working negative control, which is why I'm sending it — but it has not been attacked
-the way the §2 bug was, and ⑤ in particular I have not verified myself.
+The reproduction reported "0 of 35 `2a` clips key the distal finger bones, while 52 of 52 `2s` clips
+do." I parsed `CLIPS` out of `avatar-player.html` (line 3925 — it is plain JSON, no decoding needed)
+and counted bone tracks across all 250 clips. That is exactly right, but the scoping understates it:
+
+```
+segment-3 (distal) tracks, all 250 clips:
+  LeftHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3    52 clips each   <- the 52 `2s` words
+  RightHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3    0 clips        <- NEVER, on any word
+
+by class, clips with ANY distal finger track:
+  class 1  (163 words)    0 / 163
+  class 2s ( 52 words)   52 /  52     (left/passive hand only)
+  class 2a ( 35 words)    0 /  35
+```
+
+**So this is not a 2a problem. The DOMINANT hand's distal phalanges are never keyed on any of the
+250 words** — including all 163 one-handed ones, where the dominant hand is the entire sign. The only
+path in the whole system that keys a segment-3 bone is the `2s` mirror, on the passive hand.
+Corroborating detail: a `2s` clip carries a median 38 tracks versus 33 for class 1 and 2a — a
+difference of exactly **5**, the five distal bones.
+
+**Likely mechanism — inference, not proof, so please confirm against your rig.** The aim loop reads:
+
+```js
+const b = ch.bones[i], child = ch.bones[i+1] || b.children.find(c => c.isBone);
+if (!b || !child) break;
+```
+
+With 3 bones per finger, at `i = 2` there is no `ch.bones[3]`, so it needs a tip child. If the rig
+has no tip node the lookup returns undefined, `break` fires, and **segment 3 is never aimed at all.**
+The `2s` branch is immune for the same reason it was immune to the side-guard bug: it copies local
+quaternions wholesale and never asks for a child.
+
+That would also explain your §3 positional error from a second direction — it is why landmarks
+4/8/12/16/20 come out null in the rendered hand, which is the same 14-vs-20 landmark gap as ①. One
+mechanism, two symptoms.
+
+**Impact:** the fingertip of every finger on the signing hand sits at its bind-pose rotation for all
+250 words. That is a real handshape fidelity loss on the hand that matters most, and it is invisible
+to the anatomy gate and the rig suite because nothing there checks that a bone was *keyed*. A
+counter would catch it — the same instrument that caught your `Pinky`/`Little` bug.
+
+**Provenance, stated plainly:** ①–④ above are one independent reproduction whose own adversarial
+reviewers died on a session limit before they ran. It reproduced your numbers exactly and carries a
+working negative control, which is why I am sending it — but it has not been attacked the way the §2
+bug was. **⑤ I re-derived myself from your `CLIPS` array**, and the counts above are direct
+measurements; only the mechanism paragraph is inference.
 
 ---
 

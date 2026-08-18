@@ -138,9 +138,38 @@ on a session limit — so treat it as a strong single reproduction rather than s
 it by having the animation side adopt a direction-space acceptance gate with the rest-hand negative
 control.
 
-**And a real render defect found in passing, which neither side had noticed: 0 of 35 `2a` clips key
-the distal finger bones, while 52 of 52 `2s` clips do.** The fingertips are not being posed on the
-asymmetric path at all. That is independent of everything above and of the side-guard bug in §6.
+### 🔴 The dominant hand's fingertips are never posed — on any of the 250 words
+
+Found while checking the above, then **verified directly** by parsing the `CLIPS` array out of
+`Fix/avatar-player.html` (line 3925 is plain JSON, no decoding needed) and counting bone tracks:
+
+```
+segment-3 (distal) tracks, across all 250 clips:
+  LeftHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3     52 clips each
+  RightHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3     0 clips  -- never, on any word
+
+clips with ANY distal finger track, by class:
+  class 1   0 / 163      class 2s  52 / 52 (passive hand only)      class 2a  0 / 35
+```
+
+The reproduction first reported this as "0 of 35 `2a` versus 52 of 52 `2s`", which is true but scopes
+it too narrowly. **It is not a 2a defect: the dominant hand's distal phalanges are unposed on all
+250 words**, including the 163 one-handed ones where the dominant hand *is* the sign. The only path
+that keys a segment-3 bone anywhere in the system is the `2s` mirror, acting on the passive hand. A
+`2s` clip carries a median 38 tracks against 33 for class 1 and 2a — a difference of exactly the five
+distal bones.
+
+**Likely mechanism (inference, not proof).** `retarget.mjs`'s aim loop takes
+`child = ch.bones[i+1] || b.children.find(c => c.isBone)` and `break`s when there is no child. With
+three bones per finger, `i = 2` has no `ch.bones[3]`, so it needs a tip node; if the rig has none,
+segment 3 is never aimed. The `2s` branch escapes this for the same reason it escaped the side-guard
+bug — it copies local quaternions wholesale and never asks for a child. This would also explain why
+landmarks 4/8/12/16/20 read null in the rendered hand: one mechanism, two symptoms.
+
+**Why nothing caught it:** the anatomy gate, hinge check, jitter metric and 60/60 rig suite all score
+poses that *were* produced. **None of them asks whether a bone was keyed at all** — a bone left at
+its bind rotation is anatomically perfect. A non-zero counter would have caught it, which is the same
+instrument that caught the animation side's `Pinky`/`Little` bug.
 
 **Placement.** The recorded passive wrist is unusable — a median **1.56 shoulder widths** from the
 dominant wrist across all 35 words, with only 1 of 35 inside 1.38. The arm is *not* hanging
