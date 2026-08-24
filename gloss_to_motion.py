@@ -151,14 +151,19 @@ def blend_len(cap: int, a_len: int, b_len: int) -> int:
 
 def stitch(glosses, clips: dict, transition: int = DEFAULT_TRANSITION, lex: dict | None = None):
     """Concatenate each gloss's clip with eased transition frames between signs.
-    Returns (frames (T,75,3), segments [{gloss,start,end,synthesis?}], present, missing)."""
+
+    `glosses` accepts bare strings and/or extended gloss objects (§12, see parse_gloss) in the
+    same list, so ["hello", {"gloss": "sick", "nonmanual": "q"}] is valid.
+    Returns (frames (T,75,3), segments [{gloss,start,end,nonmanual?,hold?,synthesis?}],
+    present, missing)."""
     frames: list[np.ndarray] = []
     segments: list[dict] = []
     present: list[str] = []
     missing: list[str] = []
     prev_last = None
     prev_len = 0
-    for g in glosses:
+    for raw in glosses:
+        g, extras = parse_gloss(raw)
         clip = clips.get(g)
         if clip is None or clip.shape[0] == 0:
             missing.append(g)                                # no clip -> skip (or fingerspell later)
@@ -169,7 +174,7 @@ def stitch(glosses, clips: dict, transition: int = DEFAULT_TRANSITION, lex: dict
         start = len(frames)
         frames.extend(clip)
         end = len(frames)
-        segments.append(make_segment(g, start, end, lex or {}, clip))
+        segments.append(make_segment(g, start, end, lex or {}, clip, extras))
         present.append(g)
         prev_last = clip[-1]
         prev_len = clip.shape[0]
@@ -316,9 +321,62 @@ def quality_tier(coverage: float) -> str:
     return "A" if coverage >= TIER_A else "B" if coverage >= TIER_B else "C"
 
 
+# ── extended gloss form (contract §12) ───────────────────────────────────────────────────────
+# A gloss may be a bare string, or an object carrying grammar that a bare word cannot:
+#     "sick"                                  -> the sign, nothing more
+#     {"gloss": "sick", "nonmanual": "q"}     -> the sign, marked as a yes/no question
+#
+# WHY THIS EXISTS. ASL grammar is not carried by word order alone -- questions, negation and
+# topicalisation live on the FACE, simultaneously with the manual sign. A flat list of English
+# words cannot express them, which is why the honest description of the current system is that it
+# *plays ASL signs* rather than *produces ASL* (docs/AVATAR_LIMITS.md §1).
+#
+# Our 75-point corpus has no face landmarks, and contract §7 explains that the 468-point face
+# stream IS recoverable upstream -- but also why that would not help: the clips are ISOLATED
+# WORDS, so the signers' expressions are neutral rather than grammatical. Recovering the face
+# gives motion without meaning; the grammar was never performed, so no retraining can find it.
+# Rendering a non-manual, by contrast, needs no data at all -- only a rule and a rig. So the
+# production direction can carry grammar the recognition direction cannot, and this is it.
+#
+# Additive on purpose: a bare string stays valid forever, every consumer that ignores these keys
+# keeps working, and the keys exist now so Ghozlan's rig can be built to read them rather than
+# retrofitted later.
+NONMANUALS = {
+    "q":    "yes/no question -- brow raise, held for the marked span",
+    "wh":   "wh-question -- brow furrow + slight head tilt",
+    "neg":  "negation -- headshake across the marked span",
+    "top":  "topic -- brow raise on the topicalised element only",
+    None:   "neutral",
+}
+
+
+def parse_gloss(g) -> tuple[str, dict]:
+    """'sick' or {'gloss':'sick','nonmanual':'q','hold':0.2} -> ('sick', extras).
+
+    Unknown non-manuals are REJECTED rather than silently dropped: a typo'd marker that renders
+    as neutral is a sentence that quietly means something else, which is worse than a crash."""
+    if isinstance(g, str):
+        return g, {}
+    if not isinstance(g, dict) or "gloss" not in g:
+        raise ValueError(f"gloss must be a string or an object with a 'gloss' key, got {g!r}")
+    word = g["gloss"]
+    extras = {}
+    nm = g.get("nonmanual")
+    if nm is not None:
+        if nm not in NONMANUALS:
+            raise ValueError(f"unknown nonmanual {nm!r} on {word!r}; "
+                             f"expected one of {sorted(k for k in NONMANUALS if k)}")
+        extras["nonmanual"] = nm
+    if g.get("hold"):
+        extras["hold"] = float(g["hold"])           # extra seconds to freeze on the final pose
+    return word, extras
+
+
 def make_segment(word: str, start: int, end: int, lex: dict,
-                 clip: np.ndarray | None = None) -> dict:
+                 clip: np.ndarray | None = None, extras: dict | None = None) -> dict:
     seg = {"gloss": word, "start": int(start), "end": int(end)}
+    if extras:
+        seg.update(extras)                          # nonmanual / hold, only when actually set
     ent = lex.get(word)
     if ent:
         s = dict(ent)

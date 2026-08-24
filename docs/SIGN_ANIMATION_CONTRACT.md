@@ -444,6 +444,93 @@ Speech `"hello, I'm hungry"`:
 
 ---
 
+## 12. The extended gloss — where ASL grammar enters (NEW 2026-08-24)
+
+### The problem this fixes
+
+A gloss has been a bare English word: `"sick"`. That is enough to select a sign and nothing more.
+But **ASL grammar is not carried by word order alone.** Questions, negation and topicalisation are
+marked on the **face**, *simultaneously* with the manual sign. A flat list of English words cannot
+express any of them — which is why the honest description of the current system is that it
+**plays ASL signs; it does not produce ASL** (see `AVATAR_LIMITS.md` §1).
+
+Concretely, today a statement and a yes/no question are the **identical** gloss sequence. There is
+no way to tell them apart in our output.
+
+### Why this can't come from data — and doesn't need to
+
+§7 explains that the 468-point face stream is recoverable upstream (recognition dropped it; the
+raw source still has it). **That gives a face channel, not face grammar.** §7's own caveat is the
+reason: the corpus is *isolated-word* clips, so the signers' expressions are neutral and
+inconsistent rather than grammatical. Recovering all 468 points yields a face that **moves without
+meaning anything.** No amount of retraining changes that — the grammar was never performed.
+
+So the non-manuals have to be **generated from rules on the production side**, keyed off the input
+sentence we already parse. That needs **no data at all** — only a rule and a rig. This is the one
+place in the project where the production direction can carry linguistic structure that the
+recognition direction cannot.
+
+### The format — additive, a bare string stays valid forever
+
+```json
+"glosses": [
+  "hello",
+  {"gloss": "sick", "nonmanual": "q"},
+  {"gloss": "please", "hold": 0.25}
+]
+```
+
+Each `segments[]` entry gains the same optional keys:
+
+```json
+{"gloss": "sick", "start": 57, "end": 75, "nonmanual": "q", "synthesis": { ... }}
+```
+
+| Key | Type | Meaning |
+|---|---|---|
+| `gloss` | string | **required.** The sign, as in `vocab_250.json` |
+| `nonmanual` | string \| absent | `q` · `wh` · `neg` · `top` — see below |
+| `hold` | number \| absent | extra **seconds** frozen on the final pose (prosody / emphasis) |
+
+| `nonmanual` | Render as |
+|---|---|
+| `q` | yes/no question — **brow raise**, held for the whole marked span |
+| `wh` | wh-question — **brow furrow** + slight head tilt |
+| `neg` | negation — **headshake** across the marked span |
+| `top` | topic — brow raise on the topicalised element **only** |
+
+### Rules for consumers
+
+1. **A bare string is valid input, permanently.** `["hello","sick"]` must never stop working.
+2. **Absent means absent.** When no non-manual is set, the keys are **omitted entirely** — not
+   emitted as `null`. A bare-gloss run produces byte-identical output to the pre-§12 format;
+   verified by direct comparison, frames and segments both.
+3. **Ignoring the keys is legal.** A renderer with no face rig drops them and behaves exactly as
+   before. Nothing breaks; the sentence is simply ungrammatical, as it is today.
+4. **An unknown `nonmanual` is an ERROR, not a fallback.** `parse_gloss` raises. A typo'd marker
+   that silently renders as neutral is a sentence that quietly means something *else* — worse than
+   a crash, because nothing downstream can detect it.
+5. **A non-manual spans its segment**, from `start` to `end`. Multi-sign spans (a headshake across
+   a whole clause) are **not yet expressible** — mark each affected gloss. Noted as a known gap.
+
+### What this asks of the rig — decide before finalising it
+
+**Two channels: brow (raise / furrow) and head rotation (shake, tilt).** That is all four
+non-manuals above.
+
+⚠️ **This is time-critical.** Retrofitting a face onto a finished rig costs far more than planning
+two channels into it now. If the rig is finalised without them, §12 is dead for a year and the
+system stays at "plays signs."
+
+- [ ] **Ghozlan:** can the rig carry a brow channel and head-rotation channel? If not, what would it take?
+- [ ] **Deaf review:** are these four markers the right first set, and are the renderings correct?
+- [ ] Multi-sign non-manual spans — needed for v2?
+
+**Implementation:** `parse_gloss()` / `NONMANUALS` in `gloss_to_motion.py`. Accepts both forms in
+one list; `stitch()` carries the extras through to each segment.
+
+---
+
 # PART B — FULL SPEECH → SIGN PIPELINE: every phase in detail
 
 _Added 2026-07-28. Parts 0–11 above pin the animation hand-off. This part details EVERY phase end-to-end — goal, input/output, tools, how, effort, gotchas — plus a 5-day plan for the 250-word demo._
