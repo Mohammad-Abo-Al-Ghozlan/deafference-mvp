@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import cv2
@@ -61,6 +62,173 @@ def upper_body(a: np.ndarray) -> np.ndarray:
 
 def tier_of(cov: float) -> str:
     return "A" if cov >= TIER_A else "B" if cov >= TIER_B else "C"
+
+
+# ── human-figure renderer (--style human) ─────────────────────────────────────
+# WHY THIS EXISTS
+# `preview_signs.render_frame` is a DEBUG overlay: 2px lines and 3px dots on near-black. It is
+# the right tool for review (you can see exactly which landmark is missing) and the wrong input
+# for a motion-transfer model. Kling 3.0 Motion Control takes a *reference video of a person* and
+# extracts the motion itself -- so the driving clip has to contain something its pose estimator
+# recognises as a human body. Dots and hairlines on black almost certainly do not.
+#
+# So: same landmarks, same geometry, drawn as a filled figure with limb volume, a head, and
+# hands that read as hands. No landmark is invented -- a missing hand block still draws nothing.
+# Everything below is a rendering choice; the motion is untouched.
+HB_BG      = (208, 208, 206)      # light neutral studio grey (matches the character-still prompt)
+HB_CLOTH   = (118, 116, 114)      # mid-grey long-sleeved top
+HB_CLOTH_E = (84, 82, 80)         # its darker edge, for silhouette definition
+HB_SKIN    = (152, 178, 208)      # BGR -> a light warm tan
+HB_SKIN_E  = (110, 136, 168)
+
+# Limb thicknesses as a fraction of the on-screen shoulder width, so they track the global fit.
+HB_UPPER, HB_FORE, HB_NECK, HB_FINGER, HB_HEAD = 0.17, 0.14, 0.20, 0.075, 0.30
+
+
+def _pt(pts: np.ndarray, i: int):
+    return ps._project(pts[i])
+
+
+def _shoulder_px(pts: np.ndarray) -> float:
+    """On-screen shoulder width. Every thickness derives from this, so the figure keeps its
+    proportions whatever `fit_all` chose for SCALE."""
+    a, b = _pt(pts, 11), _pt(pts, 12)
+    if a is None or b is None:
+        return ps.SCALE                                  # 1 shoulder-width by definition
+    return math.hypot(a[0] - b[0], a[1] - b[1]) or ps.SCALE
+
+
+def _capsule(img, a, b, w: float, fill, edge) -> None:
+    """A limb: dark stroke, then fill, with round caps at both ends.
+
+    Drawn as line+circles rather than a thick cv2.line alone because OpenCV's thick lines have
+    square ends -- which read as blocky stumps at the elbow and wrist, exactly the joints a pose
+    estimator keys on."""
+    if a is None or b is None:
+        return
+    we, wf = max(2, int(round(w * 1.30))), max(1, int(round(w)))
+    for width, col in ((we, edge), (wf, fill)):
+        cv2.line(img, a, b, col, width, cv2.LINE_AA)
+        for p in (a, b):
+            cv2.circle(img, p, width // 2, col, -1, cv2.LINE_AA)
+
+
+def _fill_scaled(img, quad, sx: float, sy: float, col) -> None:
+    """Fill a polygon scaled about its own centroid (used to get the torso's edge pass)."""
+    c = np.mean(np.asarray(quad, dtype=np.float64), axis=0)
+    poly = np.array([[c[0] + (x - c[0]) * sx, c[1] + (y - c[1]) * sy] for x, y in quad],
+                    dtype=np.int32)
+    cv2.fillPoly(img, [poly], col, cv2.LINE_AA)
+
+
+def _torso(img, pts: np.ndarray, sw: float) -> None:
+    """Shoulders down to the hips, then CONTINUED off the bottom of the frame.
+
+    Stopping the fill at the hip landmarks left a floating trapezoid with a hard flat base -- a
+    body that simply ends. Real waist-up framing has the torso leave the frame, so the quad is
+    extended well past the canvas and clipped by it."""
+    sl, sr, hr, hl = _pt(pts, 11), _pt(pts, 12), _pt(pts, 24), _pt(pts, 23)
+    if any(v is None for v in (sl, sr, hr, hl)):
+        return
+    drop = ps.CANVAS_H                                   # far enough to always clear the canvas
+    quad = [sl, sr, (hr[0], hr[1] + drop), (hl[0], hl[1] + drop)]
+    # Widen about the body's own midline, HORIZONTALLY ONLY. Scaling this quad about its centroid
+    # (as _fill_scaled does) is wrong once it extends off-canvas: the taller edge pass rose higher
+    # than the fill, leaving a dark band floating above the shoulders, and the vertical stretch
+    # splayed the hips wider than the shoulders. Keeping y fixed also preserves the measured
+    # shoulder-to-hip taper instead of inventing one.
+    midx = (sl[0] + sr[0]) / 2.0
+    for k, col in ((1.13, HB_CLOTH_E), (1.02, HB_CLOTH)):
+        poly = np.array([[midx + (x - midx) * k, y] for x, y in quad], dtype=np.int32)
+        cv2.fillPoly(img, [poly], col, cv2.LINE_AA)
+    # Round off the shoulder caps so the arms join the body instead of meeting a sharp corner.
+    for p in (sl, sr):
+        r = max(3, int(round(sw * HB_UPPER * 0.62)))
+        cv2.circle(img, p, int(r * 1.28), HB_CLOTH_E, -1, cv2.LINE_AA)
+        cv2.circle(img, p, r, HB_CLOTH, -1, cv2.LINE_AA)
+
+
+def _head(img, pts: np.ndarray, sw: float) -> None:
+    ears = [_pt(pts, 7), _pt(pts, 8)]
+    if all(v is not None for v in ears):
+        ctr = ((ears[0][0] + ears[1][0]) // 2, (ears[0][1] + ears[1][1]) // 2)
+    else:
+        ctr = _pt(pts, 0)                                # fall back to the nose
+    if ctr is None:
+        return
+    r = max(5, int(round(sw * HB_HEAD)))
+    # The outline pass is wider here than elsewhere on purpose: signs made at the face put the
+    # hand directly over the head, and with a thin edge the two same-toned shapes merged into one
+    # blob. A heavier rim keeps the hand readable as a separate object in front of the face.
+    cv2.ellipse(img, ctr, (int(r * 0.86), int(r * 1.04)), 0, 0, 360, HB_SKIN_E, -1, cv2.LINE_AA)
+    cv2.ellipse(img, ctr, (int(r * 0.73), int(r * 0.91)), 0, 0, 360, HB_SKIN, -1, cv2.LINE_AA)
+    # Brow + eyes: two dark marks. Not decoration -- a face-detector finding nothing on the head
+    # is one more reason for a video model to read the figure as an object rather than a person.
+    ey = ctr[1] - int(r * 0.10)
+    for dx in (-int(r * 0.30), int(r * 0.30)):
+        cv2.circle(img, (ctr[0] + dx, ey), max(2, int(r * 0.10)), HB_SKIN_E, -1, cv2.LINE_AA)
+
+
+def _fist(img, wrist, sw: float) -> None:
+    """A relaxed hand at a TRACKED pose wrist whose 21-point block is missing.
+
+    APPEARANCE ONLY, and only ever a featureless blob -- never a handshape. The distinction that
+    matters: the wrist here is measured (pose landmark 15/16), it is the finger detail that is
+    absent. Leaving it bare rendered the signer with an amputated arm, which is both wrong about
+    the person and a strong cue to a video model that this is not a human. It carries no
+    linguistic content: a one-handed sign's passive hand means nothing, and for a two-handed sign
+    the tier already records that the data is degraded (see AVATAR_LIMITS.md)."""
+    if wrist is None:
+        return
+    r = max(3, int(round(sw * 0.115)))
+    cv2.circle(img, wrist, int(r * 1.26), HB_SKIN_E, -1, cv2.LINE_AA)
+    cv2.circle(img, wrist, r, HB_SKIN, -1, cv2.LINE_AA)
+
+
+def _hand(img, pts: np.ndarray, base: int, sw: float, wrist) -> bool:
+    """Draw the measured hand. Returns False if its block is absent (caller draws a fist)."""
+    P = [_pt(pts, base + i) for i in range(ps.HAND_N)]
+    if P[0] is None:
+        return False
+    palm = [P[0], P[5], P[9], P[13], P[17]]
+    if all(v is not None for v in palm):
+        _fill_scaled(img, palm, 1.30, 1.30, HB_SKIN_E)
+        _fill_scaled(img, palm, 1.14, 1.14, HB_SKIN)
+    fw = max(2.0, sw * HB_FINGER)
+    for a, b in ps.HAND_EDGES:
+        _capsule(img, P[a], P[b], fw, HB_SKIN, HB_SKIN_E)
+    for tip in (4, 8, 12, 16, 20):                       # fingertip pads, drawn last
+        if P[tip] is not None:
+            cv2.circle(img, P[tip], max(2, int(fw * 0.60)), HB_SKIN, -1, cv2.LINE_AA)
+    return True
+
+
+def render_human(pts: np.ndarray) -> np.ndarray:
+    """(75,3) -> a BGR frame of a filled figure. Painter order puts the hands on top of
+    everything, because an arm crossing in front of the signing hand would hide the word."""
+    img = np.full((ps.CANVAS_H, ps.CANVAS_W, 3), HB_BG, dtype=np.uint8)
+    sw = _shoulder_px(pts)
+
+    _torso(img, pts, sw)
+
+    sh = [_pt(pts, 11), _pt(pts, 12)]
+    if all(v is not None for v in sh):                   # neck: shoulder midpoint -> head
+        mid = ((sh[0][0] + sh[1][0]) // 2, (sh[0][1] + sh[1][1]) // 2)
+        _capsule(img, mid, _pt(pts, 0), sw * HB_NECK, HB_SKIN, HB_SKIN_E)
+
+    arms = ((11, 13, 15, ps.LHAND_BASE), (12, 14, 16, ps.RHAND_BASE))
+    for shoulder, elbow, wrist, hbase in arms:
+        _capsule(img, _pt(pts, shoulder), _pt(pts, elbow), sw * HB_UPPER, HB_CLOTH, HB_CLOTH_E)
+        _capsule(img, _pt(pts, elbow), _pt(pts, wrist), sw * HB_FORE, HB_CLOTH, HB_CLOTH_E)
+        # bridge the pose wrist to the hand block's own wrist -- they are separate estimates and
+        # a few px apart, which without this shows as a gap between sleeve and hand.
+        _capsule(img, _pt(pts, wrist), _pt(pts, hbase), sw * HB_FORE * 0.85, HB_SKIN, HB_SKIN_E)
+
+    _head(img, pts, sw)
+    for _s, _e, wrist, hbase in arms:                    # hands last: never occluded by an arm
+        if not _hand(img, pts, hbase, sw, _pt(pts, wrist)):
+            _fist(img, _pt(pts, wrist), sw)
+    return img
 
 
 def fit_all(clips: list[np.ndarray], margin: int = 40) -> tuple[float, float, float, float]:
@@ -103,10 +271,19 @@ def main() -> None:
     ap.add_argument("--flat", action="store_true", help="all files in one folder, no tier subdirs")
     ap.add_argument("--no-fit", action="store_true",
                     help="keep preview_signs' fixed 210px scale (clips ~11%% of points)")
-    ap.add_argument("--margin", type=int, default=40, help="fit margin in px")
+    ap.add_argument("--style", choices=["human", "skeleton"], default="human",
+                    help="human = filled figure a motion-transfer model can read (default); "
+                         "skeleton = the debug overlay, for review only")
+    ap.add_argument("--margin", type=int, default=None,
+                    help="fit margin in px (default: 76 for human, 40 for skeleton)")
     ap.add_argument("--legs", action="store_true",
                     help="keep the orphan leg dots (they shrink the hands; see LEGS)")
     args = ap.parse_args()
+    human = args.style == "human"
+    # A filled figure extends past the landmark bbox by roughly half a limb thickness plus the
+    # head radius (~0.30 shoulder-widths). The skeleton's 40px margin clips both.
+    if args.margin is None:
+        args.margin = 76 if human else 40
 
     wdir = Path(args.handoff) / "words"
     files = sorted(wdir.glob("*.json"))
@@ -172,7 +349,8 @@ def main() -> None:
         if not vw.isOpened():
             raise SystemExit(f"[err] could not open a writer for {dest}")
         for f in range(arr.shape[0]):
-            vw.write(ps.render_frame(arr[f], None))       # hud=None -> no baked text
+            # hud=None on the skeleton path -> no baked-in word label either way
+            vw.write(render_human(arr[f]) if human else ps.render_frame(arr[f], None))
         vw.release()
         total_frames += arr.shape[0]
 
@@ -194,6 +372,7 @@ def main() -> None:
     (out_root / "manifest.json").write_text(
         json.dumps({"n": len(manifest),
                     "canvas": [ps.CANVAS_W, ps.CANVAS_H],
+                    "style": args.style,
                     "hold_filled": not args.raw,
                     "purpose": ("driving input for a pose-conditioned video model; the skeleton "
                                 "carries the real handshape and movement, the model supplies "
