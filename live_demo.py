@@ -180,6 +180,9 @@ MIN_HAND_SEC  = 0.25       # a segment needs a real hand for at least this long
 START_SEC     = 0.13       # a hand must persist this long before a NEW segment starts (kills
                            #   twitch-starts from single-frame false hand detections)
 MOTION_EPS    = 0.02       # hand movement (shoulder-width units) below = "still"
+# Per-commit response-latency samples: (path, detect_ms, infer_ms). Printed as p50/p95 on
+# exit. See commit_segment for what the two components mean and why they are kept apart.
+LAT_LOG: list[tuple[str, float, float]] = []
 PRE_ROLL      = 8          # frames kept from BEFORE the hand appears (captures sign start)
 LEAD_SEC      = 0.25       # of that pre-roll, keep only this much ONSET context in the clip we
                            #   CLASSIFY. The full pre-roll is a static hand-up pose; at low fps
@@ -733,6 +736,16 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         re-running the ensemble — keeps the approve/commit decision consistent."""
         nonlocal seg, seg_active, sentence, now_line, last_conf
         nonlocal nohand_count, cooldown, prev_preview, last_commit, seg_hands
+        # RESPONSE LATENCY (#lat). Two components, deliberately reported apart:
+        #   detect_ms — the wait before we even know the sign ended: still_fr frames at the live
+        #               rate. Deterministic, and ZERO on the early-commit path, which fires while
+        #               the hand is still moving.
+        #   infer_ms  — everything after that: classification, the gates, TTS dispatch.
+        # Without this there is no way to tell whether a threshold change helped, and an
+        # unfalsifiable change is the one mistake this project has paid for most.
+        _t_enter = time.time()
+        _detect_ms = 0.0 if pre_probs is not None else (still_fr / max(_fps, 1.0)) * 1000.0
+        _lat_path = "early" if pre_probs is not None else "still"
         s, seg, seg_active = seg, [], False
         if nohand_count:                                 # drop the hands-down tail
             s = s[:max(0, len(s) - nohand_count)]
@@ -788,6 +801,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         now_line = f"{word}  ({conf:.2f})"
         state["cand_committed"] = True               # top-1 appended -> a pick REPLACES it
         last_commit = (word, time.time())
+        LAT_LOG.append((_lat_path, _detect_ms, (time.time() - _t_enter) * 1000.0))
         if state["finalized"]:                           # new sign after DONE = fresh sentence
             gloss_buf.clear(); cand_buf.clear(); sentence = ""
             state["final"] = ""; state["finalized"] = False
@@ -823,6 +837,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
             cand_buf.append([chosen])                # locked single choice
             state["cand_committed"] = True
         last_commit = (chosen, time.time())
+        LAT_LOG.append((_lat_path, _detect_ms, (time.time() - _t_enter) * 1000.0))
         now_line = f"{chosen}  (picked)"
         sentence = "" if ai_enabled else render_sentence(rules, gloss_buf)
         state["sentence"] = sentence
@@ -899,6 +914,13 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         early_min_fr = max(4,  round(EARLY_MIN_SEC * _fps))
         cooldown_fr  = max(2,  round(COOLDOWN_SEC  * _fps))
         lead_fr      = max(2,  round(LEAD_SEC      * _fps))   # onset frames kept from pre-roll
+        # ...and the VELOCITY threshold, which the original code left unscaled. `mv` is a
+        # per-frame displacement, so at 30 fps the same hand speed yields ~1/4 the value it
+        # does at 7 fps -- so the demo calls 'still' far sooner on fast hardware. Measured
+        # (measure_still_runs.py): 37 words truncated mid-sign at 7 fps, 56 at 30 fps. 0.02
+        # was tuned at ~7 fps, hence the anchor. OFF by default -- it changes segmentation and
+        # this project does not ship untested behaviour changes. Enable with --scale-eps.
+        motion_eps   = MOTION_EPS * (7.0 / _fps) if args.scale_eps else MOTION_EPS
         image = cv2.flip(image, 1)                   # mirror (selfie view)
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if rgb.shape[1] > MP_MAX_W:                  # smaller frame for MediaPipe (normalized
@@ -959,9 +981,9 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 seg.append(norm)
                 seg_hands += 1
                 nohand_count = max(0, nohand_count - 1)   # decay, not hard-reset (tolerate a 1-frame flicker)
-                if mv is not None and mv > MOTION_EPS:
+                if mv is not None and mv > motion_eps:
                     seg_moved = True                      # a real motion happened this segment
-                if mv is not None and mv < MOTION_EPS:
+                if mv is not None and mv < motion_eps:
                     still_count += 1                      # genuinely still
                 elif mv is not None:
                     still_count = 0                       # real movement -> reset the still timer
@@ -1220,11 +1242,45 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
 
     camera.release(); cv2.destroyAllWindows(); holistic.close()
 
+    # ── response latency, measured (#lat) ────────────────────────────────────────────────
+    # The number to compare against a latency target. Reported per PATH because the two are
+    # different products: an early commit lands while the hand is still moving (detect_ms = 0),
+    # a still commit must first wait out still_fr frames. A mean over both hides that.
+    if LAT_LOG:
+        import statistics as _st
+
+        def _pct(xs, q):
+            xs = sorted(xs)
+            return xs[min(len(xs) - 1, int(round(q / 100.0 * (len(xs) - 1))))]
+
+        print("")
+        print(f"[lat] {len(LAT_LOG)} commits   path      n   detect_ms      infer_ms       total")
+        for path in ("early", "still"):
+            rows = [(d, i) for p_, d, i in LAT_LOG if p_ == path]
+            if not rows:
+                continue
+            det = [d for d, _ in rows]; inf = [i for _, i in rows]
+            tot = [d + i for d, i in rows]
+            print(f"[lat] {'':16s}{path:<7s}{len(rows):>4}  "
+                  f"{_st.median(det):>6.0f}       {_st.median(inf):>6.0f}  "
+                  f"p50 {_st.median(tot):>6.0f}  p95 {_pct(tot, 95):>6.0f}")
+        allt = [d + i for _p, d, i in LAT_LOG]
+        print(f"[lat] overall p50 {_st.median(allt):.0f} ms   p95 {_pct(allt, 95):.0f} ms   "
+              f"(target from review: 200-500 ms)")
+        slow = sum(1 for t in allt if t > 500)
+        print(f"[lat] {slow}/{len(allt)} commits over 500 ms "
+              f"({slow / len(allt) * 100:.0f}%)")
+
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Live ASL demo (30- or 250-word)")
     ap.add_argument("--selftest", action="store_true",
                     help="no camera: load model + predict on random input")
+    ap.add_argument("--scale-eps", action="store_true",
+                    help="scale MOTION_EPS by the live frame rate, as every duration threshold "
+                         "already is. Fixes fps-dependent segmentation: measured 37 words "
+                         "truncated mid-sign at 7fps and 56 at 30fps without it. Needs a live "
+                         "test before it becomes the default.")
     ap.add_argument("--single", action="store_true",
                     help="use only fold-0 (faster) instead of the ensemble")
     ap.add_argument("--vocab250", action="store_true",
