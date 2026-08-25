@@ -1,172 +1,141 @@
-# Deafference: Speech-to-Sign MVP
+# Deafference — the AI half
 
-Deafference is a modern, responsive web application MVP designed to bridge the communication gap between hearing individuals and the Deaf/Hard-of-Hearing (DHH) community. The application translates spoken speech or typed text into simplified, high-confidence sign language phrases with interactive visual support.
+Two-way ASL, 250 words. This repository holds **only the ML and language pipeline**; the frontend
+and backend are rebuilt separately.
 
----
+| Direction | Path |
+|---|---|
+| **Sign → speech** | camera → MediaPipe landmarks → classifier → gloss → English sentence → TTS |
+| **Speech → sign** | speech → English → gloss → stitched landmark stream → avatar |
 
-## 🚀 Key Features
-
-- **Dual Input Modes**: Use voice recognition (Speech-to-Text) or manual typing to draft messages.
-- **Interactive Sign Language Avatar**: A simulated signing avatar interface that showcases visual translations, with support for replay and detailed text view.
-- **Speech-to-Sign Pipeline**: A real-time visual step indicator displaying the translation lifecycle:
-  `Listening` ➔ `Understanding` ➔ `Preparing Sign` ➔ `Showing Animation` ➔ `Complete`.
-- **Pre-Categorized Quick Phrases**: Instant access to context-specific, high-frequency phrases tailored for:
-  - 🍽️ **Restaurant**: Ordering, requesting water, allergen warnings.
-  - 🏥 **Healthcare**: Patient-doctor interactions, reporting pain, requesting help.
-  - 🛎️ **Reception**: Checking in, asking for directions, waiting room guidance.
-  - 🎓 **Education**: Classroom questions, requesting clarifications.
-  - 🌐 **General**: Everyday greetings, polite requests.
-- **Accessibility Customization**:
-  - Adjustable font sizes (Normal, Large, Extra Large).
-  - Configurable speech-to-text response rates.
-  - Toggleable high contrast and dark mode.
-  - Sound effects for state transitions.
+The **gloss** is the seam both directions turn on. Everything else hangs off that one string.
 
 ---
 
-## 🛠️ Technology Stack
+## Read these first
 
-- **Framework**: [Next.js](https://nextjs.org/) (v16) with App Router
-- **Core Library**: [React 19](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [PostCSS](https://postcss.org/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/) (for smooth, fluid transitions and UI alerts)
-- **UI Components**: [Base UI](https://base-ui.com/) & custom tailwind-designed components
-- **Icons**: [Lucide React](https://lucide.dev/)
-
----
-
-## 📁 Project Structure
-
-```text
-├── app/                  # Next.js App Router (Layouts, pages, styles)
-│   ├── globals.css       # Core design system and CSS classes
-│   ├── layout.tsx        # Base root layout
-│   └── page.tsx          # Main entry page calling DeafferenceApp
-├── components/           # Reusable UI components
-│   ├── deafference/      # Core logic and sub-components for the translation flow
-│   │   ├── accessibility-panel.tsx # Custom accessibility control interface
-│   │   ├── avatar-preview.tsx     # Sign language avatar visualization wrapper
-│   │   ├── data.ts                # Mock dictionaries, categorization, translation engine
-│   │   ├── deafference-app.tsx    # Primary controller component orchestrating the MVP
-│   │   ├── input-panel.tsx        # Voice & manual input controller
-│   │   ├── pipeline.tsx           # Progress and status step indicator
-│   │   ├── quick-phrases.tsx      # Multi-category quick-selection panel
-│   │   └── ...                    # Header, Footer, Hero, Disclaimer, and auxiliary files
-│   └── ui/               # Standard UI block components (buttons, badges, dialogs)
-├── public/               # Static assets (images, icons)
-├── package.json          # Dependency definition
-└── tsconfig.json         # TypeScript configuration
-```
+1. **[docs/SESSION_HANDOFF.md](docs/SESSION_HANDOFF.md)** — the highest-numbered `§0.x` is
+   read-this-first (currently **§0.5**). Carries the per-signer table and what has already been
+   tried and refuted, so it does not get retried.
+2. **[docs/SIGN_ANIMATION_CONTRACT.md](docs/SIGN_ANIMATION_CONTRACT.md)** — **the interface for
+   anything touching the avatar.** Coordinate space, the 75-point layout, the null convention,
+   the `synthesis` block for the hand that is not in the data, and §12 for ASL non-manuals.
+   The landmark JSONs are unreadable without it.
+3. **[docs/AVATAR_LIMITS.md](docs/AVATAR_LIMITS.md)** — the honest defect list. Read before
+   promising anything.
 
 ---
 
-## ⚙️ Setup and Installation
+## What is NOT in this repo
 
-### Prerequisites
+Two things are **built on Kaggle** and gitignored, so a fresh clone will not run until you have
+them:
 
-Make sure you have [Node.js](https://nodejs.org/) installed (v18+ recommended).
+| Missing | What it is | How to get it |
+|---|---|---|
+| `artifacts_250/savedmodel_fold{0..3}/` | the trained 250-class models | Kaggle — see [docs/TRAIN_250_PLAN.md](docs/TRAIN_250_PLAN.md) |
+| `sign_clips_250.npz` | one canonical exemplar clip per word | Kaggle — `training/build_sign_clips.py` |
 
-### Steps
+Also gitignored because they are **derived**, and regenerated by the commands below:
+`animation_handoff/`, `driving_video/`, `artifacts*/`, `*.npz`, `*.zip`.
 
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/ghozlan-mo/deafference-speech-to-sign-mvp.git
-   cd deafference-speech-to-sign-mvp
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Run the Development Server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
-
-4. **Build for Production**
-   ```bash
-   npm run build
-   npm run start
-   ```
+> The source of truth for a rebuild is `sign_clips_250.npz` **plus the lexicons**, and the
+> lexicons *are* tracked: `asl_handedness_250.json`, `handshape_templates.json`,
+> `asl_2a_base_placement.json`.
 
 ---
 
-## 🔌 Backend API
-
-A small Express + Prisma (PostgreSQL) API lives in [`server/`](server/) and is
-separate from the Next.js frontend.
-
-- **Frontend (Next.js):** port **3000** (`npm run dev`)
-- **API (Express):** port **4000** (`npm run server:dev`)
-
-They use different ports so both can run at the same time.
-
-### Database setup
-
-1. Copy the environment template and adjust the connection string for your
-   local Postgres:
-   ```bash
-   cp .env.example .env
-   # then edit DATABASE_URL in .env if your Postgres user/password/db differ
-   ```
-   `.env.example` documents the format:
-   `postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA`.
-
-2. Create the tables and generate the Prisma client:
-   ```bash
-   npx prisma migrate dev --name init
-   npx prisma generate
-   ```
-   This creates the `User` and `CameraPermission` tables.
-
-3. Start the API:
-   ```bash
-   npm run server:dev
-   ```
-
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/health` | Liveness check |
-| `POST` | `/api/users` | Create a user (`email` required, `name` optional) → **201** |
-| `POST` | `/api/users/camera-permission` | Create **or** update a user's camera permission (upsert) → **200** |
-| `GET`  | `/api/users/camera-permission/:userId` | Read a user's camera permission |
-
-`CameraPermission.userId` is a foreign key to `User.id` (both integers), so a
-user must exist before a permission can be set.
-
-### Full flow: zero → create user → set camera permission → read it back
+## Running it
 
 ```bash
-API=http://localhost:4000
-
-# 1. Create a user and capture the generated integer id
-USER_ID=$(curl -s -X POST "$API/api/users" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","name":"Alice"}' \
-  | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-
-# 2. Set that user's camera permission
-curl -X POST "$API/api/users/camera-permission" \
-  -H "Content-Type: application/json" \
-  -d "{\"userId\":$USER_ID,\"status\":\"granted\"}"
-
-# 3. Read the permission back
-curl "$API/api/users/camera-permission/$USER_ID"
+pip install -r requirements_live_demo.txt
 ```
 
-See [`CURL_EXAMPLES.md`](CURL_EXAMPLES.md) for every endpoint and error case,
-and run [`test-api.sh`](test-api.sh) to exercise the whole suite end-to-end.
+**Sign → speech** (needs a webcam and `artifacts_250/`):
+
+```bash
+python live_demo.py --vocab250
+```
+
+Sign a word, then lower your hands or hold still. Tap `1`–`5` to correct to another candidate
+without re-signing. `Enter` speaks the sentence, `q` quits and prints a `[lat]` latency table.
+Full notes: [docs/RUN_LIVE_DEMO.md](docs/RUN_LIVE_DEMO.md).
+
+**Speech → sign** (needs `sign_clips_250.npz`):
+
+```bash
+# one utterance -> a playable §1 motion stream
+python gloss_to_motion.py --glosses "hello thirsty please" --out out.json
+
+# all 250 words as individual files, plus the starter pack for the animation side
+python gloss_to_motion.py --per-word --samples --out-dir animation_handoff
+
+# watch it, or run the Deaf review pass
+python preview_signs.py --review
+```
+
+**Driving clips for a pose-conditioned video model** (`--style human` is the default;
+`--style skeleton` is the debug overlay the Deaf review must use):
+
+```bash
+python export_driving_video.py
+```
 
 ---
 
-## 🤝 Contributing
+## Measurement discipline
 
-Contributions, issues, and feature requests are welcome! Feel free to open an issue or submit a pull request.
+Three separate times, a pooled number here hid a 50-point per-signer collapse. So:
 
-## 📄 License
+> **Report per signer, never pooled.**
 
-This project is private and proprietary. All rights reserved.
+Current state, stated both ways: **0.776 pooled, and 0.31–0.82 across seven held-out signers**
+(~4,000 test clips each, so the spread is not noise). The second number is the one that decides
+whether the product works for the next person who opens it.
+
+The acceptance test is **[training/per_signer.py](training/per_signer.py)** — the worst three
+signers must gain more than **0.02** on average. That bar has killed three plausible theories
+(more epochs, attention masking, corpus canonicalization). Run anything new through it.
+
+Diagnostics that exist because a guess turned out to be wrong:
+
+| Script | Answers |
+|---|---|
+| `training/per_signer.py` | does a change help the signers it was supposed to help? |
+| `measure_still_runs.py` | how long does a hand hold still *inside* a sign? (sets the commit threshold) |
+| `measure_prefix_accuracy.py` | what does committing early cost in accuracy? |
+| `Fix/check-export3.py` | is the animation export self-consistent? |
+
+---
+
+## Known limits
+
+- **Per-signer spread 0.31–0.82.** The open problem. Per-user calibration is the candidate fix.
+- **No face channel.** ASL marks questions, negation and topicalisation on the face, so today a
+  question and a statement are the *identical* gloss sequence. §12 of the contract is the route
+  in; it needs brow and head-rotation channels in the rig.
+- **No fingerspelling.** Zero letters in the 250, so no names, places or medications.
+- **87 of 250 signs are two-handed** and the corpus records only one hand per participant, so the
+  passive hand is synthesized. See the contract §6.1.
+- **39 words are tier C** — the dominant hand is missing on more than half their frames. Generated
+  video of those looks confident and shows a sign that is not there.
+
+---
+
+## Layout
+
+```
+live_demo.py                sign -> speech, live
+speech_to_sign.py           speech -> gloss
+gloss_to_motion.py          gloss -> stitched landmark stream (the §1 deliverable)
+preview_signs.py            2D player + the Deaf review pass
+export_driving_video.py     per-word driving clips
+sign_landmarks.py           shared landmark helpers
+training/                   preprocessing, training, per-signer eval, clip building
+Fix/                        the animation-side collaboration record
+docs/                       contracts, measured reports, Kaggle procedures
+*.json                      lexicons and vocabularies (tracked; the rebuild depends on them)
+```
+
+**Secrets live only in a gitignored `.env`.** Never commit them, never paste them into a notebook
+cell or a chat.
