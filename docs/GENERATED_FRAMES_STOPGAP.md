@@ -131,6 +131,59 @@ data, or the generator — the review becomes unable to fail, which is the singl
 cost this project the most (see `SESSION_HANDOFF.md` §0.5). Deaf review runs on the 2D player
 against real landmarks: `python preview_signs.py --review`.
 
+## OUTCOME 2026-08-25: tried, priced, stopped
+
+Higgsfield was connected via MCP and every option was priced against the real uploaded clips.
+**Nothing was generated and no credits were spent.** Recorded here so this is not re-attempted from
+scratch.
+
+### Account reality
+
+**10 credits, free plan, `unlim.available: false`** — no free-trial generations. Prices measured
+with `get_cost`, which submits no job:
+
+| Path | Credits | Motion fidelity |
+|---|---|---|
+| `seedance_2_5` **`video_edit`** 720p | **26** | edits our frames — cannot invent a handshape |
+| `seedance_2_5` `video_edit` 480p | **10** | same, and the whole balance |
+| `motion_control` (Kling 3.0) 720p | ~7.5 + 1 for a still | re-synthesises from pose it must **find** in our render |
+| `seedance_2_0_mini` 480p | 4 | omni-reference — **not** frame-accurate |
+
+### Three findings that outlast the attempt
+
+1. **`video_edit` needs a Plus plan.** Credits are not enough; the call returns
+   `Requires plus plan or higher` and charges nothing. The only frame-accurate path is closed on
+   free. A 3-day $0 Plus trial with 100 credits exists (auto-renews at $49 — the risk is
+   forgetting to cancel, not the trial).
+2. **Kling's duration floor is 3 s, and only 6 of our 147 tier-A words reach it.** Median sign is
+   1.37 s. Per-word generation on that path would pad 141 words with invented motion. **The fix is
+   to stop thinking per word and stitch a SENTENCE** — 3–5 s lands mid-window, is one generation
+   instead of four, and is a better demo. `gloss_to_motion.stitch()` already does it.
+3. **`video_edit` has a cost floor: a 1.9 s clip and a 3.7 s clip both cost 10.** So shorter is
+   never cheaper — always send the longest clip that fits.
+
+Also: **no model in the catalogue accepts OpenPose/DWPose input.** `motion_control` is the only
+motion-transfer path and it wants a video of a *person*, so the DWPose renderer that seemed likely
+to be needed would have had nothing to feed.
+
+### What was banked
+
+`export_driving_video.py --style human` (now the default) — a filled figure rather than dots,
+because a motion-transfer model extracts pose from the driving clip and finds nothing in a debug
+overlay. Worth keeping regardless: it suits any pose-conditioned model and is a usable style
+reference for the rig. `--style skeleton` still exists and is what the Deaf review must use.
+
+**It is a mannequin, not a person.** Whether a generator can read it is still *unmeasured* — the
+plan gate stopped the one test. Do not assume it works.
+
+### The economics, for whoever revisits this
+
+720p is 26 credits. Plus is 1,000 credits/month at $49 → ~38 clips. A 147-word vocabulary is four
+months of subscription. **This was always a stopgap for a slide, never a product.** The real answer
+is the rig.
+
+---
+
 ## When the avatar lands
 
 Delete `driving_video/`, and delete every generated clip. Its only job is to make a demo look

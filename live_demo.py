@@ -1276,11 +1276,11 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Live ASL demo (30- or 250-word)")
     ap.add_argument("--selftest", action="store_true",
                     help="no camera: load model + predict on random input")
-    ap.add_argument("--scale-eps", action="store_true",
-                    help="scale MOTION_EPS by the live frame rate, as every duration threshold "
-                         "already is. Fixes fps-dependent segmentation: measured 37 words "
-                         "truncated mid-sign at 7fps and 56 at 30fps without it. Needs a live "
-                         "test before it becomes the default.")
+    ap.add_argument("--no-scale-eps", dest="scale_eps", action="store_false",
+                    help="revert to the fps-INVARIANT MOTION_EPS. Only for comparing against the "
+                         "pre-2026-08-25 behaviour; it truncates 37 words mid-sign at 7fps and 56 "
+                         "at 30fps (measure_still_runs.py).")
+    ap.set_defaults(scale_eps=True)
     ap.add_argument("--single", action="store_true",
                     help="use only fold-0 (faster) instead of the ensemble")
     ap.add_argument("--vocab250", action="store_true",
@@ -1318,7 +1318,14 @@ if __name__ == "__main__":
         EARLY_CONF    = 0.42   # min preview conf to early-commit (= CONF_GATE) — was 0.55
         EARLY_SURE    = 0.72   # sure on ONE preview -> instant commit — was 0.78 (the ~0.8 "wall")
         PREVIEW_SEC   = 0.20   # preview more often
-        EARLY_MIN_SEC = 0.45   # allow committing earlier into the sign
+        # MEASURED trade, not a preference (measure_prefix_accuracy.py, 7fps sim):
+        #   0.45s -> 3 frames -> 0.372 top-1   (81 of 250 words lost vs the full clip)
+        #   0.80s -> 6 frames -> 0.532 top-1   (39 lost)      <- +16 points
+        #   1.00s -> 7 frames -> 0.600 top-1   (26 lost)      diminishing past here
+        # The instrumented run (28 commits) had p50 latency 0ms and p95 447ms against a
+        # 500ms target, so 0.45 was buying speed nobody needed with accuracy that mattered.
+        # 0.80 keeps the early path inside the target (~350ms) and recovers 42 of 81 words.
+        EARLY_MIN_SEC = 0.80
         STILL_SEC     = 0.40   # commit a bit sooner once you hold still
         END_SEC       = 0.60   # tolerate brief hand-detection gaps (was 0.50) -> fewer early cuts
         MAX_SEG_SEC   = 3.0    # force-commit ceiling (5.0->3.0: a stuck segment recovers faster)
@@ -1335,7 +1342,9 @@ if __name__ == "__main__":
         Q_STRONG  = 0.45       # let face-signs (hand_presence ~0.5) reach instant commit
         L2_CONF   = 0.40       # confirm-commit floor (was 0.50 — sat ABOVE the ~0.45 mode)
         L2_MARGIN = 0.10       # a narrow-but-decisive win is enough at 250 (was 0.18)
-        L2_STABLE = 1          # one agreeing preview (was 2 — too few previews at ~7fps)
+        L2_STABLE = 2          # two agreeing previews. Was 1 because a 4-frame window at
+                               #   ~7fps had no room for a second; EARLY_MIN_SEC 0.80 with
+                               #   PREVIEW_SEC 0.20 leaves room for four.
         USE_TTA       = False  # live PREVIEW stays single-pass; the COMMIT does its
                                #   own multi-view+mirror averaging (classify_commit)
         # The 30-word rule grammar can't cover 250 words, so the sentence on DONE is
