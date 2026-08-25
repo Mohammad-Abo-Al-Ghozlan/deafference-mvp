@@ -238,6 +238,20 @@ JITTER_P         = 0.50   # probability of applying per-frame coordinate noise
 JITTER_SIGMA     = 0.015  # noise sd in SHOULDER-WIDTH units (coords are normalized)
 FRAME_DROP_P     = 0.25   # probability of dropping scattered frames pre-resample
 FRAME_DROP_MAX   = 0.15   # max fraction of frames removed
+# 4) DECIMATE: the CAPTURE RATE, which none of the three above models. Comment (3) assumed
+#    live_demo runs at 10-30 fps; its own instrumentation puts it near 7, so a 30 fps exemplar
+#    arrives having lost ~77% of its frames -- while FRAME_DROP removes at most 15%, scattered,
+#    and `resample` changes speed by interpolating rather than destroying information.
+#    measure_prefix_accuracy.py (2026-08-25, 4-fold ensemble) prices the gap: full-clip top-1
+#    is 0.748 at 30 fps and 0.696 at 7 fps, so the downsample alone costs 5.2 points before any
+#    truncation. At a fixed 0.80 s wait the same sweep reads 7 fps 0.580 / 15 fps 0.628 /
+#    30 fps 0.660. This augmentation aims at that gap.
+#    DEFAULT OFF, unlike (1)-(3), because it has never been trained with. Turn it on with
+#    `--decimate 0.5` and A/B fold 0 against a control before spending folds 1-3 on it.
+DECIMATE_P       = 0.0    # probability of simulating a low capture rate (--decimate)
+DECIMATE_FPS     = (5.0, 15.0)   # simulated camera rate to decimate toward
+DECIMATE_MIN     = 6      # never leave fewer frames than this
+CORPUS_FPS       = 30     # the rate the exemplars were recorded at
 BATCH_SIZE = 64
 DEFAULT_EPOCHS = 200
 BASE_LR = 4e-4
@@ -638,6 +652,16 @@ def augment(a: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         w = max(8, int(a.shape[0] * keep))
         s = rng.integers(0, a.shape[0] - w + 1)
         a = a[s : s + w]
+
+    # decimate: throw away frames UNIFORMLY, modelling the camera's capture rate rather than
+    # a laggy dropout. Applied before frame-drop and resample so the later two act on a clip
+    # that already has the deploy-side temporal resolution, which is the order the live path
+    # produces: camera decimates, then live_demo.time_resize stretches to MAX_LEN.
+    if DECIMATE_P > 0.0 and rng.uniform() < DECIMATE_P:
+        n = max(DECIMATE_MIN,
+                int(round(a.shape[0] * rng.uniform(*DECIMATE_FPS) / CORPUS_FPS)))
+        if n < a.shape[0]:
+            a = a[np.linspace(0, a.shape[0] - 1, n).round().astype(int)]
 
     # frame drop: remove scattered frames BEFORE resampling. This is deliberately
     # different from the resample below — resampling changes signing SPEED uniformly,
@@ -1045,6 +1069,9 @@ def run_fold(fold: int, data_dir: Path, out_dir: Path, *, all_words: bool,
 
 
 def main():
+    # Declared up here, not beside the assignments below, because argparse reads DECIMATE_P
+    # for its default and Python forbids `global X` after X has been used in the function.
+    global _FLIP, _DROP_BLOCKS, _MASK_MODE, DECIMATE_P
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", type=Path, required=True)
     ap.add_argument("--out-dir", type=Path, default=Path("artifacts"))
@@ -1063,6 +1090,11 @@ def main():
                     help="enable AWP (EXPERIMENTAL — destabilized training; off by default)")
     ap.add_argument("--seed", type=int, default=42,
                     help="random seed — vary it (e.g. 42/43/44) for a multi-seed ensemble")
+    ap.add_argument("--decimate", type=float, default=DECIMATE_P, metavar="P",
+                    help="probability of decimating a clip to a simulated 5-15 fps camera "
+                         "before resampling (default 0.0 = off). Closes the measured 5.2-point "
+                         "gap between 30 fps and the demo's ~7 fps. A/B fold 0 with 0.5 against "
+                         "a 0.0 control before committing folds 1-3.")
     ap.add_argument("--mixup", action="store_true",
                     help="manifold mixup at the pooled embedding (mutually exclusive with --awp)")
     ap.add_argument("--late-dropout", type=float, default=LATE_DROPOUT,
@@ -1087,7 +1119,7 @@ def main():
     if args.mixup and args.awp:
         ap.error("--mixup and --awp are mutually exclusive (both rewrite train_step)")
 
-    global _FLIP, _DROP_BLOCKS, _MASK_MODE
+    DECIMATE_P = args.decimate
     if args.canonical_hand:
         _FLIP = FLIP_MAP_CANON
         _DROP_BLOCKS = (slice(54, N_POINTS),)
@@ -1099,6 +1131,11 @@ def main():
           f" | hflip swaps hands = {not args.canonical_hand}"
           f" | hand-drop blocks = {len(_DROP_BLOCKS)}"
           f" | resting-hand mask = {_MASK_MODE}")
+    # Printed on its own line because it is the variable under test in the fps A/B, and a
+    # silent 0.0 would make the experiment arm indistinguishable from the control in the log.
+    print(f"[cfg] decimate = {DECIMATE_P}"
+          + (f" -> simulating {DECIMATE_FPS[0]:.0f}-{DECIMATE_FPS[1]:.0f} fps capture"
+             if DECIMATE_P > 0 else " (OFF — control arm, 30 fps clips as recorded)"))
 
     tf.random.set_seed(args.seed)
     np.random.seed(args.seed)
