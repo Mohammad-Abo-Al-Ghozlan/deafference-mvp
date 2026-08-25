@@ -1287,8 +1287,11 @@ if __name__ == "__main__":
                     help="use the 250-word model (artifacts_250/ + vocab_250.json) "
                          "instead of the default 30-word demo")
     ap.add_argument("--conf", type=float, default=None,
-                    help="override the confidence gate (default 0.50; try 0.60-0.70 "
-                         "for the 250-word model if it commits too many wrong words)")
+                    help="override the commit confidence gate (sets BOTH L1_CONF and L2_CONF, "
+                         "the thresholds decide_commit actually reads). Measured on the 250 "
+                         "ensemble (measure_conf_gate.py): 0.40 -> 64%% commit / 0.950 prec, "
+                         "0.58 -> 52%% / 0.977, and precision is FLAT above 0.58 while "
+                         "throughput keeps falling. Raising it past 0.58 buys nothing.")
     ap.add_argument("--ai", action="store_true",
                     help="build sentences with the AI (Gemini) on DONE, falling "
                          "back to rules. Needs GEMINI_API_KEYS set + internet.")
@@ -1333,15 +1336,36 @@ if __name__ == "__main__":
         SHOW_TOPK     = 5      # full 250: top-1 is unreliable (0.76 mean) but the right
                                #   word is almost always in the top-5 -> tap 1-5 to fix.
                                #   This is the PRIMARY interaction at 250, not a fallback.
-        # THE decisive gate fix. decide_commit() reads L1_*/L2_*/Q_STRONG — CONF_GATE and
-        # EARLY_* above are cosmetic (dead). At 250 classes a CORRECT sign often scores only
-        # ~0.45 with a narrow margin; the 30-word thresholds rejected it -> "sign it again".
-        # Lower the gates decide_commit ACTUALLY uses so a correct 250-class sign commits:
+        # THE decisive gate fix. decide_commit() reads L1_*/L2_*/Q_STRONG. CONF_GATE is NOT a
+        # decision threshold — only the bottom-bar bar colour compares against it — and neither
+        # is EARLY_SURE's sibling CONF_GATE below. `--conf` used to write CONF_GATE alone and so
+        # changed nothing; it now retargets L1_CONF/L2_CONF (see the --conf handler).
+        # At 250 classes a CORRECT sign often scores only ~0.45 with a narrow margin; the 30-word
+        # thresholds rejected it -> "sign it again". Lower the gates decide_commit ACTUALLY uses:
+        #
+        # MEASURED (measure_conf_gate.py, 2026-08-25, 4-fold ensemble, 250 exemplars @ 7 fps,
+        # ungated ceiling 0.696 — read as a SHAPE, absolutes are inflated by training data):
+        #   gate  accept  precision        These settings are AT THE KNEE. Precision saturates
+        #   0.40    64%     0.950          at 0.58 and is FLAT or worse above it (0.976 / 0.972
+        #   0.50    59%     0.959          / 0.976 / 0.961 at 0.60 / 0.70 / 0.80 / 0.90) while
+        #   0.58    52%     0.977  <- L1   throughput keeps collapsing to 20%. Raising the gate
+        #   0.70    42%     0.972          past 0.58 buys NOTHING. L2 0.40 -> 0.50 is +0.009 at
+        #   0.90    20%     0.961          -5 pts accept, inside the n=250 SE (~0.03): no change.
+        # Level split at the shipped values: L1 131 accepts @ 0.977, L2 30 @ 0.833 — the confirm
+        # path is the weaker half. 89 words never commit; 21 of them had the CORRECT top-1, so
+        # the gate spends 21 right words to remove 68 wrong ones. Those 89 fall through to the
+        # top-K tap, which SHOW_TOPK below documents as the PRIMARY 250-word interaction.
         L1_CONF   = 0.58       # instant-commit conf (was 0.70 — never reached at 250)
         L1_MARGIN = 0.18       # instant-commit margin (was 0.30 — mass is spread at 250)
         Q_STRONG  = 0.45       # let face-signs (hand_presence ~0.5) reach instant commit
         L2_CONF   = 0.40       # confirm-commit floor (was 0.50 — sat ABOVE the ~0.45 mode)
         L2_MARGIN = 0.10       # a narrow-but-decisive win is enough at 250 (was 0.18)
+        # DO NOT "tune" the two margins for accuracy. Ablating them to 0.0 reproduces the accept
+        # set EXACTLY at every gate from 0.40 up (0.950 / 0.959 / 0.977 / 0.976 / 0.972 / 0.976
+        # / 0.961 — identical columns), because at 250 classes anything clearing conf 0.40 has
+        # already won by more than 0.10. They still do real work, just not on precision: they
+        # route a word between LEVEL 1 (instant) and LEVEL 2 (wait for L2_STABLE previews), so
+        # they are a LATENCY control. Margins only affect *whether* a word commits below 0.40.
         L2_STABLE = 2          # two agreeing previews. Was 1 because a 4-frame window at
                                #   ~7fps had no room for a second; EARLY_MIN_SEC 0.80 with
                                #   PREVIEW_SEC 0.20 leaves room for four.
@@ -1356,8 +1380,14 @@ if __name__ == "__main__":
         print(f"[cfg] 250-word model from {ARTIFACTS} "
               f"(complexity-1 MediaPipe, hand-quality gate, robust commit, AI on DONE)")
     if args.conf is not None:
-        CONF_GATE = args.conf
-        print(f"[cfg] confidence gate = {CONF_GATE}")
+        # THE FIX. This used to set CONF_GATE alone — which the comment at the top of the
+        # --vocab250 branch above already calls dead, because decide_commit() reads L1_CONF /
+        # L2_CONF and never looks at CONF_GATE. So `--conf 0.7` changed the colour of the UI
+        # bar and NOTHING about which words committed. Point it at the real gates.
+        # CONF_GATE is still assigned because the bottom-bar bar colour compares against it.
+        L1_CONF = L2_CONF = CONF_GATE = args.conf
+        print(f"[cfg] commit gate: L1_CONF = L2_CONF = {args.conf} "
+              f"(margins unchanged: L1 {L1_MARGIN}, L2 {L2_MARGIN})")
     if args.selftest:
         selftest(args.single)
     else:

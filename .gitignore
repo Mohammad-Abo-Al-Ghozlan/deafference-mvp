@@ -58,3 +58,8 @@ SPLIT_TRAIN_VALIDATE.md
 
 # Generated driving videos for the demo stopgap (regenerate with export_driving_video.py)
 driving_video/
+
+# Leftover from the stripped web app. There is no package.json in this repo any more --
+# it is the AI pipeline only -- so a lockfile here is a stray, not a dependency record.
+package-lock.json
+node_modules/
