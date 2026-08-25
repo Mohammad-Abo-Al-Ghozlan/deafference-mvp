@@ -1388,6 +1388,19 @@ if __name__ == "__main__":
         L1_CONF = L2_CONF = CONF_GATE = args.conf
         print(f"[cfg] commit gate: L1_CONF = L2_CONF = {args.conf} "
               f"(margins unchanged: L1 {L1_MARGIN}, L2 {L2_MARGIN})")
+    elif args.words:
+        # A footgun worth shouting about. _mask_probs RENORMALIZES over the allowed classes, so
+        # narrowing inflates every confidence and the SAME gate becomes much looser. Measured
+        # (measure_conf_gate.py --words vocab_clinical_43.json): with 43 of 250 classes allowed,
+        # the 207 masked-out words still commit 35% of the time at L2_CONF 0.40 -- and every one
+        # of those is wrong by construction, because the true class was masked away. At 0.90 it
+        # is 2%, and narrowed precision is flat from 0.30 to 0.90, so the gate is nearly free to
+        # raise. No formula is applied here on purpose: the right value depends on how far you
+        # narrowed, and guessing one silently is how this project lost three months.
+        print("[warn] --words without --conf. Narrowing RENORMALIZES the softmax, so the "
+              "default gate\n       is effectively much looser: a 43-word mask commits 35% of "
+              "out-of-domain signs\n       at L2_CONF 0.40 vs 2% at 0.90. Strongly consider "
+              "--conf 0.85-0.90.")
     if args.selftest:
         selftest(args.single)
     else:
