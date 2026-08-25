@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""What does the commit gate buy? Precision vs throughput, priced on the real ensemble.
+"""What does the commit gate buy, and does NARROWING the vocabulary buy more? Both, measured.
 
-WHY
----
+WHY (part 1: the gate)
+----------------------
 A Kaggle diagnostic (2026-08-25, fold-0 canonical model, 7 held-out signers, 30,200 clips)
-established that per-signer variance is NOT fixable downstream. Nine hypotheses were measured
-and refuted, including calibration itself: an ORACLE mean-shift using all 4,361 of the worst
+established that per-signer variance is NOT fixable downstream. Ten hypotheses measured and
+refuted, including calibration itself: an ORACLE mean-shift using all 4,361 of the worst
 signer's own clips moved it -0.0018, and a within-signer classifier fit on its own labels caps
 at 0.3845 while the best signer reaches 0.9282. The information is gone before the model runs.
 
@@ -17,42 +17,60 @@ One axis did work. Gating on softmax confidence collapsed the per-signer spread:
     0.70        0.836         0.971       0.135
     0.80        0.884         0.985       0.101
 
-The worst signer goes 0.314 -> 0.884. What the model does not know about WHICH word it saw, it
-does know about WHETHER it knows. A coverage gate (hand_cov) was tested alongside and is
-STRICTLY DOMINATED at matched throughput -- confidence already encodes the tracking signal --
-so this script gates on confidence only, deliberately.
+A coverage gate (hand_cov) was tested alongside and is STRICTLY DOMINATED at matched
+throughput -- confidence already encodes the tracking signal -- so this gates on confidence
+only, deliberately. Those numbers came from a SINGLE fold-0 model on isolated clips, while the
+demo runs the FOUR-fold ensemble through `classify_commit` and then `decide_commit`, a
+three-level engine over confidence AND margin AND quality AND stability. This re-prices the
+curve through the code that actually runs.
 
-WHY THOSE NUMBERS CANNOT BE SHIPPED AS-IS
------------------------------------------
-That table came from a SINGLE fold-0 model scoring isolated clips. The demo runs the FOUR-fold
-ensemble through `classify_commit` (view + mirror averaging) and then through `decide_commit`,
-a three-level engine using confidence AND margin AND segment quality AND temporal stability.
-Ensemble averaging changes the confidence DISTRIBUTION, not just its quality, so accept rates
-at a fixed threshold shift. Transplanting 0.70 or 0.80 into live_demo would be guessing again.
+WHY (part 2: narrowing)
+-----------------------
+`word_acc_250.json` says 26 of the 250 words score <= 0.50 on held-out test, and in 8 of 9
+cases a weak class is being ABSORBED by a strong neighbour: nap 0.109 -> sleep 0.714 (46:1),
+mouth 0.300 -> lips 0.845 (41:19), look 0.350 -> see 0.983, puppy 0.344 -> dog 0.582 (41:3).
+So the vocabulary is not too small, it is too noisy -- and the medical MVP needs a DIFFERENT
+vocabulary, not a bigger one: of 130 clinical words only 43 are in the trained 250, and the
+covered ones include give 0.151, go 0.220, mouth 0.300, look 0.350.
 
-This script re-prices the curve through the code that actually runs.
+`--words` masks the softmax to a subset and RENORMALIZES (live_demo._mask_probs), which is why
+its help text promises "concentrates confidence". That is a testable claim and nobody has
+tested it. With `--words vocab_clinical_43.json` this script measures three things:
+
+  1. IN-DOMAIN, full 250-way   -- the 43 clinical words as the demo scores them today
+  2. IN-DOMAIN, narrowed       -- the same clips with only 43 classes competing
+  3. OUT-OF-DOMAIN LEAKAGE     -- the other 207 words forced through the 43-way mask, where
+                                  every commit is WRONG by construction because the true class
+                                  is masked out. This is the cost of narrowing and the reason
+                                  it could be a bad idea; a clinic will not only sign the list.
+
+Renormalizing raises every confidence, so a threshold does NOT mean the same thing in the two
+conditions. Compare at matched ACCEPT RATE, never at matched gate.
+
+HOW IT STAYS HONEST
+-------------------
+One forward pass per word stores the FULL 250-dim probability vector; every condition and
+every threshold is then arithmetic over the same stored numbers, so no two rows can drift
+apart and masking is applied exactly as `_mask_probs` does.
 
 WHAT IT CANNOT TELL YOU
 -----------------------
 `sign_clips_250.npz` is keyed by WORD -- one exemplar per word, no participant ids. So there is
 NO per-signer number here, and per-signer precision was the entire point of the Kaggle table.
-This measures the ENSEMBLE + decide_commit correction to the curve's SHAPE. Reproducing the
-per-signer table needs a Kaggle run with the 4 ensemble folds against the by-signer corpus.
+Reproducing that needs a Kaggle run with these 4 folds against the by-signer corpus.
 
-Absolute precision here is not a model score either -- but NOT for the reason
-measure_prefix_accuracy.py's docstring gives. That file asserts these exemplars are training data
-and therefore "inflated"; the measurement contradicts it. Ungated top-1 here is 0.696 and it
-measured 0.680 full-clip, both BELOW the shipped 4-fold test accuracy of 0.7755. So these clips
-are HARDER than the real test set, not easier -- whatever the 7 fps downsample plus whatever these
-250 canonical exemplars are costs more than any training-set familiarity gains. Treat the
-precision column as a SHAPE and quite possibly a CONSERVATIVE one; do not quote it as a model
-score in either direction. Between-row comparisons are the result. Same discipline as
-measure_prefix_accuracy.py: the project has been burned three times by pooled absolutes.
+Absolute precision is not a model score either -- but NOT for the reason
+measure_prefix_accuracy.py's docstring gives. That file asserts these exemplars are training
+data and therefore "inflated"; the measurement contradicts it. Ungated top-1 here is 0.696 and
+it measured 0.680 full-clip, both BELOW the shipped 4-fold test accuracy of 0.7755. These clips
+are HARDER than the real test set, so the precision column is if anything CONSERVATIVE. Treat
+it as a shape. Between-row comparisons are the result; the project has been burned three times
+by pooled absolutes.
 
 USAGE
-    python measure_conf_gate.py                    # 7 fps, 4-fold ensemble
-    python measure_conf_gate.py --fps 15
-    python measure_conf_gate.py --single           # fold-0 only (faster, not the demo's path)
+    python measure_conf_gate.py                                   # the gate, full 250
+    python measure_conf_gate.py --words vocab_clinical_43.json    # + the narrowing test
+    python measure_conf_gate.py --single                          # fold-0 only (not the demo)
 """
 from __future__ import annotations
 
@@ -67,15 +85,17 @@ from sign_landmarks import canonicalize_missing
 
 HERE = Path(__file__).resolve().parent
 SRC_FPS = 30                       # the exemplar corpus rate
+GATES = (0.30, 0.40, 0.50, 0.58, 0.70, 0.80, 0.90)
 
 # live_demo.py:1340-1347 -- the thresholds `--vocab250` installs. They are assigned INSIDE the
 # argparse branch, which never runs on import, so an importer gets the module-level 30-word
 # values instead (L1_CONF 0.70, L1_MARGIN 0.30, L2_CONF 0.50, L2_MARGIN 0.18, L2_STABLE 1).
 # Measuring against those would price a gate the 250 demo does not use. This is the THIRD time
 # this trap has bitten -- see measure_prefix_accuracy.py:81-84 for the ARTIFACTS/VOCAB_PATH
-# version of it. If live_demo's 250 branch changes, this dict must change with it.
+# version. If live_demo's 250 branch changes, this dict must change with it.
 V250 = dict(L1_CONF=0.58, L1_MARGIN=0.18, Q_STRONG=0.45,
             L2_CONF=0.40, L2_MARGIN=0.10, L2_STABLE=2)
+SHIPPED = {k: v for k, v in V250.items() if k != "L2_STABLE"}   # L2_STABLE is a count, not a gate
 
 
 def to_live(arr: np.ndarray, live_fps: float) -> np.ndarray:
@@ -85,15 +105,34 @@ def to_live(arr: np.ndarray, live_fps: float) -> np.ndarray:
     return arr[idx]
 
 
+def mask_renorm(p: np.ndarray, allowed: np.ndarray | None) -> np.ndarray:
+    """Subset softmax, byte-for-byte what live_demo._mask_probs does."""
+    if allowed is None:
+        return p
+    m = np.zeros_like(p)
+    m[allowed] = p[allowed]
+    s = m.sum()
+    return m / s if s > 0 else p
+
+
+def rows_from(names, P, Q, index, allowed=None) -> list[dict]:
+    """Decision rows under one mask condition, from the stored full-vocab probabilities."""
+    out = []
+    for w, p, q in zip(names, P, Q):
+        pm = mask_renorm(p, allowed)
+        order = np.argsort(pm)[::-1]
+        out.append({"word": w, "conf": float(pm[order[0]]), "second": float(pm[order[1]]),
+                    "q": float(q), "ok": int(order[0] == index[w])})
+    return out
+
+
 def accepted(row: dict, L1_CONF: float, L1_MARGIN: float, Q_STRONG: float,
              L2_CONF: float, L2_MARGIN: float) -> int:
     """Mirror decide_commit's LEVEL 1/2 arithmetic -> 1 (level 1), 2 (level 2), 0 (rejected).
 
-    Parameter names match live_demo's globals on purpose: every caller here passes them as
-    **kwargs pulled from V250, so a rename on either side fails loudly instead of silently
-    pricing the wrong gate.
-
-    `stable` is treated as satisfied, exactly as commit_segment does: it calls
+    Parameter names match live_demo's globals on purpose: every caller passes them as **kwargs
+    pulled from V250, so a rename on either side fails loudly instead of silently pricing the
+    wrong gate. `stable` is treated as satisfied, exactly as commit_segment does -- it calls
     decide_commit(..., stable=L2_STABLE) at the pause, because the sign is FINISHED there and
     temporal confirmation has already happened (live_demo.py:788)."""
     margin = row["conf"] - row["second"]
@@ -104,11 +143,23 @@ def accepted(row: dict, L1_CONF: float, L1_MARGIN: float, Q_STRONG: float,
     return 0
 
 
-def score(rows: list[dict], **th) -> tuple[int, int, float]:
-    """-> (accepted, correct-among-accepted, precision)."""
+def score(rows: list[dict], **th) -> tuple[int, float]:
+    """-> (accepted, precision among accepted)."""
     hits = [r for r in rows if accepted(r, **th)]
-    ok = sum(r["ok"] for r in hits)
-    return len(hits), ok, (ok / len(hits) if hits else float("nan"))
+    return len(hits), (sum(r["ok"] for r in hits) / len(hits) if hits else float("nan"))
+
+
+def sweep(rows: list[dict], label: str) -> None:
+    n0 = len(rows)
+    ung = sum(r["ok"] for r in rows) / n0
+    print(f"  {label:<22} ungated {ung:.3f} over {n0} words")
+    print(f"    {'gate':>6} {'accept':>8} {'precision':>10}")
+    for t in GATES:
+        n, prec = score(rows, L1_CONF=t, L1_MARGIN=V250["L1_MARGIN"],
+                        Q_STRONG=V250["Q_STRONG"], L2_CONF=t, L2_MARGIN=V250["L2_MARGIN"])
+        tag = "   <- L1 today" if abs(t - V250["L1_CONF"]) < 1e-9 else (
+              "   <- L2 today" if abs(t - V250["L2_CONF"]) < 1e-9 else "")
+        print(f"    {t:>6.2f} {f'{100*n/n0:.0f}%':>8} {prec:>10.3f}{tag}")
 
 
 def main() -> None:
@@ -117,6 +168,9 @@ def main() -> None:
     ap.add_argument("--clips", default=str(HERE / "sign_clips_250.npz"))
     ap.add_argument("--vocab", default=str(HERE / "vocab_250.json"))
     ap.add_argument("--artifacts", default=str(HERE / "artifacts_250"))
+    ap.add_argument("--words", default=None,
+                    help="JSON subset (list, or {'words': [...]}) to also measure NARROWED, "
+                         "e.g. vocab_clinical_43.json")
     ap.add_argument("--fps", type=float, default=7.0,
                     help="simulated camera rate (default: the demo's observed 7)")
     ap.add_argument("--single", action="store_true",
@@ -146,77 +200,101 @@ def main() -> None:
         if was != v:
             print(f"[cfg] {k}: {was} -> {v}   (module default was the 30-word value)")
 
-    # One forward pass per word. Every threshold sweep below is then pure arithmetic over
-    # `rows`, so the sweep costs nothing and the numbers cannot drift between conditions.
-    rows: list[dict] = []
+    # The forward pass must be UNMASKED so one pass serves every condition. classify_commit
+    # ends in _mask_probs, which is identity while ALLOWED_IDX is None.
+    assert ld.ALLOWED_IDX is None, "ALLOWED_IDX is set; the stored probs would be pre-masked"
+    names, P, Q = [], [], []
     for w, arr in clips.items():
-        seg = list(to_live(arr, args.fps))                  # list of (75,3), as the live loop holds
-        probs = ld.classify_commit(fns, seg)                # view + mirror, the real commit path
-        order = np.argsort(probs)[::-1]
-        q, hp = ld.segment_quality(seg)
-        rows.append({"word": w, "conf": float(probs[order[0]]),
-                     "second": float(probs[order[1]]), "q": float(q), "hp": float(hp),
-                     "ok": int(order[0] == index[w])})
+        seg = list(to_live(arr, args.fps))          # list of (75,3), as the live loop holds it
+        names.append(w)
+        P.append(ld.classify_commit(fns, seg))      # view + mirror, the real commit path
+        Q.append(ld.segment_quality(seg)[0])
+    P = np.stack(P)
+    print(f"[ok] {P.shape[0]} forward passes stored, full {P.shape[1]}-dim probs\n")
 
-    ceiling = sum(r["ok"] for r in rows) / len(rows)
-    print(f"[ok] ungated top-1 at {args.fps:.0f} fps: {ceiling:.3f}   "
-          f"<- CEILING for these rows, NOT a model score\n")
-
-    # L2_STABLE is not a decide_commit threshold, it is the stability COUNT the caller supplies,
-    # so it is excluded here rather than passed and ignored.
-    shipped = {k: v for k, v in V250.items() if k != "L2_STABLE"}
-    n, ok, prec = score(rows, **shipped)
-    lv = [accepted(r, **shipped) for r in rows]
-    print(f"THE DEMO AS IT SHIPS TODAY (L1 {V250['L1_CONF']} / L2 {V250['L2_CONF']})")
-    print(f"  accept {n}/{len(rows)} ({100*n/len(rows):.0f}%)   precision {prec:.3f}   "
-          f"vs ungated {ceiling:.3f}  ({prec - ceiling:+.3f})")
+    full = rows_from(names, P, Q, index)
+    n, prec = score(full, **SHIPPED)
+    lv = [accepted(r, **SHIPPED) for r in full]
+    ung = sum(r["ok"] for r in full) / len(full)
+    print(f"THE DEMO AS IT SHIPS TODAY (L1 {V250['L1_CONF']} / L2 {V250['L2_CONF']}, all "
+          f"{len(full)} words)")
+    print(f"  accept {n}/{len(full)} ({100*n/len(full):.0f}%)   precision {prec:.3f}   "
+          f"vs ungated {ung:.3f}  ({prec - ung:+.3f})")
     for level in (1, 2):
-        sel = [r for r, l in zip(rows, lv) if l == level]
+        sel = [r for r, l in zip(full, lv) if l == level]
         if sel:
             print(f"    level {level}: {len(sel):>3} accepted, precision "
                   f"{sum(r['ok'] for r in sel)/len(sel):.3f}")
-    print()
 
-    # Sweep one scalar as BOTH gates -- the form comparable to the Kaggle table, which used a
-    # plain max-softmax threshold. Margins stay at their shipped values.
-    print("CONFIDENCE SWEEP (margins at shipped values, L1_CONF = L2_CONF = gate)")
-    print(f"  {'gate':>6} {'accept':>8} {'precision':>10} {'vs ungated':>11}")
-    for t in (0.0, 0.30, 0.40, 0.50, 0.58, 0.60, 0.70, 0.80, 0.90):
-        n, ok, prec = score(rows, L1_CONF=t, L1_MARGIN=V250["L1_MARGIN"],
-                            Q_STRONG=V250["Q_STRONG"], L2_CONF=t, L2_MARGIN=V250["L2_MARGIN"])
-        tag = "   <- L2 today" if abs(t - V250["L2_CONF"]) < 1e-9 else (
-              "   <- L1 today" if abs(t - V250["L1_CONF"]) < 1e-9 else "")
-        print(f"  {t:>6.2f} {f'{100*n/len(rows):.0f}%':>8} {prec:>10.3f} "
-              f"{prec - ceiling:>+11.3f}{tag}")
-    print()
+    print("\nCONFIDENCE SWEEP, FULL 250-WAY (margins at shipped values)")
+    sweep(full, "all 250 words")
 
-    # Does the margin rule earn its complexity? The Kaggle table showed confidence alone is a
-    # strong discriminator; if zeroing the margins costs nothing at matched throughput, the
-    # engine can lose two thresholds. Compare ROWS AT SIMILAR ACCEPT RATES, not at equal gate.
-    print("MARGIN ABLATION (same sweep, L1_MARGIN = L2_MARGIN = 0)")
-    print(f"  {'gate':>6} {'accept':>8} {'precision':>10}")
-    for t in (0.0, 0.30, 0.40, 0.50, 0.58, 0.60, 0.70, 0.80, 0.90):
-        n, ok, prec = score(rows, L1_CONF=t, L1_MARGIN=0.0, Q_STRONG=V250["Q_STRONG"],
-                            L2_CONF=t, L2_MARGIN=0.0)
-        print(f"  {t:>6.2f} {f'{100*n/len(rows):.0f}%':>8} {prec:>10.3f}")
-    print()
+    # Does the margin rule earn its complexity? If zeroing it reproduces the accept set, the
+    # engine carries two thresholds that do nothing for precision (they still route L1 vs L2,
+    # which is a LATENCY control -- see the note beside them in live_demo).
+    print("\nMARGIN ABLATION (L1_MARGIN = L2_MARGIN = 0)")
+    print(f"    {'gate':>6} {'accept':>8} {'precision':>10}")
+    for t in GATES:
+        n, prec = score(full, L1_CONF=t, L1_MARGIN=0.0, Q_STRONG=V250["Q_STRONG"],
+                        L2_CONF=t, L2_MARGIN=0.0)
+        print(f"    {t:>6.2f} {f'{100*n/len(full):.0f}%':>8} {prec:>10.3f}")
 
-    never = [r for r, l in zip(rows, lv) if l == 0]
-    print(f"NEVER COMMITTED at the shipped gate: {len(never)} words "
-          f"({100*len(never)/len(rows):.0f}%) -- these hit top-K instead")
+    never = [r for r, l in zip(full, lv) if l == 0]
+    right = sum(r["ok"] for r in never)
+    print(f"\nNEVER COMMITTED at the shipped gate: {len(never)} words "
+          f"({100*len(never)/len(full):.0f}%) -- these fall through to the top-K tap, which "
+          f"SHOW_TOPK\ndocuments as the PRIMARY 250-word interaction, not a fallback")
     for r in sorted(never, key=lambda r: -r["conf"])[:args.worst]:
         print(f"   {r['word']:<14} conf {r['conf']:.2f}  margin "
               f"{r['conf']-r['second']:.2f}  q {r['q']:.2f}  "
               f"{'(top-1 was RIGHT)' if r['ok'] else ''}")
-    right_rejected = sum(r["ok"] for r in never)
-    print(f"\n  {right_rejected} of those {len(never)} had the CORRECT top-1 -- the gate's cost, "
-          f"paid\n  to remove {len(never) - right_rejected} wrong ones. Read that ratio before "
+    print(f"\n  {right} of those {len(never)} had the CORRECT top-1 -- the gate spends {right} "
+          f"right words\n  to remove {len(never) - right} wrong ones. Read that ratio before "
           f"raising the gate.")
 
-    print("\nREAD THIS AS A SHAPE. One exemplar per word (n=250, so precision has an SE near\n"
-          "0.03 at 50% accept), training-corpus data, and NO per-signer breakdown is possible\n"
-          "from this npz. The per-signer table -- the reason the gate matters at all -- needs a\n"
-          "Kaggle run with these 4 folds against the by-signer corpus.")
+    # ── the narrowing test ──────────────────────────────────────────────────────────────────
+    if args.words:
+        raw = json.loads(Path(args.words).read_text(encoding="utf-8"))
+        allow = raw["words"] if isinstance(raw, dict) else raw
+        missing = [w for w in allow if w not in index]
+        allowed = np.array(sorted({index[w] for w in allow if w in index}), dtype=np.int64)
+        if missing:
+            print(f"\n[warn] {len(missing)} subset words are not in the model vocab "
+                  f"(ignored): {missing[:8]}")
+        inset = {words[i] for i in allowed}
+        sel = [i for i, w in enumerate(names) if w in inset]
+        out = [i for i, w in enumerate(names) if w not in inset]
+        print(f"\n{'='*78}\nNARROWING TEST -- {len(allowed)} allowed classes "
+              f"({Path(args.words).name})\n{'='*78}")
+
+        nm = lambda ix, al: rows_from([names[i] for i in ix], P[ix], [Q[i] for i in ix],
+                                      index, al)
+        print("\nIN-DOMAIN: the subset words, scored two ways")
+        sweep(nm(sel, None), "full 250-way")
+        print()
+        sweep(nm(sel, allowed), "narrowed")
+        print("\n  Renormalizing raises every confidence, so the two blocks are NOT comparable\n"
+              "  at equal gate. Compare them at matched ACCEPT RATE.")
+
+        # The cost nobody would think to measure. Under the mask the true class is gone, so
+        # every one of these commits is wrong -- this is the false-accept rate a clinic pays
+        # whenever someone signs outside the list.
+        leak = nm(out, allowed)
+        assert not any(r["ok"] for r in leak), "an out-of-domain word scored correct; mask is wrong"
+        print(f"\nOUT-OF-DOMAIN LEAKAGE: the {len(leak)} non-subset words forced through the "
+              f"mask.\n  Every commit here is WRONG by construction -- the true class is masked "
+              f"out.\n    {'gate':>6} {'commits':>9}  (false-accept rate)")
+        for t in GATES:
+            n, _ = score(leak, L1_CONF=t, L1_MARGIN=V250["L1_MARGIN"],
+                         Q_STRONG=V250["Q_STRONG"], L2_CONF=t, L2_MARGIN=V250["L2_MARGIN"])
+            print(f"    {t:>6.2f} {f'{100*n/len(leak):.0f}%':>9}")
+        print("\n  Read this against the in-domain gain. Narrowing is worth it only if the\n"
+              "  in-domain lift exceeds what these confident-but-wrong commits cost -- and in\n"
+              "  a clinic, a confident wrong word is the expensive failure, not a rejection.")
+
+    print("\nREAD THIS AS A SHAPE. One exemplar per word, so precision has an SE near 0.03 at\n"
+          "50% accept on 250 and near 0.08 on a 43-word subset. No per-signer breakdown is\n"
+          "possible from this npz; that needs a Kaggle run with these 4 folds.")
 
 
 if __name__ == "__main__":
