@@ -1,0 +1,33 @@
+{
+  "note": "Topic mask for live_demo --words. 15 classes, so ~235 competitors removed. Narrowing pays in proportion to COMPETITORS REMOVED (measured: 43 words = +0.116, 224 words = +0.014), so a topic this size should recover most of that gain. Only words scoring > 0.6 on held-out test are included -- a topic full of broken words helps nobody.",
+  "min_test_acc": 0.6,
+  "mean_test_acc": 0.859,
+  "excluded_not_in_vocab": [
+    "sister",
+    "woman",
+    "baby",
+    "family",
+    "friend",
+    "name"
+  ],
+  "excluded_too_weak": {
+    "person": 0.229
+  },
+  "words": [
+    "aunt",
+    "boy",
+    "brother",
+    "child",
+    "dad",
+    "girl",
+    "grandma",
+    "grandpa",
+    "hesheit",
+    "man",
+    "minemy",
+    "mom",
+    "uncle",
+    "weus",
+    "yourself"
+  ]
+}

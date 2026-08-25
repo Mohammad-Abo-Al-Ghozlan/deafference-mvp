@@ -1,0 +1,32 @@
+{
+  "note": "Topic mask for live_demo --words. 21 classes, so ~229 competitors removed. Narrowing pays in proportion to COMPETITORS REMOVED (measured: 43 words = +0.116, 224 words = +0.014), so a topic this size should recover most of that gain. Only words scoring > 0.6 on held-out test are included -- a topic full of broken words helps nobody.",
+  "min_test_acc": 0.6,
+  "mean_test_acc": 0.8418,
+  "excluded_not_in_vocab": [],
+  "excluded_too_weak": {
+    "dog": 0.582
+  },
+  "words": [
+    "alligator",
+    "bee",
+    "bird",
+    "bug",
+    "cat",
+    "cow",
+    "donkey",
+    "duck",
+    "elephant",
+    "fish",
+    "frog",
+    "giraffe",
+    "hen",
+    "horse",
+    "lion",
+    "mouse",
+    "owl",
+    "pig",
+    "tiger",
+    "wolf",
+    "zebra"
+  ]
+}

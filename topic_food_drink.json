@@ -1,0 +1,35 @@
+{
+  "note": "Topic mask for live_demo --words. 16 classes, so ~234 competitors removed. Narrowing pays in proportion to COMPETITORS REMOVED (measured: 43 words = +0.116, 224 words = +0.014), so a topic this size should recover most of that gain. Only words scoring > 0.6 on held-out test are included -- a topic full of broken words helps nobody.",
+  "min_test_acc": 0.6,
+  "mean_test_acc": 0.9116,
+  "excluded_not_in_vocab": [
+    "eat",
+    "cookie",
+    "banana",
+    "bread"
+  ],
+  "excluded_too_weak": {
+    "pizza": 0.409,
+    "cereal": 0.536,
+    "carrot": 0.545,
+    "snack": 0.421
+  },
+  "words": [
+    "apple",
+    "chocolate",
+    "drink",
+    "food",
+    "frenchfries",
+    "gum",
+    "hungry",
+    "icecream",
+    "milk",
+    "nuts",
+    "orange",
+    "sticky",
+    "taste",
+    "thirsty",
+    "water",
+    "yucky"
+  ]
+}

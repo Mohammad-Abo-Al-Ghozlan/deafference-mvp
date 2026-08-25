@@ -1,0 +1,41 @@
+{
+  "note": "Topic mask for live_demo --words. 18 classes, so ~232 competitors removed. Narrowing pays in proportion to COMPETITORS REMOVED (measured: 43 words = +0.116, 224 words = +0.014), so a topic this size should recover most of that gain. Only words scoring > 0.6 on held-out test are included -- a topic full of broken words helps nobody.",
+  "min_test_acc": 0.6,
+  "mean_test_acc": 0.7864,
+  "excluded_not_in_vocab": [
+    "hand",
+    "hurt",
+    "tired",
+    "wash",
+    "medicine"
+  ],
+  "excluded_too_weak": {
+    "mouth": 0.3,
+    "chin": 0.482,
+    "tongue": 0.517,
+    "tooth": 0.472,
+    "arm": 0.588,
+    "finger": 0.583,
+    "owie": 0.316
+  },
+  "words": [
+    "bad",
+    "bath",
+    "better",
+    "cheek",
+    "cry",
+    "ear",
+    "eye",
+    "face",
+    "feet",
+    "hair",
+    "head",
+    "hot",
+    "nose",
+    "potty",
+    "sick",
+    "sleep",
+    "sleepy",
+    "touch"
+  ]
+}
