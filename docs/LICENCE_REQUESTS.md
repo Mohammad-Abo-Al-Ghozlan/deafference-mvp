@@ -83,8 +83,60 @@ are negotiated later there is no ambiguity about what was built on what.
 
 ### Draft — commercial terms inquiry (this is NOT the access form; send it separately)
 
-Send from the company address, after submitting the form. Find current addresses on the repo or
-the paper's author list — do not guess one.
+Send from the company address, after submitting the form.
+
+| who | role | address |
+|---|---|---|
+| **Lee Kezar** | first author | **lkezar@usc.edu** |
+| **Naomi Caselli** | senior author, ASL-LEX | **nkc@bu.edu** (cc) |
+| Zed Sevcikova Sehyr | senior author | Chapman University — find current address if you want a third cc |
+
+⚠️ **Check lkezar@usc.edu before relying on it.** Lee Kezar was a PhD candidate at USC ISI
+(GLAMOR Lab, advised by Jesse Thomason) and may since have moved institution; the personal
+site **leekezar.github.io** is the place to confirm a current address. Naomi Caselli is
+Associate Professor of Deaf Studies at BU Wheelock and Director of its AI & Education
+Initiative, so that address is the more stable of the two — worth having on the thread for
+exactly that reason.
+
+### Downloading it WITHOUT using your own connection
+
+The form's download page offers **poses and videos separately**, and that distinction saves
+about 42 GB:
+
+| | train | val | test | total |
+|---|---|---|---|---|
+| **poses** `.tar.gz` | 7 GB | 2.5 GB | 2.1 GB | **11.6 GB** |
+| videos `.tar.gz` | 22 GB | 7 GB | 13 GB | 42 GB |
+
+**Take the poses only.** This whole pipeline is landmark-based — `live_demo.py`,
+`build_sign_clips.py` and `train.py` never touch a video frame. The videos would be 42 GB of
+data nothing in the repo can read.
+
+Also worth noting from the form: **the test set is unseen signers**, not a random split. That
+matches how this project already evaluates and is the split that actually predicts live
+behaviour.
+
+**Do it inside Kaggle, not on your laptop and not on AWS:**
+
+1. New Kaggle notebook → **Settings → Internet: On** (needs phone verification once).
+2. `!wget -c "<url>" -O /kaggle/working/sem-lex-train-poses.tar.gz` for each of the three pose
+   archives. 11.6 GB fits in the 19.5 GB working directory; the videos would not.
+   - First **right-click each link and check the host.** If it is a direct HTTP/S3 URL, `wget`
+     works. If it is Google Drive, `wget` gets an HTML interstitial instead of the file — use
+     `pip install gdown` and `gdown <id>`.
+   - `-c` matters: it resumes rather than restarting a 7 GB transfer.
+3. **Save Version → Output → New Dataset → Private.**
+
+Why Kaggle rather than AWS: it is free, the bandwidth is Google's rather than yours, and the
+result lands *exactly* where the training runs — attachable to a notebook with no further
+transfer. An EC2 box would cost money and still leave the data one hop from where it is needed.
+It also avoids AWS credentials entirely, which matters because **the AWS keys this project has
+been using are burned and still awaiting rotation.**
+
+⚠️ **Keep that dataset Private.** CC BY-NC-SA does permit redistribution with attribution under
+the same licence, but a public Kaggle dataset would be redistribution — and doing it without the
+attribution and licence notice attached would breach the terms you just agreed to. Private is a
+personal working copy and raises none of that.
 
 > Subject: Commercial licensing inquiry — Sem-Lex Benchmark, clinical ASL interpreting
 >
@@ -205,6 +257,43 @@ for csv in glob.glob("/kaggle/input/**/*.csv", recursive=True)[:5]:
     print(d.columns.tolist())
     print(d.head(3).to_string()[:600])
 ```
+
+### Measured layout, 2026-08-26 — and the two facts that make it tractable
+
+```
+/kaggle/input/competitions/asl-fingerspelling/
+  character_to_prediction_index.json     59 characters
+  train.csv                              67,208 sequences, 94 participants
+  supplemental_metadata.csv              52,958 sequences, 72 participants (49 overlap)
+  train_landmarks/          68 parquet × ~1,510 MB ≈ 103 GB
+  supplemental_landmarks/   53 parquet × ~1,655 MB ≈  88 GB
+```
+
+**Fact 1 — it is the SAME landmark layout as GISLR.** 1,631 columns = 543 landmarks × 3 + frame
++ sequence_id, split face 468 / pose 33 / left_hand 21 / right_hand 21. Our 75-point convention
+is exactly `pose(33) + left_hand(21) + right_hand(21)` — a **13.8%** column subset. Reading only
+those columns cuts the effective data from ~190 GB to **~26 GB**, and `normalize()` /
+`canonicalize()` apply unchanged. This is the single fact that turns the dataset from
+infeasible-on-Kaggle into ordinary.
+
+**Fact 2 — 94 participants.** Against GISLR's 21 and Sem-Lex's 41. Per-signer variance is the
+one dataset property this project has *measured* as decisive (0.31–0.82 spread on the 250-word
+model, proven uncorrectable downstream — an oracle mean-shift moved the worst signer −0.0018).
+This is the best signer diversity available to us anywhere.
+
+Two more things the probe settled:
+
+- **59 characters, not 26.** ``[' ', '!', '#', ... '0'-'9', ... 'a'-'z', '~']`` — phrases carry
+  digits, spaces and punctuation because they are addresses, phone numbers and URLs
+  (`'+95-335-395'`, `'1383 william lanier'`, `'scales/kuhaylah'`).
+- **~11.5 frames per character** (median phrase 17 chars, max 31). Comfortably above the CTC
+  requirement that input length ≥ output length, so CTC is viable and does not need
+  frame-upsampling tricks.
+
+**Face landmarks are present (468).** `docs/AVATAR_LIMITS.md` records that our export has no face
+channel and that ASL grammar lives in eyebrows, mouth morphemes, head tilt and gaze — a
+correctness gap for sentences, not polish. This dataset has that channel. Not useful for
+fingerspelling itself, but it is the first corpus here that could support the face work at all.
 
 ### Two warnings
 
