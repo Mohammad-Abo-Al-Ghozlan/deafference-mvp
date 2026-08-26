@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
+
 import os
 import sys
 from pathlib import Path
@@ -184,23 +184,43 @@ def main() -> None:
     check(np.array_equal(np.isnan(canonicalize_missing(cm)), np.isnan(cm)),
           "canonicalize_missing is idempotent here too")
 
-    # normalize() is defined in live_demo, which imports cv2/mediapipe at module scope on some
-    # setups; reimplementing it here would defeat the point, so import it and say so if it fails.
+    # Normalization has three interchangeable implementations in this repo, all verified to use
+    # the same convention (shoulder-midpoint centre, shoulder-width scale, x/y only, z untouched,
+    # NaN preserved). Try them in order of "closest to what ships" and SAY which one ran --
+    # reimplementing it here would defeat the whole purpose of the check.
+    #   live_demo.normalize          the shipping path, but imports cv2 at module scope
+    #   extract_canonical.normalize_xy   what built the corpus; needs training/ on the path
+    #   sign_landmarks._normalized_xy    numpy only, so it works wherever sign_landmarks does
+    # On Kaggle only sign_landmarks.py is typically staged, which is why the third exists.
+    nz, src = None, None
     try:
         from live_demo import normalize
-        src = "live_demo.normalize"
-    except Exception as e:                                   # noqa: BLE001
-        print(f"  --   live_demo not importable here ({type(e).__name__}); using "
-              f"extract_canonical.normalize_xy, which is the documented same convention")
-        from training.extract_canonical import normalize_xy
-        normalize, src = None, "extract_canonical.normalize_xy"
-        nz = normalize_xy(cm)
-    if normalize is not None:
         outs = [normalize(f) for f in cm]
         kept = [o for o in outs if o is not None]
-        check(len(kept) > 0, f"{src} accepted {len(kept)}/{len(outs)} frames",
-              "None means both shoulders were not visible — expected on some frames")
-        nz = np.stack(kept) if kept else cm
+        check(len(kept) > 0, "live_demo.normalize accepted frames",
+              f"{len(kept)}/{len(outs)} — None means both shoulders were not visible")
+        if kept:
+            nz, src = np.stack(kept), "live_demo.normalize"
+    except Exception as e:                                   # noqa: BLE001
+        print(f"  --   live_demo not importable ({type(e).__name__}), trying the next one")
+    if nz is None:
+        try:
+            from training.extract_canonical import normalize_xy
+            nz, src = normalize_xy(cm), "extract_canonical.normalize_xy"
+        except Exception as e:                               # noqa: BLE001
+            print(f"  --   extract_canonical not importable ({type(e).__name__}), "
+                  f"falling back to sign_landmarks")
+    if nz is None:
+        from sign_landmarks import _normalized_xy
+        xy, ok = _normalized_xy(cm)
+        nz = cm.copy()
+        nz[:, :, :2] = xy
+        nz = nz[ok] if ok.any() else nz
+        src = "sign_landmarks._normalized_xy"
+    if not check(nz is not None and src is not None,
+                 "a normalization implementation was importable"):
+        sys.exit(1)
+    print(f"  using {src}")
     mid = np.nanmedian(nz[:, [L_SHOULDER, R_SHOULDER], :2].reshape(-1, 2), axis=0)
     w = float(np.nanmedian(np.linalg.norm(
         nz[:, L_SHOULDER, :2] - nz[:, R_SHOULDER, :2], axis=-1)))
