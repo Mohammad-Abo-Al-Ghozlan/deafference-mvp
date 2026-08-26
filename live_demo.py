@@ -296,12 +296,54 @@ def time_resize(a: np.ndarray, n: int = MAX_LEN) -> np.ndarray:
     return (a[lo] * (1.0 - w) + a[hi] * w).astype(np.float32)
 
 
+# FLIP_MAP swaps the two hand blocks, which is right for a LEGACY model and actively wrong for
+# a CANONICAL one: there the dominant hand always sits at 54-74 and 33-53 is reserved/NaN, so
+# swapping moves the only hand into the empty block. train.py:127 builds the canonical map the
+# same way — pose flipped, hand slots identity — and trains with it (`hflip swaps hands = False`).
+FLIP_MAP_CANON = np.concatenate([FLIP_MAP[:POSE_N],
+                                 np.arange(POSE_N, N_POINTS, dtype=FLIP_MAP.dtype)])
+assert sorted(FLIP_MAP_CANON.tolist()) == list(range(N_POINTS))
+
+CANONICAL_HAND = False        # set by --canonical; selects the mirror map AND enables canonicalize
+
+
 def _mirror(x: np.ndarray) -> np.ndarray:
-    """Horizontal flip of a (1,T,75,3) normalized clip: reorder L/R via FLIP_MAP
-    and negate x (coords are shoulder-centered, so mirror is x -> -x)."""
-    m = x[:, :, FLIP_MAP, :].copy()
+    """Horizontal flip of a (1,T,75,3) normalized clip: reorder L/R and negate x
+    (coords are shoulder-centered, so mirror is x -> -x).
+
+    The map MUST match the one the weights were trained with. classify_commit averages a clip
+    with its mirror, so using the hand-swapping map on canonical weights would feed half the
+    views a clip whose only hand sits in the reserved block."""
+    m = x[:, :, FLIP_MAP_CANON if CANONICAL_HAND else FLIP_MAP, :].copy()
     m[..., 0] *= -1.0
     return m
+
+
+def canonicalize_seg(seg: list) -> list:
+    """Mirror a segment so the signing arm reads as right, hand parked at 54-74.
+
+    Canonical weights (train.py --canonical-hand) never see a hand in the 33-53 block: the
+    corpus they were built from measures L-block occupancy 0.000 across all seven signers. But
+    live_demo.normalize() does no such thing — a left-dominant signer's hand stays where
+    MediaPipe put it, in a block the model has never seen once. Without this, canonical weights
+    work for right-dominant signers and fail completely for left-dominant ones.
+
+    Delegates to training/extract_canonical.canonicalize, the SAME function that built the
+    corpus, rather than reimplementing the rule. That matters twice over: parity is exact, and
+    the naive rule is known-bad — extract_canonical.py:259-261 records that "most tracked frames
+    wins" is what put the RESTING hand in the dominant slot, because MediaPipe preferentially
+    drops the hand that moves (root cause R5). Its default `dominance="geometric"` is the fix.
+
+    Safe to apply to already-normalized frames: canonicalize() begins with normalize_xy(), which
+    centers on the shoulder midpoint and scales by shoulder width — on normalized input that is
+    mid=0, width=1, i.e. the identity. Verified against live_demo.normalize(): same convention,
+    x/y only, z untouched, NaN preserved."""
+    try:
+        from training.extract_canonical import canonicalize
+    except ImportError:
+        from extract_canonical import canonicalize          # training/ on sys.path
+    arr, _meta = canonicalize(np.stack(seg).astype(np.float32))
+    return list(arr)
 
 
 # Restrict recognition to a curated subset of words (set via --words). With 250
@@ -369,6 +411,8 @@ def classify_segment(fns, seg) -> np.ndarray:
     """seg: list of (75,3) normalized frames for one sign -> softmax probs.
     Resamples to 64 frames (training parity) and, if USE_TTA, averages the clip
     with its mirror (the model was trained with hflip)."""
+    if CANONICAL_HAND:
+        seg = canonicalize_seg(seg)
     arr = time_resize(np.stack(seg), MAX_LEN)[None].astype(np.float32)   # (1,64,75,3)
     probs = predict(fns, arr)
     if USE_TTA:
@@ -386,6 +430,8 @@ def classify_commit(fns, seg) -> np.ndarray:
     attempt. That's what removes the "sign it three times" feel. Cost is a short
     burst of extra forward passes at commit only — the per-frame preview stays the
     cheap single-model path."""
+    if CANONICAL_HAND:
+        seg = canonicalize_seg(seg)
     base = np.stack(seg)                                  # (T,75,3)
     views = [base]                                        # crop view dropped: on a short low-fps
     #   clip it trims only ~1-2 frames but DOUBLES the commit passes (16->8), which was freezing
@@ -1363,6 +1409,13 @@ if __name__ == "__main__":
                     help="lighter MediaPipe pose model (~2x fps, but MUCH weaker hand "
                          "detection near the face — hello/food/hat suffer). NOT "
                          "recommended for --vocab250; prefer good lighting instead.")
+    ap.add_argument("--canonical", action="store_true",
+                    help="the weights were trained with train.py --canonical-hand (dominant "
+                         "hand always at 54-74, 33-53 reserved). Mirrors each segment so the "
+                         "signing arm reads as right, and switches mirror TTA to the pose-only "
+                         "map. REQUIRED for canonical weights: without it a left-dominant "
+                         "signer's hand stays in a block the model has never seen. Must NOT be "
+                         "set for the legacy artifacts_250 weights.")
     ap.add_argument("--words", default=None,
                     help="path to a JSON list of words to restrict recognition to "
                          "(e.g. demo_vocab_250.json). Concentrates confidence onto "
@@ -1443,6 +1496,11 @@ if __name__ == "__main__":
                   "(hello/food/hat) at 250 words. Strongly recommend running WITHOUT --fast.")
         print(f"[cfg] 250-word model from {ARTIFACTS} "
               f"(complexity-1 MediaPipe, hand-quality gate, robust commit, AI on DONE)")
+    if args.canonical:
+        CANONICAL_HAND = True
+        print("[cfg] CANONICAL weights: segments mirrored so the signing arm reads as right "
+              "(hand -> 54-74),\n      mirror TTA uses the pose-only map. Do NOT use this with "
+              "the legacy artifacts_250.")
     if args.conf is not None:
         # THE FIX. This used to set CONF_GATE alone — which the comment at the top of the
         # --vocab250 branch above already calls dead, because decide_commit() reads L1_CONF /
