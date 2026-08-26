@@ -353,6 +353,9 @@ def canonicalize_seg(seg: list) -> list:
 # words, so the same sign now scores ~0.80 and commits first try. None = all words.
 ALLOWED_IDX = None            # np.ndarray of allowed class indices, or None
 DEMO_WORDS_PATH = None        # path to a JSON list/{"words":[...]} of allowed words
+# Which topic a large vocabulary BOOTS into when --words is not given. Matched by the stripped
+# name, so it is topic_everyday.json on disk. Falls back to the first topic if absent.
+DEFAULT_TOPIC = "everyday"
 
 
 def _mask_probs(probs: np.ndarray) -> np.ndarray:
@@ -684,9 +687,28 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
 
     # ── runtime topic switching (press T) ────────────────────────────────────
     MASKS = build_masks(words, DEMO_WORDS_PATH, ALLOWED_IDX)
-    mask_i = 1 if len(MASKS) > 1 and DEMO_WORDS_PATH is not None else 0
+    # Never BOOT into the full vocabulary when it is large. MASKS[0] is always ALL-n, so the old
+    # `else 0` meant `--vocab250` with no --words started in the one state that does not work:
+    # measured 12% commit rate at gate 0.90 across 250 classes against 68% inside a ~34-word
+    # topic, and the first live test of all-250 came back "messy and not accurate" while every
+    # individual topic was usable. The full list stays one T away — it is a diagnostic, not a
+    # sane starting state. 40 is the same small/large threshold this file already uses below.
+    if len(MASKS) > 1 and (DEMO_WORDS_PATH is not None or len(words) > 40):
+        # --words wins if given (it sorts to index 1). Otherwise prefer 'everyday' over whatever
+        # is alphabetically first: the topics on disk start at 'animals', and a demo that opens on
+        # 21 animal words cannot recognise hello / mom / please / hungry — which is exactly the
+        # failure that made a 43-word clinical mask look broken on 2026-08-25.
+        mask_i = 1
+        if DEMO_WORDS_PATH is None:
+            mask_i = next((i for i, (n, _m) in enumerate(MASKS) if n == DEFAULT_TOPIC), 1)
+    else:
+        mask_i = 0
     print(f"[cfg] {len(MASKS)} masks loaded — press T to cycle: "
           + " / ".join(f"{n}({'all' if m is None else len(m)})" for n, m in MASKS))
+    if mask_i != 0 and DEMO_WORDS_PATH is None:
+        print(f"[cfg] starting on topic '{MASKS[mask_i][0]}' ({len(MASKS[mask_i][1])} words), NOT "
+              f"all {len(words)}.\n      All {len(words)} is reachable with T but commits ~12% of "
+              f"the time; a topic commits ~68%.")
 
     # An INDEX, not the tuple: MASKS.index(tuple_with_ndarray) compares arrays elementwise
     # and raises "truth value of an array is ambiguous".
@@ -1510,7 +1532,9 @@ if __name__ == "__main__":
         L1_CONF = L2_CONF = CONF_GATE = args.conf
         print(f"[cfg] commit gate: L1_CONF = L2_CONF = {args.conf} "
               f"(margins unchanged: L1 {L1_MARGIN}, L2 {L2_MARGIN})")
-    elif args.words:
+    elif args.words or args.vocab250:
+        # Also fires for a bare --vocab250 now, because that auto-starts on a topic mask rather
+        # than on all 250 — so the renormalization footgun below applies even with no --words.
         # A footgun worth shouting about. _mask_probs RENORMALIZES over the allowed classes, so
         # narrowing inflates every confidence and the SAME gate becomes much looser. Measured
         # (measure_conf_gate.py --words vocab_clinical_43.json): with 43 of 250 classes allowed,
