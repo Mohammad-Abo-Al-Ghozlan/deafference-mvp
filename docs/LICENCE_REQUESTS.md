@@ -87,16 +87,39 @@ Send from the company address, after submitting the form.
 
 | who | role | address |
 |---|---|---|
-| **Lee Kezar** | first author | **lkezar@usc.edu** |
+| **Lee Kezar** | first author | **lee.kezar@gallaudet.edu** |
 | **Naomi Caselli** | senior author, ASL-LEX | **nkc@bu.edu** (cc) |
 | Zed Sevcikova Sehyr | senior author | Chapman University — find current address if you want a third cc |
 
-⚠️ **Check lkezar@usc.edu before relying on it.** Lee Kezar was a PhD candidate at USC ISI
-(GLAMOR Lab, advised by Jesse Thomason) and may since have moved institution; the personal
-site **leekezar.github.io** is the place to confirm a current address. Naomi Caselli is
-Associate Professor of Deaf Studies at BU Wheelock and Director of its AI & Education
-Initiative, so that address is the more stable of the two — worth having on the thread for
-exactly that reason.
+⚠️ **`lkezar@usc.edu` is DEAD — verified by a bounce on 2026-08-26** ("550-5.2.1 The email
+account that you tried to reach is inactive"). Kezar completed the USC PhD in 2025 and joined
+**Gallaudet University** in August 2025 as a Postdoctoral Research Associate in Prof. Lorna
+Quandt's Action & Brain Lab, working on sign-language AI and learning tools for deaf and
+hard-of-hearing students. Current address confirmed on the lab's People page.
+
+Lesson worth keeping: the USC address came from a search result that reflected a stale
+affiliation, and it was handed over with "verify this first" attached instead of just being
+verified. For an academic contact, check the *lab page* rather than the paper or a search
+snippet — papers freeze the affiliation at publication date.
+
+Note a bounce is per-recipient: a dead To: does not stop delivery to the Cc:, so a message to
+Caselli still arrived.
+
+### Gallaudet is a bigger opportunity than the licence
+
+Gallaudet is the world's Deaf university, and the first author of our target dataset now works
+there in a lab building sign-language AI for Deaf students.
+
+This project has **five** Deaf-review items blocking work, stalled for weeks with no route to a
+reviewer: the 250 exemplars, the 7 handshape template anchors, `asl_2a_base_placement.json` (made
+BLOCKING by the 2026-08-26 2a reselect win), the 11 collision pairs, and the class-2s render
+question.
+
+**Do not put that in the licence email.** Asking for a commercial licence and for unpaid Deaf
+review in one message reads as presumptuous and risks losing both answers. Once the licence
+thread has a reply, a separate note about review or collaboration is legitimate on its own
+merits — that lab does exactly this work, and a clinical accessibility application is a natural
+fit. Sequence it; do not bundle it.
 
 ### Downloading it WITHOUT using your own connection
 
