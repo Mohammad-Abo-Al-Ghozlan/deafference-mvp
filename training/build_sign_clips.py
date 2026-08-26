@@ -191,6 +191,16 @@ def main():
                          "discarded downstream. 'off' also drops it for 2s, where the passive "
                          "wrist IS used (the handshape is mirrored onto a recorded wrist), so "
                          "that is a real trade and wants a render comparison first.")
+    ap.add_argument("--dump-candidates", type=Path, default=None,
+                    help="write one CSV row per CANDIDATE (not per word) to this path: word, "
+                         "class, aligned, passive_resting, coverage, valid, reason. The per-word "
+                         "meta records only the take that WON, so it cannot answer why. Two "
+                         "questions need the losers: (a) does the passive-up gate discard "
+                         "better-tracked takes, i.e. is dominant coverage higher among "
+                         "passive_resting takes -- which decides the 2a experiment BEFORE the "
+                         "test arm runs, from the control arm alone; and (b) what actually "
+                         "rejects each take, since the per-word invalid_reason is null whenever "
+                         "the word found any valid take at all. ~70k rows, ~4 MB.")
     ap.add_argument("--contiguity", type=float, default=0.0,
                     help="weight w in (1-w)*coverage + w*longest_contiguous_run. The animation "
                          "side bridges gaps by interpolation, so a bridged handshape is a "
@@ -371,6 +381,42 @@ def main():
             stats[k]["class"] = word_class[w]
             stats[k]["handedness"] = HAND_NAME[word_class[w]]
             stats[k]["required"] = dom_block(k)
+
+    # ── optional per-CANDIDATE dump ───────────────────────────────────────────────
+    # Written here, after validity() has run on every take and before pick() throws the
+    # losers away. The per-word meta only ever describes the winner, which makes the one
+    # question that decides the 2a experiment unanswerable from it: among the takes the
+    # passive-up gate REJECTS, is dominant coverage higher or lower than among the ones it
+    # keeps? Higher means the gate is discarding the better-tracked takes and dropping it
+    # should help; lower or equal means the corpus has no better take and tier C is real.
+    # That is readable from the CONTROL arm alone, so it predicts the result rather than
+    # merely explaining it afterwards.
+    if args.dump_candidates is not None:
+        import csv
+        args.dump_candidates.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.dump_candidates, "w", newline="", encoding="utf-8") as fh:
+            wr = csv.writer(fh)
+            wr.writerow(["word", "class", "key", "frames", "aligned", "passive_resting",
+                         "dominant_travel", "travel_ratio", "coverage", "longest_run",
+                         "valid", "reason"])
+            for w, keys in by_word.items():
+                for k in keys:
+                    s = stats[k]
+                    wr.writerow([
+                        w, s["class"], k, s["frames"],
+                        int(bool(s["align"]["aligned"])),
+                        # tri-state on purpose: None means "not measurable on this take"
+                        # (no passive wrist tracked at all), which is NOT the same as False
+                        # and must not silently join the "held up" group.
+                        "" if s["passive_resting"] is None else int(s["passive_resting"]),
+                        round(float(s["dominant_travel"]), 4),
+                        round(float(s["travel_ratio"]), 4),
+                        round(float(s["score"]), 4),
+                        round(float(s["runs"][s["required"]]), 4),
+                        int(bool(s["valid"])), s["invalid_reason"] or "",
+                    ])
+        n_rows = sum(len(v) for v in by_word.values())
+        print(f"[ok] per-candidate dump: {n_rows} rows -> {args.dump_candidates}")
 
     # ── the animation side's §3 diagnostic ────────────────────────────────────────
     # WITHIN a word, is coverage anti-correlated with motion? That is the only level
