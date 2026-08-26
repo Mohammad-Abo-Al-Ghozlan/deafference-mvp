@@ -323,6 +323,34 @@ def _mask_probs(probs: np.ndarray) -> np.ndarray:
     return m / s if s > 0 else probs
 
 
+def build_masks(words, demo_path=None, demo_idx=None) -> list:
+    """[(name, idx|None)] — the vocabulary masks the T key cycles through.
+
+    Narrowing is the only lever that measured large: masking to a ~34-word topic takes the
+    commit rate from 12% to 68% at gate 0.90 at the same precision (measure_conf_gate.py).
+    But a conversation changes subject, and a mask fixed at startup cannot follow it — which
+    is exactly how a live run of the 43-word clinical mask "detected nothing": hello, mom and
+    hungry were simply not in that list. Cycling at runtime is what makes a mask a feature
+    rather than a trap. Module-level so it is testable without a camera."""
+    def _of(path: Path):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        allow = raw["words"] if isinstance(raw, dict) else raw
+        idx = sorted({words.index(w) for w in allow if w in words})
+        return np.array(idx, dtype=np.int64) if idx else None
+
+    out = [(f"ALL {len(words)}", None)]
+    if demo_path is not None and demo_idx is not None:
+        # Same label whether the mask arrived via --words or was discovered on disk; the name
+        # is shown on the debug overlay, so "topic_everyday" vs "everyday" would read as two.
+        out.append((demo_path.stem.replace("topic_", ""), demo_idx))
+    for p in sorted(HERE.glob("topic_*.json")):
+        if demo_path is None or p.name != demo_path.name:
+            m = _of(p)
+            if m is not None:
+                out.append((p.stem.replace("topic_", ""), m))
+    return out
+
+
 def trim_preroll(seq, preroll_n, lead_fr):
     """Drop the STATIC pre-roll lead-in, keeping only `lead_fr` frames of onset
     context right before the active signing. `preroll_n` is how many frames at the
@@ -607,6 +635,36 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         print(f"[cfg] recognition restricted to {len(ALLOWED_IDX)} words "
               f"(confidence concentrated → faster commits)")
         print("  sign any of: " + ", ".join(allowed_words))
+
+    # ── runtime topic switching (press T) ────────────────────────────────────
+    MASKS = build_masks(words, DEMO_WORDS_PATH, ALLOWED_IDX)
+    mask_i = 1 if len(MASKS) > 1 and DEMO_WORDS_PATH is not None else 0
+    print(f"[cfg] {len(MASKS)} masks loaded — press T to cycle: "
+          + " / ".join(f"{n}({'all' if m is None else len(m)})" for n, m in MASKS))
+
+    # An INDEX, not the tuple: MASKS.index(tuple_with_ndarray) compares arrays elementwise
+    # and raises "truth value of an array is ambiguous".
+    _active = [mask_i]
+
+    def cycle_topic():
+        """Next mask. NOTE the gate is NOT rescaled: _mask_probs renormalizes, so a narrower
+        mask makes the same threshold looser (measured: 35% out-of-domain false accepts at
+        L2_CONF 0.40 on a 43-word mask vs 2% at 0.90). Switching to a much smaller topic
+        without raising --conf trades precision for throughput."""
+        _active[0] = (_active[0] + 1) % len(MASKS)
+        name, m = MASKS[_active[0]]
+        globals()["ALLOWED_IDX"] = m            # what _mask_probs reads, at module scope
+        n = len(words) if m is None else len(m)
+        print(f"[topic] {name}  ({n} words)")
+        if m is not None:
+            print("   " + ", ".join(words[i] for i in m))
+        return name, n
+
+    def active_topic():
+        name, m = MASKS[_active[0]]
+        return name, (len(words) if m is None else len(m))
+
+    ALLOWED_IDX = MASKS[mask_i][1]
 
     rules = load_grammar()
     word_acc = {}
@@ -1201,6 +1259,8 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 (f"frames  : {dbg['frames']}", (200, 200, 200)),
                 (f"decision: {dbg['decision']}  (LEVEL {dbg['level']})", lvl_col),
                 (f"reason  : {dbg['reason']}", (170, 210, 170)),
+                (f"topic   : {active_topic()[0]}  ({active_topic()[1]} words)  [T]",
+                 (0, 200, 255)),
             ]
             for i, (txt, col) in enumerate(lines):
                 aa(image, txt, (dx + 12, dy + 28 + i * 27), 0.5, col, 1)
@@ -1225,6 +1285,10 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 state["sentence"] = sentence
                 state["final"] = ""; state["finalized"] = False
                 state["candidates"] = []; state["cand_committed"] = False
+        if key == ord("t"):
+            tname, tn = cycle_topic()
+            now_line = f"topic: {tname} ({tn} words)"
+            state["candidates"] = []                     # stale: scored under the old mask
         if key == ord("s"):
             state["speak"] = not state["speak"]
         if key == ord("w"):
