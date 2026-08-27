@@ -1335,6 +1335,14 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
 
         cv2.imshow(WINDOW, image)
         key = cv2.waitKey(1) & 0xFF
+        # Fold A-Z onto a-z. Every handler below compares against ord("q") / ord("t") / ord("w")
+        # etc., so with CAPS LOCK ON — or Shift held — not one of them fires: T silently does
+        # nothing, W does nothing, and even q stops quitting, so the only way out is Ctrl+C in
+        # the terminal. Reported 2026-08-27 as "T didn't change the section"; the session had
+        # been killed with KeyboardInterrupt twice, which is the tell. Digits, Enter, Backspace
+        # and Space are outside 65-90 and unaffected.
+        if 65 <= key <= 90:
+            key += 32
         if key == ord("q"):
             break
         if state["pick_req"] is not None:                # a candidate chip was clicked
