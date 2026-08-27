@@ -23,6 +23,10 @@ next-env.d.ts
 # Keep them out of the web repo so a stray `git add .` can't commit model weights.
 artifacts/
 artifacts_250/
+artifacts_250_canonical/
+# ^ the 2026-08-27 canonical+decimate ensemble. savedmodel_fold*/ below already ignores the
+# weights, but not the vocab_250.json / PROVENANCE.json beside them, so the directory kept
+# showing up as untracked. Ignore the whole thing, same as the two above it.
 *_backup/
 __pycache__/
 *.pyc
