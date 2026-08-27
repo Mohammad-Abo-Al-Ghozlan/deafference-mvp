@@ -847,9 +847,25 @@ was the wrong axis — it fires at 70/30 splits, which is MediaPipe L/R label no
 But the mirror half is still wanted, for parity: `live_demo.py --canonical` mirrors every live
 segment. Train un-mirrored and the medical model must run *without* `--canonical` while the
 250-word model runs *with* it. So `semlex_poses_to_75.py --canonical` means **mirror only** —
-signing arm from `wrist_travel`, negate x, `POSE_FLIP`, and **swap** the hand blocks. Opt-in,
-default OFF, prints the mirrored fraction (expect 15-20%; near 50% means wrist travel is picking
-the resting arm).
+negate x, `POSE_FLIP`, and **swap** the hand blocks. Opt-in, default OFF.
+
+**And the mirror decision is PER SIGNER, not per clip — the tripwire caught the first version.**
+Deciding per clip by `wrist_travel` (which arm moved more) mirrored **3,587/6,996 = 51.3%** of a
+corpus with only **18.4%** left-dominant clips. A coin flip, because 41.2% of clips are genuinely
+two-handed *and* the trimmed span includes the bilateral hand-raise, so both wrists travel
+comparably and the sign of the difference is noise — and path length, being a sum of `|diffs|`,
+accumulates noise instead of cancelling it.
+
+Handedness is a property of a person. Aggregating block presence per signer is **bimodal with a
+0.100 gap between 0.463 and 0.563** across 41 signers, so any threshold in 0.50–0.60 picks the
+same 8 signers = 18.4% of clips. `--canonical-mode signer` is the default; `--canonical-mode
+clip` reproduces the refuted rule, kept like `--no-trim`.
+
+⚠️ The inversion is the transferable lesson: on GISLR block presence was a recording artifact and
+useless for handedness, while per-clip motion was decisive. Here both hands are recorded, so
+presence becomes the reliable signal and motion the unreliable one. **Same two statistics,
+opposite verdicts, because the corpora were collected differently.** Never port a dominance rule
+between corpora without re-measuring it.
 
 **2. The 338 double-glossed videos are resolved by policy** (`build_clinical_manifest.py`).
 Three facts drive it, and the first invalidates the priority order quoted in `build_vocab.py`:

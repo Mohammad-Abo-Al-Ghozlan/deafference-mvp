@@ -371,6 +371,45 @@ def main() -> None:
     check("clip_to_tensor accepts canonical=",
           "canonical" in inspect.signature(SL.clip_to_tensor).parameters)
 
+    # ── [8b] the two properties the PER-SIGNER mode depends on ────────────────────────────
+    # Per-clip wrist travel was refuted (51.3% mirrored on an 18.4% left-dominant corpus), so
+    # the default now mirrors AFTER time_resize, using a per-signer decision. Both facts that
+    # makes safe are pinned here rather than trusted.
+    print("\n[8b] PER-SIGNER MODE — mirror after resize, and it must be reversible")
+
+    left = _clip(t=17, l_travel=1.0, r_travel=0.1)
+    # mirror_clip must COMMUTE with time_resize, or mirroring the stored (64,75,3) tensors
+    # would not equal mirroring the raw span — and the whole per-signer pass does the former.
+    a = EL.time_resize(SL.mirror_clip(left), EL.MAX_LEN)
+    b = SL.mirror_clip(EL.time_resize(left, EL.MAX_LEN))
+    check("mirror_clip COMMUTES with time_resize", np.allclose(a, b, equal_nan=True, atol=1e-6),
+          f"max |diff| {np.nanmax(np.abs(a - b)):.2e}")
+
+    # unconditional: mirror_clip must NOT re-decide anything
+    once = SL.mirror_clip(left)
+    check("mirror_clip is unconditional (mirrors a RIGHT-dominant clip too)",
+          not np.allclose(SL.mirror_clip(_clip(l_travel=0.1, r_travel=1.0)),
+                          _clip(l_travel=0.1, r_travel=1.0), equal_nan=True))
+    check("mirror_clip is an involution (applying it twice restores the original)",
+          np.allclose(SL.mirror_clip(once), left, equal_nan=True, atol=1e-6),
+          f"max |diff| {np.nanmax(np.abs(SL.mirror_clip(once) - left)):.2e}")
+    check("mirror_clip does not mutate its input",
+          np.allclose(left, _clip(t=17, l_travel=1.0, r_travel=0.1), equal_nan=True))
+    check("mirror_clip preserves the passive hand", bool(
+        np.isfinite(once[:, SL.OUR_L_HAND, 0]).all()
+        and np.isfinite(once[:, SL.OUR_R_HAND, 0]).all()))
+
+    # the refuted mode must stay REACHABLE and stay LABELLED — ask argparse, don't assume
+    import subprocess
+    hlp = subprocess.run([sys.executable, str(Path(SL.__file__)), "--help"],
+                         capture_output=True, text=True).stdout
+    check("--canonical-mode exposes both 'signer' and 'clip'",
+          "--canonical-mode" in hlp and "signer" in hlp and "clip" in hlp)
+    check("--help warns that per-clip mode is refuted", "REFUTED" in hlp)
+    check("--dominance-threshold is tunable", "--dominance-threshold" in hlp)
+    check("canonical_mirror's docstring records the 51.3% refutation",
+          "51.3" in (SL.canonical_mirror.__doc__ or ""))
+
     print("\n" + "=" * 74)
     if _fails:
         print(f"FAILED {len(_fails)}: " + "; ".join(_fails))

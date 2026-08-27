@@ -143,15 +143,44 @@ Two conclusions, and they point in opposite directions:
    while the 250-word model runs WITH it: two models, two preprocessing conventions, in one
    app. `live_demo` already warns about that mismatch, which is how we know it is a footgun.
 
-Hence `--canonical` here means **mirror only**:
-    * decide the signing arm by `wrist_travel` (path length), never by block presence —
-      the tracker drops the MOVING hand, so presence systematically picks the resting one
-    * if it is the left arm: negate x, apply POSE_FLIP, and **swap the two hand blocks**
-    * both hands survive; the layout stays 75 points; 33-53 is never reserved
+Hence `--canonical` here means **mirror only**: if the signer is left-dominant, negate x, apply
+POSE_FLIP, and **swap the two hand blocks**. Both hands survive; the layout stays 75 points;
+33-53 is never reserved.
 
-⚠️ UNVALIDATED. `pick_signing_block`'s both-blocks-populated path was exercised on GISLR's
-1.7% of clips and will carry 41.2% of the decisions here. `--canonical` is therefore opt-in,
-default OFF, and prints the mirrored fraction so the A/B is measurable rather than assumed.
+THE DECISION IS PER SIGNER, NOT PER CLIP — measured 2026-08-27
+--------------------------------------------------------------
+The first version decided per clip by `wrist_travel` (which arm moved more), on the reasoning
+that the tracker drops the MOVING hand so block presence picks the resting one. That reasoning
+is correct on GISLR and **wrong here**, and the tripwire built into this script caught it on the
+first full run:
+
+    per-clip wrist travel mirrored   3,587 / 6,996 = 51.3%
+    clips belonging to left-dominant signers      = 18.4%   (8 signers of 41)
+
+A coin flip. The mechanism, once stated, is obvious:
+
+  * `wrist_travel` asks which ARM moved more. On GISLR one arm signs and the other is absent
+    or still, so the answer is decisive. Here **41.2% of clips are genuinely two-handed**, so
+    both wrists travel comparably and the SIGN of the difference is noise.
+  * The trimmed span begins at hand-tracking ONSET, which includes the bilateral hand-RAISE and
+    hand-LOWER. Both arms move through those on every clip.
+  * Path length is a sum of |diffs|: it accumulates noise monotonically and never cancels, so a
+    near-tie does not average out, it randomizes.
+
+Handedness is a property of a PERSON. Aggregating hand-block presence over all of a signer's
+clips separates this corpus cleanly — DOMINANCE = L/(L+R) is bimodal with a **0.100 gap between
+0.463 and 0.563** across 41 signers, so any threshold in 0.50-0.60 gives the same 8 signers.
+That is `--canonical-mode signer`, the default; `--canonical-mode clip` reproduces the refuted
+rule, kept for the same reason `--no-trim` is.
+
+Note the inversion worth remembering: on GISLR block presence was a *recording artifact* and
+useless for handedness; here both hands are recorded, the dominant hand is present throughout
+while the passive one appears only in two-handed signs, so presence becomes the RELIABLE signal
+and per-clip motion becomes the unreliable one. Same two statistics, opposite verdicts, because
+the corpora were collected differently.
+
+⚠️ Still opt-in, default OFF, and the mirrored fraction is printed against the per-signer
+prediction every run — that check is what caught the bug and it stays.
 """
 from __future__ import annotations
 
@@ -229,21 +258,17 @@ def wrist_travel(clip: np.ndarray) -> dict:
     return travel
 
 
-def canonical_mirror(seq: np.ndarray) -> tuple:
-    """Mirror a normalized (T,75,3) clip so the signing arm reads as RIGHT. Both hands kept.
+def mirror_clip(seq: np.ndarray) -> np.ndarray:
+    """UNCONDITIONAL horizontal mirror of a normalized (T,75,3) clip. Both hands kept.
 
     Deliberately NOT extract_canonical.canonicalize: that function ends by moving the dominant
     hand to 54-74 and NaN-ing 33-53, which deletes a real passive hand in 41.2% of Sem-Lex
     clips (module docstring). Here the two hand blocks are SWAPPED instead of collapsed.
 
-    No motion on either wrist -> no mirror. extract_canonical's reasoning applies unchanged:
-    a coin-flip mirror adds variance for nothing.
+    Every operation is pointwise-in-time (x negation) or a fixed index permutation, so this
+    COMMUTES with time_resize — it may be applied before or after resampling. The test pins
+    that, because relying on it silently would be a trap for the next reader.
     """
-    tr = wrist_travel(seq)
-    st = {"travel_l": round(tr["L"], 4), "travel_r": round(tr["R"], 4), "mirrored": False}
-    if tr["L"] <= tr["R"] or (tr["L"] == 0.0 and tr["R"] == 0.0):
-        return seq, st
-
     out = seq.copy()
     out[..., 0] *= -1.0                          # x negation makes a left hand read as a right
     out[:, OUR_POSE, :] = out[:, POSE_FLIP, :]   # fancy-index RHS copies first — safe in place
@@ -252,8 +277,39 @@ def canonical_mirror(seq: np.ndarray) -> tuple:
     keep = out[:, OUR_L_HAND, :].copy()
     out[:, OUR_L_HAND, :] = out[:, OUR_R_HAND, :]
     out[:, OUR_R_HAND, :] = keep
+    return out
+
+
+def canonical_mirror(seq: np.ndarray) -> tuple:
+    """PER-CLIP mirror decision by wrist travel.
+
+    ⚠️ REFUTED AS A DEFAULT ON THIS CORPUS, 2026-08-27. Kept behind `--canonical-mode clip`
+    so the measurement stays reproducible, exactly like `--no-trim`.
+
+    Measured on the full clinical set: this rule mirrored **3,587/6,996 clips = 51.3%**, against
+    a corpus that has only **8 left-dominant signers of 41 (18.4% of clips)**. It is a coin
+    flip, and the mechanism is clear once stated:
+
+      * `wrist_travel` asks WHICH ARM MOVED MORE. On GISLR that is decisive — one arm signs and
+        the other is absent or still.
+      * Here **41.2% of clips are genuinely two-handed**, so both wrists travel comparably and
+        the SIGN of the difference is noise.
+      * And the trimmed span starts at hand-tracking ONSET, which includes the bilateral
+        hand-RAISE and hand-LOWER. Both arms move through those, on every clip.
+
+    Path length is a sum of absolute differences, so it accumulates noise monotonically and
+    never cancels — a near-tie does not average out, it randomizes.
+
+    Use `--canonical-mode signer` (the default): handedness is a property of a PERSON, not of a
+    clip, and aggregating block presence per signer separates the corpus cleanly (a 0.100 gap
+    between 0.463 and 0.563 on 41 signers).
+    """
+    tr = wrist_travel(seq)
+    st = {"travel_l": round(tr["L"], 4), "travel_r": round(tr["R"], 4), "mirrored": False}
+    if tr["L"] <= tr["R"] or (tr["L"] == 0.0 and tr["R"] == 0.0):
+        return seq, st
     st["mirrored"] = True
-    return out, st
+    return mirror_clip(seq), st
 
 
 def assert_sentinel(a: np.ndarray) -> None:
@@ -484,6 +540,19 @@ def main() -> None:
                          "test on GISLR. Matches what live_demo.py --canonical does to a live "
                          "segment, so both models can share one inference flag. ⚠️ UNVALIDATED "
                          "on this corpus — opt-in, and the mirrored fraction is printed.")
+    ap.add_argument("--canonical-mode", choices=("signer", "clip"), default="signer",
+                    help="how the signing arm is decided. 'signer' (default): aggregate hand-"
+                         "block presence over ALL of a signer's clips and mirror that signer's "
+                         "whole set — handedness is a property of a person, not a clip, and the "
+                         "corpus separates cleanly (0.100 gap at 41 signers). 'clip': per-clip "
+                         "wrist travel — REFUTED 2026-08-27, it mirrored 51.3%% of clips on a "
+                         "corpus with 18.4%% left-dominant clips, because 41.2%% of clips are "
+                         "two-handed and the trimmed span includes the bilateral hand-raise. "
+                         "Kept only so the measurement reproduces.")
+    ap.add_argument("--dominance-threshold", type=float, default=0.55,
+                    help="L/(L+R) block presence above which a SIGNER is called left-dominant "
+                         "(default 0.55). Measured distribution is bimodal with a gap between "
+                         "0.463 and 0.563, so anything in 0.50-0.60 gives the same answer.")
     ap.add_argument("--report", action="store_true",
                     help="per-signer hand-block presence — the diagnostic that predicted "
                          "the 250-word model's 0.314 signer. Read it BEFORE training.")
@@ -530,8 +599,15 @@ def main() -> None:
     checked_sentinel = False
     t0 = time.perf_counter()
     print(f"[cfg] trim-to-tracked-span: {'ON' if args.trim else 'OFF (--no-trim)'}")
-    _canon_msg = ("ON — both hands KEPT, blocks swapped when the signing arm is left"
-                  if args.canonical else "OFF (hand blocks exactly as recorded)")
+    if args.canonical:
+        _canon_msg = (f"ON, mode={args.canonical_mode} — both hands KEPT, blocks swapped when "
+                      f"the signing arm is left")
+        if args.canonical_mode == "clip":
+            _canon_msg += ("\n      ⚠️ per-CLIP wrist travel is REFUTED on this corpus "
+                           "(mirrored 51.3% vs 18.4% of clips actually left-dominant). "
+                           "Use --canonical-mode signer unless you are reproducing that.")
+    else:
+        _canon_msg = "OFF (hand blocks exactly as recorded)"
     print(f"[cfg] canonical mirror: {_canon_msg}")
 
     for n, (vid, raw) in enumerate(src.iter(wanted), 1):
@@ -542,9 +618,11 @@ def main() -> None:
             checked_sentinel = True
         lab, sg, sp = man[vid]
         lab = to_concept(lab)
+        # mode 'signer' needs every clip's block presence before it can decide anything, so the
+        # mirror happens after the loop; only mode 'clip' can decide inline.
         arr, st = clip_to_tensor(np.asarray(raw), min_hand_rate=args.min_hand_rate,
                                  min_frames=args.min_frames, trim=args.trim,
-                                 canonical=args.canonical)
+                                 canonical=args.canonical and args.canonical_mode == "clip")
         if arr is None:
             skipped.append((vid, lab, st["reason"]))
         else:
@@ -570,6 +648,28 @@ def main() -> None:
 
     if not X:
         sys.exit("[err] nothing extracted — every clip failed the gates (see reasons above)")
+
+    # ── PER-SIGNER canonicalization (the default) ──────────────────────────────────────────
+    # Handedness belongs to a PERSON. Deciding per clip by wrist travel mirrored 51.3% of a
+    # corpus that is 18.4% left-dominant (see canonical_mirror's docstring); aggregating block
+    # presence over a signer's whole set separates it cleanly instead. mirror_clip commutes
+    # with time_resize, so applying it here to the already-resized tensors is exact.
+    left_signers = set()
+    if args.canonical and args.canonical_mode == "signer":
+        for sg, d in per_signer.items():
+            tot = d["l"] + d["r"]
+            if tot and d["l"] / tot >= args.dominance_threshold:
+                left_signers.add(sg)
+        for i, sg in enumerate(signer):
+            if sg in left_signers:
+                X[i] = mirror_clip(X[i])
+                trim_stats["mirrored"] += 1
+        thin = sorted(sg for sg in left_signers if per_signer[sg]["n"] < 10)
+        if thin:
+            detail = ", ".join(f"{s}:{per_signer[s]['n']}" for s in thin)
+            print(f"[canonical] ⚠️  {len(thin)} left-dominant calls rest on fewer than 10 clips "
+                  f"({detail}) — a thin vote, but mirroring the wrong way costs at most "
+                  f"those clips")
 
     Xn = np.stack(X).astype(np.float32)
     np.savez_compressed(args.out, X=Xn, y=np.array(y, np.int32), words=np.array(words),
@@ -597,10 +697,22 @@ def main() -> None:
               f"have thrown away ({trim_stats['rescued'] / max(len(X), 1):.1%} of the kept set)")
     if args.canonical and len(X):
         m = trim_stats["mirrored"]
-        print(f"[canonical] mirrored {m:,}/{len(X):,} clips ({m / len(X):.1%}) — wrist travel put "
-              f"the signing arm on the left. Both hand blocks kept in every clip; 33-53 is never "
-              f"reserved. Expect roughly the LEFT-dominant signer share below; a wildly different "
-              f"number means wrist travel is picking the resting arm and must be investigated.")
+        how = (f"{len(left_signers)} signers called left-dominant at L/(L+R) >= "
+               f"{args.dominance_threshold}" if args.canonical_mode == "signer"
+               else "per-clip wrist travel (REFUTED — see --canonical-mode)")
+        print(f"[canonical] mirrored {m:,}/{len(X):,} clips ({m / len(X):.1%}) via {how}. "
+              f"Both hand blocks kept in every clip; 33-53 is never reserved.")
+        if left_signers:
+            print(f"[canonical] mirrored signers: "
+                  f"{sorted(left_signers, key=lambda s: -per_signer[s]['n'])}")
+        # The tripwire that caught the per-clip rule. Keep it: it is the only automatic check
+        # that the mirror decision tracks handedness rather than noise.
+        exp = sum(d["n"] for sg, d in per_signer.items()
+                  if (d["l"] + d["r"]) and d["l"] / (d["l"] + d["r"]) >= args.dominance_threshold)
+        if abs(m - exp) > 0.25 * max(len(X), 1):
+            print(f"[canonical] ⚠️  MIRRORED {m:,} BUT PER-SIGNER DOMINANCE PREDICTS {exp:,} "
+                  f"({exp / len(X):.1%}). That gap means the decision rule is not tracking "
+                  f"handedness. Do NOT train on this npz until it is explained.")
 
     if args.report:
         # The 250-word post-mortem: per-signer accuracy tracked HAND-BLOCK LAYOUT, which is a
@@ -613,7 +725,10 @@ def main() -> None:
         # real split. Both hands are tracked on two-handed signs, so dominance sits near 0.5
         # for a balanced signer; the tails are what matter.
         print("\nPER-SIGNER HAND-BLOCK PRESENCE (fraction of kept frames the block is tracked)")
-        print(f"{'signer':>8} {'clips':>6} {'L':>7} {'R':>7} {'DOMINANCE':>10}  reading")
+        print("  measured PRE-mirror, so this column always describes the CORPUS, never the "
+              "transform")
+        print(f"{'signer':>8} {'clips':>6} {'L':>7} {'R':>7} {'DOMINANCE':>10} {'MIRROR':>7}  "
+              f"reading")
         rows = sorted(per_signer.items(), key=lambda kv: -kv[1]["n"])
         n_left = n_right = 0
         for sg, d in rows:
@@ -627,7 +742,8 @@ def main() -> None:
                 reading = "balanced / two-handed"
             if min(l, r) > 0.30 and 0.40 < dom < 0.60:
                 reading += "  <- BOTH blocks, the 0.314 pattern"
-            print(f"{sg:>8} {d['n']:>6} {l:>7.3f} {r:>7.3f} {dom:>10.3f}  {reading}")
+            mk = "YES" if sg in left_signers else ("-" if args.canonical else "")
+            print(f"{sg:>8} {d['n']:>6} {l:>7.3f} {r:>7.3f} {dom:>10.3f} {mk:>7}  {reading}")
         tot = len(rows)
         print(f"\n[handedness] {n_left}/{tot} LEFT-dominant, {n_right}/{tot} right-dominant, "
               f"{tot - n_left - n_right}/{tot} balanced")
