@@ -56,7 +56,6 @@
   "hurt",
   "interpreter",
   "itch",
-  "knee",
   "leg",
   "light",
   "long",
@@ -132,5 +131,8 @@
   "yesterday"
  ],
  "source": "Sem-Lex",
- "gate": ">=8 videos & >=3 signers"
+ "gate": ">=8 unique video_id & >=3 signers",
+ "counted": "unique video_id (91,148 rows dedupe to 88,174 videos)",
+ "note": "tier A = 129 concepts. 'knee' sits at 7 videos, one below the gate, so it is in tier B; the gate is a round number, not a cliff \u2014 revisit if knee matters clinically.",
+ "score_on": "split == 'test' only; Sem-Lex's val shares 31/32 signers with train"
 }

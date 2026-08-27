@@ -174,7 +174,7 @@ personal working copy and raises none of that.
 > consequences for care. We have a working 250-word prototype trained on isolated-sign landmark
 > data, and a validated extraction pipeline.
 >
-> Of a 145-concept clinical vocabulary we assembled against ASL-LEX, 130 are covered by Sem-Lex
+> Of a 145-concept clinical vocabulary we assembled against ASL-LEX, 129 are covered by Sem-Lex
 > at our thresholds of at least 8 videos and 3 signers, and 87 of those are covered by no other
 > source available to us. There is no medical ASL dataset; assembling the vocabulary from a
 > general isolated-sign corpus is the only route we have found.
@@ -223,7 +223,7 @@ What to look for, in order:
 2. Is there a **share-alike-equivalent** term? That is the clause that bit us on Sem-Lex, and it
    is easy to skim past while reading for "non-commercial".
 3. Any constraint on **distributing model weights** trained on it.
-4. Clinical-vocabulary coverage, once access is granted — the 15 thin words Sem-Lex could not
+4. Clinical-vocabulary coverage, once access is granted — the 16 thin words Sem-Lex could not
    supply (fever, chest, stomach, nausea, rash, cramp, infection, sneeze, neck, shot,
    wheelchair, patient, stand, very, never) are the specific gap to check.
 

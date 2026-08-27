@@ -207,24 +207,35 @@ children's words** (he rejected that approach when it was proposed).
    assembled from a general isolated-sign dataset.**
 2. **Measured feasibility (real data, not guesswork):** downloaded the actual Sem-Lex
    metadata (91,148 videos, 9,953 labels, **44 signers**) and scored a 145-concept
-   clinical vocabulary against it. **130/145 (90%) are trainable** (≥8 videos and ≥3
-   signers), **8,324 videos**, **0 absent**. Strong: `hurt` 248v/36s, `sick` 207/37,
+   clinical vocabulary against it. **129/145 (89%) are trainable** (≥8 unique videos and ≥3
+   signers), **8,051 videos**, **0 absent**. *(Corrected 2026-08-27: `build_vocab.py` counted
+   CSV rows, but 91,148 rows dedupe to **88,174 unique `video_id`**. `knee` falls to 7 and
+   crosses the gate. Also **338 video_ids carry two different labels** — resolve or drop.)* Strong: `hurt` 248v/36s, `sick` 207/37,
    `help` 136/28, `doctor` 115/31, `medicine` 95/29, `breathe` 75/30, `pain` 52/22.
-3. **15 thin words, and they matter clinically:** `fever`(6v) `chest`(4v) `stomach`(5v)
+3. **16 thin words, and they matter clinically:** `fever`(6v) `chest`(4v) `stomach`(5v)
    `nausea`(2v) `rash`(2v) `cramp`(2v) `infection`(5v) `sneeze`(4v) `neck`(7v)
-   `shot`(6v) `wheelchair`(7v) `patient`(2v) `stand`(5v) `very`(3v) `never`(7v).
+   `shot`(6v) `wheelchair`(7v) `patient`(2v) `stand`(5v) `very`(3v) `never`(7v)
+   **`knee`(7v) — new to this list after the dedupe fix.**
    Must be supplemented from **ASL Citizen** (a different 2,731-sign selection) or
    recorded with a Deaf signer. Treat as required, not optional.
-4. **Two numbers that will shape training:** class imbalance is **51×** (8 → 408
-   videos/class, median 39) → needs class weighting/capping; and **~64 videos/class vs
-   GISLR's ~376**, so **expect accuracy below 0.7576 at first** — but 44 signers vs
-   GISLR's 21 is *better* for unseen-signer generalization. Do not promise 0.78.
+4. **Four numbers that will shape training** (revised 2026-08-27):
+   - class imbalance **49×** (8 → 393 videos/class, median 38) → class weighting/capping;
+   - **62 videos/class vs GISLR's ~376 — 6× less**, so expect accuracy **below 0.7576**.
+     Do not promise 0.78.
+   - **⚠️ "44 signers" is not the win it looked like.** Only **41** appear in the clinical
+     subset and the **top 10 hold 58%** of it (max/min **330×**). Per-signer variance is the
+     risk, not class count — the 250-word spread was 0.314–0.823 and nothing downstream of
+     the feature extractor fixed it.
+   - **⚠️ Sem-Lex's `val` is NOT held out**: train∩test = 0 and val∩test = 0 signers, but
+     **train∩val = 31 of 32**, and 995 video_ids sit in both archives (zero in train+test).
+     **Score on `split == "test"` only** — 9 signers, 1,468 clinical clips.
+   - **⚠️ ~25% of Sem-Lex signers are left-dominant** (GISLR ~10%) → train `--canonical-hand`.
 
 **Artifacts created (all in the repo):**
 | File | What |
 |---|---|
 | `docs/MEDICAL_MVP_PLAN.md` | The staged plan, dataset comparison table, risks, sources |
-| `vocab_medical.json` | The **130 trainable clinical words** |
+| `vocab_medical.json` | The **129 trainable clinical words** (130 before the 2026-08-27 dedupe fix) |
 | `vocab_medical_analysis.json` | Per-word video/signer counts + tier A/B/C |
 | `training/medical/build_vocab.py` | Reproduces the coverage analysis from Sem-Lex metadata |
 | `training/medical/semlex_med.py` | The trainability scan |
@@ -260,9 +271,14 @@ and consistent — no double-normalization.
    fold, is_outlier`. Folds must be **signer-disjoint** (group by `signer_id`).
    ⚠️ *Unverified:* whether this environment has `pandas`/`pyarrow`/`sklearn` — the
    check was interrupted. Confirm before relying on parquet.
-3. Download only the 130 Tier-A classes (~8,324 clips), not all 91k.
-4. Extract landmarks (MediaPipe over ~8,300 videos = hours, not minutes).
-5. Train with `train.py` (vocab-size agnostic) + class weighting for the 51× imbalance.
+3. ✅ **DONE 2026-08-27** — downloaded the **poses** release (13.3 GB, not 53.6 GB of video);
+   8,064 of 8,103 clinical clips present.
+4. ✅ **DONE** — `training/medical/semlex_poses_to_75.py` (no MediaPipe needed, ~20 s on CPU).
+   ⚠️ Sem-Lex poses are **553 landmarks, not 543** (face mesh + 10 iris), so every index after
+   the face block shifts +10; and clips are **raw recordings** whose lead-in/lead-out is 61.5%
+   of all frames, so the adapter trims to the tracked span first.
+5. Train with `train.py` (vocab-size agnostic) + class weighting for the 49× imbalance,
+   `--canonical-hand`, and scoring on `split == "test"` only.
 6. Wire Phase 1 (`live_demo.py` + clinical grammar) and Phase 2
    (`build_sign_clips` → `sign_clips_medical.npz` → `gloss_to_motion --per-word`).
 7. **Clinical safety gates (non-negotiable):** critical terms (pain, severity,

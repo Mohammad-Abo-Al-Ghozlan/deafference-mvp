@@ -4,7 +4,7 @@
    "labels": [
     "head"
    ],
-   "videos": 43,
+   "videos": 42,
    "signers": 16,
    "category": "body"
   },
@@ -12,7 +12,7 @@
    "labels": [
     "face"
    ],
-   "videos": 38,
+   "videos": 33,
    "signers": 15,
    "category": "body"
   },
@@ -20,7 +20,7 @@
    "labels": [
     "eyes"
    ],
-   "videos": 56,
+   "videos": 53,
    "signers": 23,
    "category": "body"
   },
@@ -28,7 +28,7 @@
    "labels": [
     "ear"
    ],
-   "videos": 24,
+   "videos": 21,
    "signers": 13,
    "category": "body"
   },
@@ -36,7 +36,7 @@
    "labels": [
     "nose"
    ],
-   "videos": 34,
+   "videos": 33,
    "signers": 16,
    "category": "body"
   },
@@ -44,7 +44,7 @@
    "labels": [
     "mouth"
    ],
-   "videos": 26,
+   "videos": 24,
    "signers": 13,
    "category": "body"
   },
@@ -52,7 +52,7 @@
    "labels": [
     "teeth"
    ],
-   "videos": 79,
+   "videos": 78,
    "signers": 26,
    "category": "body"
   },
@@ -60,7 +60,7 @@
    "labels": [
     "tongue"
    ],
-   "videos": 12,
+   "videos": 11,
    "signers": 8,
    "category": "body"
   },
@@ -68,7 +68,7 @@
    "labels": [
     "throat"
    ],
-   "videos": 18,
+   "videos": 17,
    "signers": 13,
    "category": "body"
   },
@@ -92,7 +92,7 @@
    "labels": [
     "hands"
    ],
-   "videos": 55,
+   "videos": 52,
    "signers": 22,
    "category": "body"
   },
@@ -116,7 +116,7 @@
    "labels": [
     "back"
    ],
-   "videos": 43,
+   "videos": 42,
    "signers": 20,
    "category": "body"
   },
@@ -128,20 +128,11 @@
    "signers": 6,
    "category": "body"
   },
-  "knee": {
-   "labels": [
-    "knee",
-    "knees"
-   ],
-   "videos": 8,
-   "signers": 5,
-   "category": "body"
-  },
   "feet": {
    "labels": [
     "feet"
    ],
-   "videos": 23,
+   "videos": 21,
    "signers": 14,
    "category": "body"
   },
@@ -165,7 +156,7 @@
    "labels": [
     "blood"
    ],
-   "videos": 53,
+   "videos": 51,
    "signers": 26,
    "category": "body"
   },
@@ -181,7 +172,7 @@
    "labels": [
     "hurt"
    ],
-   "videos": 248,
+   "videos": 239,
    "signers": 36,
    "category": "symptom"
   },
@@ -197,7 +188,7 @@
    "labels": [
     "sick"
    ],
-   "videos": 207,
+   "videos": 201,
    "signers": 37,
    "category": "symptom"
   },
@@ -213,7 +204,7 @@
    "labels": [
     "hot"
    ],
-   "videos": 208,
+   "videos": 200,
    "signers": 33,
    "category": "symptom"
   },
@@ -221,7 +212,7 @@
    "labels": [
     "cold"
    ],
-   "videos": 229,
+   "videos": 222,
    "signers": 35,
    "category": "symptom"
   },
@@ -229,7 +220,7 @@
    "labels": [
     "cough"
    ],
-   "videos": 31,
+   "videos": 30,
    "signers": 19,
    "category": "symptom"
   },
@@ -253,7 +244,7 @@
    "labels": [
     "tired"
    ],
-   "videos": 149,
+   "videos": 143,
    "signers": 31,
    "category": "symptom"
   },
@@ -261,7 +252,7 @@
    "labels": [
     "weak"
    ],
-   "videos": 35,
+   "videos": 34,
    "signers": 14,
    "category": "symptom"
   },
@@ -269,7 +260,7 @@
    "labels": [
     "bleed"
    ],
-   "videos": 29,
+   "videos": 28,
    "signers": 17,
    "category": "symptom"
   },
@@ -317,7 +308,7 @@
    "labels": [
     "bad"
    ],
-   "videos": 120,
+   "videos": 118,
    "signers": 31,
    "category": "severity"
   },
@@ -341,7 +332,7 @@
    "labels": [
     "big"
    ],
-   "videos": 224,
+   "videos": 220,
    "signers": 33,
    "category": "severity"
   },
@@ -349,7 +340,7 @@
    "labels": [
     "much"
    ],
-   "videos": 36,
+   "videos": 33,
    "signers": 19,
    "category": "severity"
   },
@@ -357,7 +348,7 @@
    "labels": [
     "strong"
    ],
-   "videos": 78,
+   "videos": 76,
    "signers": 25,
    "category": "severity"
   },
@@ -381,7 +372,7 @@
    "labels": [
     "when"
    ],
-   "videos": 38,
+   "videos": 35,
    "signers": 16,
    "category": "time"
   },
@@ -389,7 +380,7 @@
    "labels": [
     "today"
    ],
-   "videos": 49,
+   "videos": 48,
    "signers": 16,
    "category": "time"
   },
@@ -397,7 +388,7 @@
    "labels": [
     "yesterday"
    ],
-   "videos": 22,
+   "videos": 21,
    "signers": 15,
    "category": "time"
   },
@@ -405,7 +396,7 @@
    "labels": [
     "tomorrow"
    ],
-   "videos": 43,
+   "videos": 41,
    "signers": 19,
    "category": "time"
   },
@@ -413,7 +404,7 @@
    "labels": [
     "now"
    ],
-   "videos": 58,
+   "videos": 57,
    "signers": 20,
    "category": "time"
   },
@@ -421,7 +412,7 @@
    "labels": [
     "morning"
    ],
-   "videos": 82,
+   "videos": 81,
    "signers": 24,
    "category": "time"
   },
@@ -437,7 +428,7 @@
    "labels": [
     "night"
    ],
-   "videos": 106,
+   "videos": 101,
    "signers": 27,
    "category": "time"
   },
@@ -445,7 +436,7 @@
    "labels": [
     "day"
    ],
-   "videos": 93,
+   "videos": 88,
    "signers": 28,
    "category": "time"
   },
@@ -453,7 +444,7 @@
    "labels": [
     "week"
    ],
-   "videos": 68,
+   "videos": 64,
    "signers": 21,
    "category": "time"
   },
@@ -461,7 +452,7 @@
    "labels": [
     "month"
    ],
-   "videos": 42,
+   "videos": 41,
    "signers": 22,
    "category": "time"
   },
@@ -485,7 +476,7 @@
    "labels": [
     "minute"
    ],
-   "videos": 18,
+   "videos": 17,
    "signers": 13,
    "category": "time"
   },
@@ -493,7 +484,7 @@
    "labels": [
     "long"
    ],
-   "videos": 109,
+   "videos": 107,
    "signers": 26,
    "category": "time"
   },
@@ -517,7 +508,7 @@
    "labels": [
     "start"
    ],
-   "videos": 45,
+   "videos": 42,
    "signers": 19,
    "category": "time"
   },
@@ -525,7 +516,7 @@
    "labels": [
     "doctor"
    ],
-   "videos": 115,
+   "videos": 114,
    "signers": 31,
    "category": "people"
   },
@@ -549,7 +540,7 @@
    "labels": [
     "dentist"
    ],
-   "videos": 37,
+   "videos": 36,
    "signers": 18,
    "category": "people"
   },
@@ -557,7 +548,7 @@
    "labels": [
     "mother"
    ],
-   "videos": 41,
+   "videos": 40,
    "signers": 21,
    "category": "people"
   },
@@ -565,7 +556,7 @@
    "labels": [
     "father"
    ],
-   "videos": 37,
+   "videos": 34,
    "signers": 17,
    "category": "people"
   },
@@ -573,7 +564,7 @@
    "labels": [
     "family"
    ],
-   "videos": 200,
+   "videos": 190,
    "signers": 35,
    "category": "people"
   },
@@ -581,7 +572,7 @@
    "labels": [
     "baby"
    ],
-   "videos": 199,
+   "videos": 191,
    "signers": 30,
    "category": "people"
   },
@@ -597,7 +588,7 @@
    "labels": [
     "man"
    ],
-   "videos": 97,
+   "videos": 94,
    "signers": 29,
    "category": "people"
   },
@@ -605,7 +596,7 @@
    "labels": [
     "woman"
    ],
-   "videos": 86,
+   "videos": 83,
    "signers": 29,
    "category": "people"
   },
@@ -621,7 +612,7 @@
    "labels": [
     "help"
    ],
-   "videos": 136,
+   "videos": 135,
    "signers": 28,
    "category": "action"
   },
@@ -629,7 +620,7 @@
    "labels": [
     "need"
    ],
-   "videos": 86,
+   "videos": 83,
    "signers": 25,
    "category": "action"
   },
@@ -637,7 +628,7 @@
    "labels": [
     "want"
    ],
-   "videos": 84,
+   "videos": 83,
    "signers": 27,
    "category": "action"
   },
@@ -645,7 +636,7 @@
    "labels": [
     "take"
    ],
-   "videos": 38,
+   "videos": 37,
    "signers": 21,
    "category": "action"
   },
@@ -653,7 +644,7 @@
    "labels": [
     "give"
    ],
-   "videos": 72,
+   "videos": 71,
    "signers": 22,
    "category": "action"
   },
@@ -661,7 +652,7 @@
    "labels": [
     "eat"
    ],
-   "videos": 29,
+   "videos": 28,
    "signers": 15,
    "category": "action"
   },
@@ -669,7 +660,7 @@
    "labels": [
     "drink"
    ],
-   "videos": 200,
+   "videos": 193,
    "signers": 34,
    "category": "action"
   },
@@ -677,7 +668,7 @@
    "labels": [
     "sleep"
    ],
-   "videos": 211,
+   "videos": 206,
    "signers": 35,
    "category": "action"
   },
@@ -701,7 +692,7 @@
    "labels": [
     "move"
    ],
-   "videos": 116,
+   "videos": 109,
    "signers": 26,
    "category": "action"
   },
@@ -709,7 +700,7 @@
    "labels": [
     "stop"
    ],
-   "videos": 66,
+   "videos": 63,
    "signers": 25,
    "category": "action"
   },
@@ -717,7 +708,7 @@
    "labels": [
     "wait"
    ],
-   "videos": 125,
+   "videos": 121,
    "signers": 28,
    "category": "action"
   },
@@ -725,7 +716,7 @@
    "labels": [
     "come"
    ],
-   "videos": 40,
+   "videos": 39,
    "signers": 16,
    "category": "action"
   },
@@ -733,7 +724,7 @@
    "labels": [
     "go"
    ],
-   "videos": 74,
+   "videos": 70,
    "signers": 19,
    "category": "action"
   },
@@ -749,7 +740,7 @@
    "labels": [
     "show"
    ],
-   "videos": 86,
+   "videos": 85,
    "signers": 25,
    "category": "action"
   },
@@ -757,7 +748,7 @@
    "labels": [
     "tell"
    ],
-   "videos": 35,
+   "videos": 34,
    "signers": 15,
    "category": "action"
   },
@@ -765,7 +756,7 @@
    "labels": [
     "understand"
    ],
-   "videos": 133,
+   "videos": 126,
    "signers": 32,
    "category": "action"
   },
@@ -773,7 +764,7 @@
    "labels": [
     "ask"
    ],
-   "videos": 71,
+   "videos": 67,
    "signers": 21,
    "category": "action"
   },
@@ -781,7 +772,7 @@
    "labels": [
     "feel"
    ],
-   "videos": 123,
+   "videos": 115,
    "signers": 26,
    "category": "action"
   },
@@ -797,7 +788,7 @@
    "labels": [
     "open"
    ],
-   "videos": 103,
+   "videos": 98,
    "signers": 29,
    "category": "action"
   },
@@ -805,7 +796,7 @@
    "labels": [
     "close"
    ],
-   "videos": 25,
+   "videos": 24,
    "signers": 15,
    "category": "action"
   },
@@ -813,7 +804,7 @@
    "labels": [
     "medicine"
    ],
-   "videos": 95,
+   "videos": 92,
    "signers": 29,
    "category": "object"
   },
@@ -821,7 +812,7 @@
    "labels": [
     "pill"
    ],
-   "videos": 34,
+   "videos": 33,
    "signers": 18,
    "category": "object"
   },
@@ -837,7 +828,7 @@
    "labels": [
     "water"
    ],
-   "videos": 408,
+   "videos": 393,
    "signers": 38,
    "category": "object"
   },
@@ -861,7 +852,7 @@
    "labels": [
     "bed"
    ],
-   "videos": 50,
+   "videos": 49,
    "signers": 21,
    "category": "object"
   },
@@ -869,7 +860,7 @@
    "labels": [
     "glasses"
    ],
-   "videos": 24,
+   "videos": 23,
    "signers": 14,
    "category": "object"
   },
@@ -877,7 +868,7 @@
    "labels": [
     "test"
    ],
-   "videos": 82,
+   "videos": 77,
    "signers": 23,
    "category": "object"
   },
@@ -893,7 +884,7 @@
    "labels": [
     "yes"
    ],
-   "videos": 66,
+   "videos": 62,
    "signers": 22,
    "category": "core"
   },
@@ -901,7 +892,7 @@
    "labels": [
     "no"
    ],
-   "videos": 76,
+   "videos": 73,
    "signers": 24,
    "category": "core"
   },
@@ -925,7 +916,7 @@
    "labels": [
     "thank_you"
    ],
-   "videos": 36,
+   "videos": 34,
    "signers": 20,
    "category": "core"
   },
@@ -933,7 +924,7 @@
    "labels": [
     "sorry"
    ],
-   "videos": 39,
+   "videos": 38,
    "signers": 17,
    "category": "core"
   },
@@ -941,7 +932,7 @@
    "labels": [
     "again"
    ],
-   "videos": 78,
+   "videos": 75,
    "signers": 27,
    "category": "core"
   },
@@ -949,7 +940,7 @@
    "labels": [
     "more"
    ],
-   "videos": 39,
+   "videos": 38,
    "signers": 16,
    "category": "core"
   },
@@ -957,7 +948,7 @@
    "labels": [
     "finish"
    ],
-   "videos": 251,
+   "videos": 242,
    "signers": 34,
    "category": "core"
   },
@@ -973,7 +964,7 @@
    "labels": [
     "some"
    ],
-   "videos": 31,
+   "videos": 29,
    "signers": 17,
    "category": "core"
   },
@@ -989,7 +980,7 @@
    "labels": [
     "where"
    ],
-   "videos": 130,
+   "videos": 127,
    "signers": 25,
    "category": "core"
   },
@@ -1005,7 +996,7 @@
    "labels": [
     "why"
    ],
-   "videos": 37,
+   "videos": 35,
    "signers": 16,
    "category": "core"
   },
@@ -1013,7 +1004,7 @@
    "labels": [
     "how"
    ],
-   "videos": 15,
+   "videos": 14,
    "signers": 10,
    "category": "core"
   },
@@ -1021,7 +1012,7 @@
    "labels": [
     "who"
    ],
-   "videos": 85,
+   "videos": 83,
    "signers": 27,
    "category": "core"
   },
@@ -1029,7 +1020,7 @@
    "labels": [
     "which"
    ],
-   "videos": 28,
+   "videos": 27,
    "signers": 12,
    "category": "core"
   },
@@ -1037,7 +1028,7 @@
    "labels": [
     "can"
    ],
-   "videos": 53,
+   "videos": 50,
    "signers": 18,
    "category": "core"
   }
@@ -1065,6 +1056,15 @@
    ],
    "videos": 5,
    "signers": 4,
+   "category": "body"
+  },
+  "knee": {
+   "labels": [
+    "knee",
+    "knees"
+   ],
+   "videos": 7,
+   "signers": 5,
    "category": "body"
   },
   "fever": {
