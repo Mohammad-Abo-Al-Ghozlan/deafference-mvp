@@ -288,6 +288,32 @@ class PoseSource:
                     yield p.stem, np.load(p)
 
 
+def load_concept_map(path: Path) -> dict:
+    """vocab_medical_analysis.json -> {sem-lex label: clinical concept}.
+
+    WHY THIS IS NOT OPTIONAL. The vocabulary is **145 concepts**, but Sem-Lex ships **146
+    labels**, and they are not the same set:
+
+        knee     <- ["knee", "knees"]     one sign, two labels
+        eye      <- ["eyes"]              renamed
+        hand     <- ["hands"]             renamed
+        thankyou <- ["thank_you"]         renamed
+
+    Training on raw labels splits KNEE into two classes of 5 and 1 instead of one class of 6,
+    and leaves `eyes`/`hands`/`thank_you` as classes the clinical vocabulary never asked for.
+    The first extraction run did exactly that: it reported `classes=146`.
+    """
+    blob = json.loads(path.read_text(encoding="utf-8"))
+    m = {}
+    for tier in ("tier_A_trainable", "tier_B_thin"):
+        for concept, rec in blob.get(tier, {}).items():
+            for lab in rec["labels"]:
+                m[lab.strip().lower()] = concept
+    if not m:
+        raise SystemExit(f"[err] no concepts found in {path}")
+    return m
+
+
 def read_manifest(path: Path, allowed: set | None):
     """CSV with columns video_id,label[,signer_id][,split]. Returns {video_id: (label, signer, split)}."""
     out = {}
@@ -315,6 +341,12 @@ def main() -> None:
     ap.add_argument("--poses", required=True, help="semlex_clinical_poses.tar OR a dir of <id>.npy")
     ap.add_argument("--manifest", required=True, help="CSV video_id,label[,signer_id][,split]")
     ap.add_argument("--vocab", help="JSON {'words':[...]} — keep only these labels")
+    ap.add_argument("--concepts", default=None,
+                    help="vocab_medical_analysis.json — MERGE Sem-Lex labels into clinical "
+                         "concepts (knee+knees -> knee; eyes -> eye; hands -> hand; "
+                         "thank_you -> thankyou). Without it you train 146 label-classes "
+                         "instead of 145 concept-classes and KNEE is split into 5 and 1. "
+                         "Strongly recommended; omit only to inspect raw labels.")
     ap.add_argument("--out", default="semlex_medical_landmarks.npz")
     ap.add_argument("--limit", type=int, help="process at most N clips (smoke test)")
     ap.add_argument("--min-hand-rate", type=float, default=HANDPRESENCE_MIN)
@@ -335,6 +367,12 @@ def main() -> None:
         allowed = {w.lower() for w in (raw["words"] if isinstance(raw, dict) else raw)}
         print(f"[cfg] restricting to {len(allowed)} labels from {Path(args.vocab).name}")
 
+    cmap = load_concept_map(Path(args.concepts)) if args.concepts else None
+    if cmap:
+        print(f"[cfg] concept map: {len(cmap)} labels -> {len(set(cmap.values()))} concepts")
+    else:
+        print("[warn] no --concepts: training on RAW Sem-Lex labels. knee/knees stay split.")
+
     man = read_manifest(Path(args.manifest), allowed)
     src = PoseSource(Path(args.poses))
     have = src.ids()
@@ -348,8 +386,15 @@ def main() -> None:
     if not wanted:
         sys.exit("[err] no overlap between manifest and pose files — check --poses / --manifest")
 
-    words = sorted({man[v][0] for v in wanted})
+    def to_concept(lab: str) -> str:
+        return cmap.get(lab, lab) if cmap else lab
+    words = sorted({to_concept(man[v][0]) for v in wanted})
     widx = {w: i for i, w in enumerate(words)}
+    if cmap:
+        unmapped = sorted({man[v][0] for v in wanted if man[v][0] not in cmap})
+        if unmapped:
+            print(f"[warn] {len(unmapped)} labels absent from the concept map, kept as-is: "
+                  f"{unmapped[:10]}")
 
     X, y, signer, clip, split = [], [], [], [], []
     per_signer, skipped = {}, []
@@ -365,6 +410,7 @@ def main() -> None:
             assert_sentinel(np.asarray(raw, np.float32))
             checked_sentinel = True
         lab, sg, sp = man[vid]
+        lab = to_concept(lab)
         arr, st = clip_to_tensor(np.asarray(raw), min_hand_rate=args.min_hand_rate,
                                  min_frames=args.min_frames, trim=args.trim)
         if arr is None:
