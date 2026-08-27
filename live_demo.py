@@ -1438,6 +1438,16 @@ if __name__ == "__main__":
                          "map. REQUIRED for canonical weights: without it a left-dominant "
                          "signer's hand stays in a block the model has never seen. Must NOT be "
                          "set for the legacy artifacts_250 weights.")
+    ap.add_argument("--artifacts", default=None,
+                    help="directory holding savedmodel_fold0..3 (default: artifacts_250 under "
+                         "--vocab250, else artifacts). Use this to A/B two exported ensembles "
+                         "WITHOUT renaming directories, so the old one stays as a rollback: "
+                         "`--vocab250 --canonical --artifacts artifacts_250_canonical`. The "
+                         "2026-08-27 canonical+decimate ensemble scores 0.7787 @ 30 fps / "
+                         "0.7628 @ 7 fps vs the legacy artifacts_250's 0.7755 (30 fps only). "
+                         "⚠️ artifacts_250 is LEGACY and must run WITHOUT --canonical; "
+                         "artifacts_250_canonical REQUIRES it. Mixing them silently degrades "
+                         "left-dominant signers, so this flag warns if the pairing looks wrong.")
     ap.add_argument("--words", default=None,
                     help="path to a JSON list of words to restrict recognition to "
                          "(e.g. demo_vocab_250.json). Concentrates confidence onto "
@@ -1449,7 +1459,31 @@ if __name__ == "__main__":
     if args.words:
         DEMO_WORDS_PATH = Path(args.words)
     if args.vocab250:                      # switch to the 250-word ensemble (folds 0-3)
+        # --artifacts lets a second exported ensemble be A/B'd without renaming the shipped
+        # one away. Resolved relative to the repo root when it isn't already absolute, so
+        # `--artifacts artifacts_250_canonical` works from anywhere.
         ARTIFACTS = HERE / "artifacts_250"
+        if args.artifacts:
+            p = Path(args.artifacts)
+            ARTIFACTS = p if p.is_absolute() else HERE / p
+            if not ARTIFACTS.is_dir():
+                sys.exit(f"[err] --artifacts {ARTIFACTS} is not a directory")
+            missing = [k for k in range(4)
+                       if not (ARTIFACTS / f"savedmodel_fold{k}" / "saved_model.pb").exists()]
+            if missing:
+                sys.exit(f"[err] {ARTIFACTS} is missing savedmodel_fold{missing} "
+                         f"(need folds 0-3, each with saved_model.pb)")
+        # The pairing rule is load-bearing and silent when broken: legacy weights read the
+        # dominant hand from whichever block it landed in, canonical weights only ever from
+        # 54-74. Get it backwards and left-dominant signers degrade with no error at all.
+        _looks_canonical = "canonical" in ARTIFACTS.name.lower()
+        if _looks_canonical and not args.canonical:
+            print(f"[WARN] {ARTIFACTS.name} looks like a CANONICAL export but --canonical is "
+                  f"OFF. A left-dominant signer's hand will stay in a block these weights "
+                  f"have never seen. Add --canonical.")
+        elif args.canonical and not _looks_canonical:
+            print(f"[WARN] --canonical is ON but {ARTIFACTS.name} does not look canonical. "
+                  f"If these are the legacy weights, drop --canonical.")
         VOCAB_PATH = HERE / "vocab_250.json"
         WORD_ACC_PATH = HERE / "word_acc_250.json"   # optional; shown in word panel if present
         ENSEMBLE_MODELS = [ARTIFACTS / f"savedmodel_fold{k}" for k in range(4)]
