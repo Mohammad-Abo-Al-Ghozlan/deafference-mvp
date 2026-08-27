@@ -68,6 +68,47 @@ OUTPUT (.npz) -- byte-compatible with extract_landmarks.py so downstream code is
     appear in BOTH the train and val archives. Score generalization on `split == "test"`
     only (9 signers). Using `val` reads optimistically for the same reason the 250-word
     fold ensemble did.
+
+WHY THIS FILE TRIMS, AND WHY THAT IS NOT THE REFUTED TRIM (measured 2026-08-27)
+------------------------------------------------------------------------------
+The first extraction run rejected **48.5% of clips** (3,913 of 8,064) on
+`HANDPRESENCE_MIN`, and 38 classes fell under 8 clips. That was the gate misfiring, not
+bad data. On 800 clips / 43,094 frames:
+
+    LEADING  untracked  30.9%
+    TRAILING untracked  30.6%     -> 61.5% of all frames are lead-in / lead-out
+    INTERIOR untracked   5.3%
+
+    hand-rate AFTER trimming to the tracked span, by raw bucket:
+      raw 0.20-0.35   232 clips   median 0.92   span 18 of 52 frames
+      raw 0.35-0.60   348 clips   median 1.00   span 23 of 48
+      raw 0.60+        55 clips   median 1.00   span 27 of 38
+      raw 0.10-0.20    89 clips   median 0.75   span 11 of 50
+      raw 0.00-0.10    76 clips   median 0.50   span  2 of 48   <- genuinely unusable
+
+    of the rejected clips, 74.3% pass once trimmed; 16% are too short; 10% still fail.
+
+Sem-Lex clips are **raw recordings** — a participant hits record, signs, hits stop — so the
+hands sit out of a head-and-shoulders frame for the lead-in and lead-out. `valid == frames`
+in those rows (both shoulders visible throughout), so the signer never left; only the hands
+did. `HANDPRESENCE_MIN = 0.35` was calibrated on `live_demo`'s ALREADY-SEGMENTED camera
+input, and the corpus median raw rate sits at ~0.33 — right on the threshold, which is why
+the cut landed near 50%.
+
+**This is not the trim that was refuted.** `SESSION_HANDOFF` §0.5 records trim-to-tracked-span
+moving pooled accuracy −0.0011 with "only 1.9% of frames droppable, so dropouts are interior".
+That was measured on **GISLR, which ships pre-trimmed to the sign** — there was nothing to cut.
+Sem-Lex is raw video from a different collection process. Same hypothesis, different corpus,
+and the corpus was the reason it failed there.
+
+**And trimming RESTORES parity rather than breaking it.** `live_demo` segments the live stream
+(sliding window + `MOTION_EPS`) before `classify_segment` ever runs, so the model at inference
+time only ever sees a trimmed segment. Training on untrimmed recordings is the actual mismatch.
+Trimming on hand-tracking onset/offset is a proxy for live_demo's motion-based boundaries, not
+an exact match — it is slightly more generous, keeping the hand-raise transition, which the live
+sliding window also catches.
+
+`--no-trim` reproduces the original behaviour, so the decision stays auditable.
 """
 from __future__ import annotations
 
@@ -138,13 +179,55 @@ def hand_seen(frame_block: np.ndarray) -> bool:
     return not bool(np.isnan(frame_block).all())
 
 
+def tracked_mask(pts: np.ndarray) -> np.ndarray:
+    """(T,) bool — is EITHER hand block present on this frame? Same predicate the
+    hand-presence gate counts, so trimming and gating cannot disagree."""
+    l = ~np.isnan(pts[:, OUR_L_HAND, 0]).all(axis=1)
+    r = ~np.isnan(pts[:, OUR_R_HAND, 0]).all(axis=1)
+    return l | r
+
+
+def tracked_span(pts: np.ndarray) -> tuple[int, int]:
+    """(first, last) inclusive indices of the tracked span, or (-1,-1) if no hand ever appears.
+    Interior gaps are deliberately KEPT: only 5.3% of frames are interior, and dropping them
+    would splice together non-adjacent moments of the sign — the same fabrication argument that
+    ruled out interpolating the fingerspelling gaps."""
+    tr = tracked_mask(pts)
+    if not tr.any():
+        return -1, -1
+    return int(np.argmax(tr)), int(len(tr) - 1 - np.argmax(tr[::-1]))
+
+
 def clip_to_tensor(clip553: np.ndarray, *, min_hand_rate=HANDPRESENCE_MIN,
-                   min_frames=MIN_VALID_FRAMES) -> tuple:
+                   min_frames=MIN_VALID_FRAMES, trim: bool = True) -> tuple:
     """One Sem-Lex clip -> ((64,75,3), stats) or (None, stats) if unusable.
-    Gates and their order are copied from extract_landmarks.clip_to_tensor."""
-    st = {"frames": int(clip553.shape[0]), "valid": 0, "hand_frames": 0,
-          "l_frames": 0, "r_frames": 0, "hand_rate": 0.0, "reason": ""}
+    Gate order follows extract_landmarks.clip_to_tensor; the trim step is inserted BEFORE the
+    hand-presence gate, because on this corpus that gate otherwise measures how long the
+    participant left the camera running (see the module docstring)."""
     pts = to_75(clip553)
+    n_raw = int(pts.shape[0])
+    st = {"frames": n_raw, "raw_frames": n_raw, "valid": 0, "hand_frames": 0,
+          "l_frames": 0, "r_frames": 0, "hand_rate": 0.0, "raw_hand_rate": 0.0,
+          "lead": 0, "trail": 0, "span": n_raw, "trimmed": False, "reason": ""}
+    st["raw_hand_rate"] = float(tracked_mask(pts).mean()) if n_raw else 0.0
+
+    if trim:
+        first, last = tracked_span(pts)
+        if first < 0:
+            st["reason"] = "no tracked hand in any frame"
+            return None, st
+        st["lead"], st["trail"] = first, n_raw - 1 - last
+        st["span"] = last - first + 1
+        st["trimmed"] = bool(first or st["trail"])
+        # A 2-frame span is what the raw<0.10 bucket looks like: a spurious single-frame hand
+        # detection, not a sign. Reject on LENGTH before the rate gate, or a 2-frame span with
+        # both frames tracked would score a perfect 1.00 hand-rate and sail through.
+        if st["span"] < min_frames:
+            st["reason"] = (f"tracked span only {st['span']} frames (<{min_frames}) — "
+                            f"raw hand-rate was {st['raw_hand_rate']:.0%}")
+            return None, st
+        pts = pts[first:last + 1]
+        st["frames"] = int(pts.shape[0])
 
     seq = []
     for f in pts:
@@ -163,8 +246,9 @@ def clip_to_tensor(clip553: np.ndarray, *, min_hand_rate=HANDPRESENCE_MIN,
         return None, st
     st["hand_rate"] = st["hand_frames"] / st["frames"] if st["frames"] else 0.0
     if st["hand_rate"] < min_hand_rate:
-        st["reason"] = (f"hand in only {st['hand_rate']:.0%} of frames "
-                        f"(<{min_hand_rate:.0%}) — no usable handshape")
+        st["reason"] = (f"hand in only {st['hand_rate']:.0%} of the "
+                        f"{'trimmed span' if trim else 'clip'} (<{min_hand_rate:.0%}) — "
+                        f"no usable handshape")
         return None, st
     return time_resize(np.stack(seq), MAX_LEN), st
 
@@ -235,6 +319,11 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="process at most N clips (smoke test)")
     ap.add_argument("--min-hand-rate", type=float, default=HANDPRESENCE_MIN)
     ap.add_argument("--min-frames", type=int, default=MIN_VALID_FRAMES)
+    ap.add_argument("--no-trim", dest="trim", action="store_false",
+                    help="do NOT trim to the tracked span. Reproduces the 2026-08-27 first run, "
+                         "which rejected 48.5%% of clips because 61.5%% of frames are lead-in/"
+                         "lead-out dead air. Kept so the decision stays auditable.")
+    ap.set_defaults(trim=True)
     ap.add_argument("--report", action="store_true",
                     help="per-signer hand-block presence — the diagnostic that predicted "
                          "the 250-word model's 0.314 signer. Read it BEFORE training.")
@@ -264,8 +353,10 @@ def main() -> None:
 
     X, y, signer, clip, split = [], [], [], [], []
     per_signer, skipped = {}, []
+    trim_stats = {"trimmed": 0, "cut_frames": 0, "kept_frames": 0, "rescued": 0}
     checked_sentinel = False
     t0 = time.perf_counter()
+    print(f"[cfg] trim-to-tracked-span: {'ON' if args.trim else 'OFF (--no-trim)'}")
 
     for n, (vid, raw) in enumerate(src.iter(wanted), 1):
         if args.limit and len(clip) >= args.limit:
@@ -275,7 +366,7 @@ def main() -> None:
             checked_sentinel = True
         lab, sg, sp = man[vid]
         arr, st = clip_to_tensor(np.asarray(raw), min_hand_rate=args.min_hand_rate,
-                                 min_frames=args.min_frames)
+                                 min_frames=args.min_frames, trim=args.trim)
         if arr is None:
             skipped.append((vid, lab, st["reason"]))
         else:
@@ -284,8 +375,14 @@ def main() -> None:
             d = per_signer.setdefault(sg, {"n": 0, "l": 0.0, "r": 0.0, "frames": 0})
             d["n"] += 1; d["frames"] += st["frames"]
             d["l"] += st["l_frames"]; d["r"] += st["r_frames"]
+            trim_stats["trimmed"] += st["trimmed"]
+            trim_stats["cut_frames"] += st["lead"] + st["trail"]
+            trim_stats["kept_frames"] += st["frames"]
+            # the whole point: it would have been thrown away without the trim
+            trim_stats["rescued"] += st["raw_hand_rate"] < args.min_hand_rate
         if args.report and n <= 20:
-            print(f"  {vid} {lab:12} frames={st['frames']:3} valid={st['valid']:3} "
+            print(f"  {vid} {lab:12} raw={st['raw_frames']:3}f rate={st['raw_hand_rate']:4.0%} "
+                  f"-> span={st['span']:3}f rate={st['hand_rate']:4.0%} "
                   f"L={st['l_frames']:3} R={st['r_frames']:3} "
                   f"{'SKIP: ' + st['reason'] if arr is None else 'ok'}")
         if n % 500 == 0:
@@ -312,21 +409,46 @@ def main() -> None:
     sp = np.array(split)
     print("[stats] split: " + "  ".join(f"{s}={int((sp == s).sum())}" for s in sorted(set(split))))
     print("[stats] ⚠️  score on split=='test' only — Sem-Lex's val shares 31/32 signers with train")
+    if args.trim and len(X):
+        cut, kept = trim_stats["cut_frames"], trim_stats["kept_frames"]
+        print(f"[trim] {trim_stats['trimmed']}/{len(X)} clips trimmed; cut {cut:,} dead-air "
+              f"frames, kept {kept:,} ({cut / max(cut + kept, 1):.1%} of recorded frames were "
+              f"lead-in/lead-out)")
+        print(f"[trim] RESCUED {trim_stats['rescued']:,} clips that the raw hand-rate gate would "
+              f"have thrown away ({trim_stats['rescued'] / max(len(X), 1):.1%} of the kept set)")
 
     if args.report:
         # The 250-word post-mortem: per-signer accuracy tracked HAND-BLOCK LAYOUT, which is a
         # recording artifact, and the worst signer (0.314) was the one with BOTH blocks
-        # populated. Printing it here means a bad signer is visible before the GPU bill, not
-        # after. A signer near 1.00/0.00 or 0.00/1.00 is cleanly one-handed-dominant; one near
-        # 0.50/1.00 is the dangerous pattern.
-        print("\nPER-SIGNER HAND-BLOCK PRESENCE (fraction of frames the block is tracked)")
-        print(f"{'signer':>8} {'clips':>6} {'L':>7} {'R':>7}  pattern")
+        # populated. Printing it here means a bad signer is visible before the GPU bill.
+        #
+        # DOMINANCE is the column to read, not L and R. The absolute fractions are diluted by
+        # however much dead air survived, so on the untrimmed 2026-08-27 run every single
+        # signer read "mixed" — an artifact, not a finding. L/(L+R) is scale-free and shows the
+        # real split. Both hands are tracked on two-handed signs, so dominance sits near 0.5
+        # for a balanced signer; the tails are what matter.
+        print("\nPER-SIGNER HAND-BLOCK PRESENCE (fraction of kept frames the block is tracked)")
+        print(f"{'signer':>8} {'clips':>6} {'L':>7} {'R':>7} {'DOMINANCE':>10}  reading")
         rows = sorted(per_signer.items(), key=lambda kv: -kv[1]["n"])
+        n_left = n_right = 0
         for sg, d in rows:
             l, r = d["l"] / max(d["frames"], 1), d["r"] / max(d["frames"], 1)
-            pat = ("pure R" if l < 0.10 <= r else "pure L" if r < 0.10 <= l
-                   else "BOTH blocks <- watch this one" if min(l, r) > 0.30 else "mixed")
-            print(f"{sg:>8} {d['n']:>6} {l:>7.3f} {r:>7.3f}  {pat}")
+            dom = l / (l + r) if (l + r) > 0 else float("nan")
+            if dom >= 0.60:
+                reading, n_left = "LEFT-dominant", n_left + 1
+            elif dom <= 0.40:
+                reading, n_right = "right-dominant", n_right + 1
+            else:
+                reading = "balanced / two-handed"
+            if min(l, r) > 0.30 and 0.40 < dom < 0.60:
+                reading += "  <- BOTH blocks, the 0.314 pattern"
+            print(f"{sg:>8} {d['n']:>6} {l:>7.3f} {r:>7.3f} {dom:>10.3f}  {reading}")
+        tot = len(rows)
+        print(f"\n[handedness] {n_left}/{tot} LEFT-dominant, {n_right}/{tot} right-dominant, "
+              f"{tot - n_left - n_right}/{tot} balanced")
+        print("[handedness] GISLR had 2 pure-L of 21 (~10%). If the left share here is higher, "
+              "train with --canonical-hand: it is the difference between a signer at 0.56 and "
+              "one at 0.81 (250-word per-signer table, 2026-08-27).")
 
     if skipped:
         print(f"\n[warn] skipped {len(skipped)} clips; first few:")

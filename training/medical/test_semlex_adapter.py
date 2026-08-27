@@ -156,13 +156,77 @@ def main() -> None:
     nohands = clip.copy()
     nohands[:, SL.SEMLEX_L_HAND, :] = np.nan
     nohands[:, SL.SEMLEX_R_HAND, :] = np.nan
-    a3, s3 = SL.clip_to_tensor(nohands)
-    check("a clip with no tracked hand is rejected", a3 is None and "hand in only" in s3["reason"],
-          s3["reason"])
+    # Rejected either way, but by a DIFFERENT gate: with trim on, the span check fires first
+    # and says so; with trim off, the hand-rate gate fires. Pin both, so a future change that
+    # skips one of them cannot pass silently.
+    a3, s3 = SL.clip_to_tensor(nohands, trim=True)
+    check("no tracked hand, trim ON -> rejected by the span gate",
+          a3 is None and "no tracked hand" in s3["reason"], s3["reason"])
+    a3b, s3b = SL.clip_to_tensor(nohands, trim=False)
+    check("no tracked hand, trim OFF -> rejected by the hand-rate gate",
+          a3b is None and "hand in only" in s3b["reason"], s3b["reason"])
     check("hand_seen: all-NaN False, one finite point True",
           (not SL.hand_seen(np.full((EL.HAND_N, 3), np.nan)))
           and SL.hand_seen(np.where(np.arange(EL.HAND_N * 3).reshape(EL.HAND_N, 3) == 0,
                                     0.5, np.nan)))
+
+    print("\n[6b] TRIM TO THE TRACKED SPAN — the fix for the 48.5% rejection")
+    # A realistic Sem-Lex clip: 60 frames, hands tracked only in the middle 24. Raw hand-rate
+    # 0.40... so build the miss deliberately below the gate instead: 20 tracked of 60 = 0.33.
+    T2 = 60
+    dead = np.full((T2, SL.SEMLEX_N, 3), np.nan, dtype=np.float32)
+    dead[:, SL.SEMLEX_POSE, :] = rng.normal(0.5, 0.05, (T2, EL.POSE_N, 3)).astype(np.float32)
+    dead[:, 478 + 11, :2] = [0.40, 0.30]
+    dead[:, 478 + 12, :2] = [0.60, 0.30]
+    LO, HI = 20, 40                                    # hands present on frames 20..39 only
+    dead[LO:HI, SL.SEMLEX_L_HAND, :] = rng.normal(0.45, 0.02, (HI - LO, EL.HAND_N, 3))
+    dead[LO:HI, SL.SEMLEX_R_HAND, :] = rng.normal(0.55, 0.02, (HI - LO, EL.HAND_N, 3))
+    raw_rate = (HI - LO) / T2
+    check("the fixture reproduces the failure (raw rate below the gate)",
+          raw_rate < EL.HANDPRESENCE_MIN, f"{raw_rate:.2f} < {EL.HANDPRESENCE_MIN}")
+
+    first, last = SL.tracked_span(SL.to_75(dead))
+    check("tracked_span finds the exact edges", (first, last) == (LO, HI - 1),
+          f"got ({first},{last}), want ({LO},{HI - 1})")
+
+    a_no, s_no = SL.clip_to_tensor(dead, trim=False)
+    check("WITHOUT trim the clip is rejected — the 2026-08-27 behaviour",
+          a_no is None and "no usable handshape" in s_no["reason"], s_no["reason"])
+
+    a_yes, s_yes = SL.clip_to_tensor(dead, trim=True)
+    check("WITH trim the same clip is kept",
+          a_yes is not None and a_yes.shape == (EL.MAX_LEN, EL.N_POINTS, 3),
+          f"span={s_yes['span']} rate={s_yes['hand_rate']:.2f} lead={s_yes['lead']} "
+          f"trail={s_yes['trail']}")
+    check("trim reports the dead air it cut",
+          s_yes["lead"] == LO and s_yes["trail"] == T2 - HI and s_yes["span"] == HI - LO)
+    check("post-trim hand-rate is 1.00 on a clean fixture", abs(s_yes["hand_rate"] - 1.0) < 1e-9,
+          f"{s_yes['hand_rate']:.4f}")
+    check("raw_hand_rate is still reported, so the rescue is auditable",
+          abs(s_yes["raw_hand_rate"] - raw_rate) < 1e-6, f"{s_yes['raw_hand_rate']:.4f}")
+
+    # The raw<0.10 bucket: a single spurious hand frame. Trimming it yields a 1-frame span
+    # whose hand-rate is a perfect 1.00 — it MUST be rejected on length, before the rate gate.
+    spur = dead.copy()
+    spur[:, SL.SEMLEX_L_HAND, :] = np.nan
+    spur[:, SL.SEMLEX_R_HAND, :] = np.nan
+    spur[30, SL.SEMLEX_R_HAND, :] = 0.5
+    a_sp, s_sp = SL.clip_to_tensor(spur, trim=True)
+    check("a 1-frame spurious detection is rejected on LENGTH, not waved through at rate 1.00",
+          a_sp is None and "tracked span only" in s_sp["reason"], s_sp["reason"])
+    a_z, s_z = SL.clip_to_tensor(np.where(np.isnan(dead), dead, dead) * 0 + np.nan, trim=True) \
+        if False else SL.clip_to_tensor(
+            np.full((T2, SL.SEMLEX_N, 3), np.nan, np.float32), trim=True)
+    check("a clip with no hand in any frame is rejected", a_z is None, s_z["reason"])
+
+    # Interior gaps must SURVIVE: splicing non-adjacent moments together would fabricate motion.
+    gap = dead.copy()
+    gap[28:32, SL.SEMLEX_L_HAND, :] = np.nan
+    gap[28:32, SL.SEMLEX_R_HAND, :] = np.nan
+    a_g, s_g = SL.clip_to_tensor(gap, trim=True)
+    check("interior gaps are KEPT, not spliced out",
+          a_g is not None and s_g["span"] == HI - LO and s_g["hand_frames"] == (HI - LO) - 4,
+          f"span={s_g['span']} tracked={s_g['hand_frames']} of {HI - LO}")
 
     print("\n[7] SENTINEL GUARD")
     try:
