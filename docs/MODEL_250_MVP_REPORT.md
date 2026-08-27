@@ -9,8 +9,9 @@ CPU verification session. Written to be read by someone who was not in the room.
 
 **Headline:** the recognition model works, and its accuracy depends far more on *who is signing*
 than on anything else. Pooled over 7 held-out signers it scores **0.666**; per signer it ranges
-from **0.314 to 0.823**. The best single-fold split-level number, **0.7658** (the 4-fold
-ensemble reaches 0.7755), is measured on a test split that happens to contain only the easy
+from **0.314 to 0.823**. The best single-fold split-level number, **0.7658** (the current 4-fold
+canonical + `--decimate` ensemble reaches **0.7787 @ 30 fps / 0.7628 @ 7 fps**, superseding the
+legacy 0.7755 — see §1.0b), is measured on a test split that happens to contain only the easy
 configuration. The animation export was, until the
 2026-08-12 session, **shipping the wrong hand on 249 of 250 words** — that is now fixed and
 verified at 76.2% dominant-hand coverage. The recognition and animation numbers are unrelated;
@@ -96,10 +97,45 @@ from `MASTER_PLAN.md` §5 is a **mean-over-signers** goal and should be restated
 | Corpus | GISLR (Google Isolated Sign Language Recognition), 82,942 clips |
 | Model | TF/Keras, exported SavedModel; runs in TF.js in the browser |
 | Split | by participant — **verified** 2026-08-13: 18 cv / 3 test participants, **0 overlap**, `0 / 14245` test clips from a cv participant |
+| **🏆 Test top-1, 4-fold ensemble, CANONICAL + `--decimate`** | **0.7787 @ 30 fps · 0.7707 @ 15 fps · 0.7628 @ 7 fps** (2026-08-27; per-fold 0.7579 / 0.7608 / 0.7626 / 0.7636 @ 30 fps, ensembling worth +2.08) — **the current best, and the only one with a 7 fps figure** |
+| Test top-1, 4-fold ensemble, LEGACY | 0.7755 (measured 2026-08-06; per-fold 0.7544 / 0.7570 / 0.7545 / 0.7615, ensembling worth +1.86) — superseded, and it has **no measured 7 fps number** |
 | **Test top-1, single fold** | **0.7658** (2026-08-13 control arm, legacy corpus) — read §1.0 before quoting it |
-| Test top-1, 4-fold ensemble | **0.7755** (measured 2026-08-06; per-fold 0.7544 / 0.7570 / 0.7545 / 0.7615, so ensembling is worth +1.86) — the highest number we have |
 | Earlier single folds | 0.7590 (arm B, canonical corpus) · 0.7576 (previously shipped) |
 | Pooled over all 7 held-out signers | **0.666** — see §1.0 |
+
+### 1.0b The 2026-08-27 ensemble — read this before quoting any of the above
+
+**+0.0032 at 30 fps (0.7787 vs 0.7755) is inside the noise on three signers. Do not sell the win
+on that number.** Three stronger facts do the work:
+
+1. **All four folds beat their counterparts** — 0.7579 / 0.7608 / 0.7626 / 0.7636 against
+   0.7544 / 0.7570 / 0.7545 / 0.7615. A broad shift, not one lucky fold.
+2. **7 fps is where it actually wins.** The demo's own instrumentation puts it near 7 fps. The
+   paired fold-0 A/B measured **+0.0218** there and cut the frame-rate penalty from **5.13 to
+   2.64 points**. The legacy ensemble's 7 fps accuracy on this pool was never measured.
+3. **Fold 0 reproduced the shipped model to 0.0003** (0.7579 vs 0.7576), so canonical +
+   `--decimate` costs nothing at 30 fps and the ensemble gain is pure profit.
+
+**⚠️ SCORE A FOLD-ENSEMBLE ON THE TEST SPLIT ONLY.** `per_signer.py`'s 7-signer pool is
+fold-0 val + test, and it is honest for **fold 0's model alone**: `train.py:915` is
+`train_man = cv[cv["fold"] != fold]`, so folds 1/2/3 TRAINED ON fold-0's val participants.
+Measured proof, per-signer @ 30 fps — on the 3 clean signers all four folds agree within ~0.01
+(53618: .7033/.7063/.7031/.7051); on the 4 leaked ones fold 0 is the lone outlier
+(32319: **.6114** vs .8930/.8910/.8959, a 28-point gap). The all-7 figures (0.7810 / 0.7731 /
+0.7529) are inflated and must not be quoted.
+
+**🚫 29302 WAS NOT FIXED.** Its only honest number is fold 0's **0.3190** (legacy control 0.3141
+— statistically the same). The **0.5568** that appears in the ensemble column is three models
+recalling a signer they trained on. This table has misled this project three times already;
+that cell is the fourth trap.
+
+**Product number for a genuinely new user: 0.70–0.82 @ 30 fps.** 53618 sits at the bottom (0.72)
+and is the test signer with 0.13 L-block contamination — the layout effect leaking faintly into a
+split §1.0 says cannot see it.
+
+**Deployment requirement:** these weights are trained on the CANONICAL corpus. `live_demo.py`
+must run with **`--canonical`**. Without it a left-dominant signer's hand stays in the L block,
+which this model has never seen.
 
 ### 1.1 The A/B run, corrected
 

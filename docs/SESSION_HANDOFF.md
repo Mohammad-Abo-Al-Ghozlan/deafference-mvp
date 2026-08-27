@@ -1,10 +1,13 @@
-# Deafference — Session Handoff (2026-07-20 → **updated 2026-08-04**)
+# Deafference — Session Handoff (2026-07-20 → **updated 2026-08-27**)
 
 > **Purpose of this file.** A complete, self-contained record of what was built,
 > decided, and discussed across these working sessions. If you are a new
-> assistant/chat: **read [§0.2 CURRENT STATE](#02-current-state-2026-08-04--read-this-first-if-you-are-a-new-chat)
-> FIRST** — it is the live picture, it says how Salim wants to be worked with, and it
-> names the one item that is blocked on him. Then read the rest for background.
+> assistant/chat: **read §0.6 CURRENT STATE (2026-08-27) FIRST**, then §0.5.
+>
+> **The rule for this file: the HIGHEST-NUMBERED §0.x is the live picture.** Lower ones are
+> kept for the reasoning trail. Supersession is often *partial* — §0.6 replaces §0.5 only on
+> the recognition headline number and on how to evaluate a fold-ensemble; §0.5's refuted
+> levers and its "Working with Salim" subsection are still current.
 >
 > **Sections §0, §0.1 and §8 are history that has since completed.** They are kept for
 > the reasoning trail, not as current status. Where they conflict with §0.2, §0.2 wins.
@@ -793,6 +796,93 @@ the right intervention. And the intervention moved the target signer by −0.000
 never wrong — the inference from it was. §0.4's rule was "disaggregate before trusting an
 aggregate"; this one is its sequel: **once disaggregation hands you a mechanism, the next step is
 an intervention that would fail if the mechanism were false, not more description of it.**
+
+---
+
+## 0.6 CURRENT STATE (2026-08-27) — READ THIS FIRST IF YOU ARE A NEW CHAT
+
+Supersedes §0.5 **only** on the recognition model's headline number and on how to evaluate a
+fold-ensemble. Everything else in §0.5 — the refuted levers, the per-signer variance being a
+product fact, "Working with Salim" — still stands.
+
+### 🏆 The 250-word recognition track has a new best, and it ships
+
+4-fold ensemble on the **canonical** corpus trained with **`--decimate 0.5`**, scored on the test
+split, mean over signers:
+
+| rate | ensemble | fold 0 alone | ensemble gain |
+|---|---|---|---|
+| **30 fps** | **0.7787** | 0.7579 | +0.0208 |
+| 15 fps | 0.7707 | 0.7528 | +0.0179 |
+| **7 fps — the demo's real rate** | **0.7628** | 0.7442 | +0.0186 |
+
+Beats the legacy ensemble's **0.7755** — but **+0.0032 at 30 fps is inside the noise on three
+signers, so do not sell the win on it.** Three stronger facts:
+
+1. **All four folds beat their counterparts:** 0.7579 / 0.7608 / 0.7626 / 0.7636 vs
+   0.7544 / 0.7570 / 0.7545 / 0.7615.
+2. **7 fps is the real win.** The paired fold-0 A/B measured **+0.0218** there and cut the
+   frame-rate penalty from **5.13 to 2.64 points**. The legacy ensemble has **no** measured 7 fps
+   number on this pool, which is why recording ours matters.
+3. **Fold 0 reproduced the shipped model to 0.0003** (0.7579 vs 0.7576) — canonical + decimate
+   costs nothing at 30 fps, so the ensemble gain is pure profit.
+
+`--decimate 0.5` was the **one** positive result after fourteen refuted hypotheses. The
+monotone dose-response across three rates *is* the result, not the point estimate.
+
+### ⚠️ DEPLOYMENT REQUIREMENT
+
+These weights are trained on the **canonical** corpus (L-block 0.000). **`live_demo.py` must run
+with `--canonical`.** Without it a left-dominant signer's hand stays in the 33–53 block, which
+this model has never seen. Ship into a **new** `artifacts_250_canonical/`; leave `artifacts_250/`
+in place as the rollback.
+
+### ⛔ THE EVALUATION RULE THIS SESSION EARNED
+
+**Score a fold-ensemble on the TEST split only. Never on any fold's val.**
+
+`per_signer.py`'s 7-signer pool is fold-0 val + test. It is honest for **fold 0's model alone** —
+`train.py:915` is `train_man = cv[cv["fold"] != fold]`, so folds 1/2/3 **trained on fold-0's val
+participants**. Per-signer @ 30 fps proves it directly: on the 3 clean signers all four folds
+agree within ~0.01 (53618: .7033 / .7063 / .7031 / .7051); on the 4 leaked signers fold 0 is the
+lone outlier (32319: **.6114** vs .8930 / .8910 / .8959 — a 28-point gap). Note too that the
+ensemble beats every member on clean signers and sits *below* folds 1–3 on leaked ones, because
+fold 0's honest prediction drags the average down.
+
+**The all-7 figures (0.7810 / 0.7731 / 0.7529) are inflated. Do not quote them.**
+
+**🚫 29302 WAS NOT FIXED.** Its only honest number is fold 0's **0.3190** (legacy control 0.3141 —
+statistically the same). The **0.5568** in the ensemble column is memorization. This project has
+been misled by a pooled number three times (§0.4, §0.5, and the 2s reselect); that cell is the
+fourth trap and it is the most tempting one yet, because it lands on exactly the signer the
+canonicalization programme existed to rescue.
+
+**Structural limit to record:** no honest ensemble number for 29302 / 34503 / 32319 is obtainable
+under the current split, because they sit in fold-0 val and therefore in folds 1–3's training
+data. Fixing that needs the folds re-assigned so an L-dominant signer sits in `test`, or
+leave-one-signer-out. Until then, fold 0 alone is the only honest read on them.
+
+**Product number for a new user: 0.70–0.82 @ 30 fps.** 53618 is the floor (0.72) and is the test
+signer with 0.13 L-block contamination — the layout effect leaking faintly into a split §1.0 of
+`MODEL_250_MVP_REPORT.md` says cannot measure it.
+
+### Also settled this session
+
+- **Sem-Lex licence: CC BY-NC-SA 4.0 — no commercial use, and Share-Alike would bind derived
+  weights.** Access is a Google Form, not an email negotiation. Feasibility study is still legal.
+- **Sem-Lex poses are 553 landmarks, not 543** (face mesh + 10 iris; every index after the face
+  block shifts +10). `training/medical/semlex_poses_to_75.py` + `test_semlex_adapter.py` handle
+  it; the offsets were verified geometrically, not assumed. `test_parity.py` cannot catch this —
+  it compares functions, and the functions were right.
+- **Clinical tier A is 129, not 130** (`knee` has 7 deduped videos against a ≥8 gate). Sem-Lex's
+  own `val` shares 31/32 signers with `train` — score on `split == "test"` only.
+- **The 2a exemplar reselect shipped** (+0.397 coverage, 24 tier-C words → 0, relaxFrames −82%),
+  35 files replaced surgically. `docs/HANDEDNESS_REVIEW_29.csv` is the Deaf-review shortlist that
+  Sem-Lex's `Sign Type` annotations identified.
+- **Fingerspelling landmark parity verified 13/13**, but ~45% of frames have no tracked hand,
+  dropout is 3.6× motion-correlated, and interpolation recovers only 12.4% of lost frames. Start
+  from a public competition baseline. The pose wrist survives, so feed pose + hands, never hands
+  alone.
 
 ---
 

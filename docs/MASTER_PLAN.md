@@ -11,7 +11,7 @@ This is the single "what do I do, what does my friend do, and when" document.
 |---|---|
 | **Direction 1 — ASL sign → speech** (the live recognition demo) | ✅ **Demo-ready.** The "many tries to commit" bugs are fixed; all 250 words load; tap 1–5 fixes the weak ones. |
 | **Direction 2 — ASL speech → sign** (the avatar) | ✅ **Fixed on disk 2026-08-13; zip built, not yet sent.** The "250/250 clean" that closed this out came from a check that could not fail; the export carried the **resting** hand (root cause R5 — the tracker loses the hand that *moves*, so selecting on tracking coverage selected for stillness). The 2026-08-12 fix was real but lived only in Kaggle output — the repo still held the broken export (28.8% coverage, 137 words missing the dominant hand) and `demo_voice_gui.py` was rendering it. Corrected clips copied in and re-exported 2026-08-13: coverage **76.2%**, resting hand **0.1%**, synthesis blocks **250/250**, native durations restored (was all-64). Bundle: `deafference_handoff_v7_CORRECTED.zip`. **Still to do: send it.** See `SESSION_HANDOFF.md` §0.4 §5. |
-| **Retrain the 250 model** | 🛑 **CLOSED 2026-08-14.** Three levers tested, three refuted: more epochs (flat from ~93), resting-hand masking (−0.0312 test), and **canonicalization (−0.0064 on the very signers it targeted)**. Per-signer accuracy 0.314–0.823 is real but is **not** caused by hand-block layout — that was tested directly and the target signer moved −0.0002. Shipping number stays the 4-fold ensemble **0.7755** pooled test. **No Kaggle work queued; quota free.** See `SESSION_HANDOFF.md` §0.5. |
+| **Retrain the 250 model** | ✅ **REOPENED AND WON 2026-08-27.** `--decimate 0.5` was the one positive after fourteen refutations. New shipping number: **0.7787 @ 30 fps / 0.7628 @ 7 fps** (4-fold canonical ensemble, test split) vs the legacy **0.7755**. The 30 fps gain is noise-level; the win is at **7 fps**, where the paired fold-0 A/B gave **+0.0218** and halved the frame-rate penalty (5.13 → 2.64 pts). **Requires `live_demo.py --canonical`.** Still refuted: more epochs, resting-hand masking, and canonicalization-for-accuracy (per-signer 0.314–0.823 is real but not caused by layout; 29302 remains **0.319** honestly). **GPU work now genuinely done; quota free.** See `SESSION_HANDOFF.md` §0.6. |
 
 **Two people, two lanes:**
 - **You (Salim):** the whole *data + pipeline* side — recognition, the per-word motion JSONs, the runtime glue, and (optionally) the retrain.
@@ -207,10 +207,21 @@ the correct signing hand"* is **alive and independently verified**: the animatio
 137/250 words rendering the resting hand to 1, coverage 28.8% → 76.2%. That fix ships and the
 export is final.
 
-**And restate the target.** "0.82–0.85" was never measured. The real numbers: **0.7755** pooled
-test (4-fold ensemble, 2026-08-06) and **0.7658** best single fold. Both are *means over signers*,
-not a promise to any one user — tell a new user to expect roughly **0.6–0.8**. Full detail:
-`SESSION_HANDOFF.md` §0.5 and `MODEL_250_MVP_REPORT.md` §1.0.
+**And restate the target.** "0.82–0.85" was never measured. The real numbers, updated
+**2026-08-27**: **0.7787 @ 30 fps / 0.7707 @ 15 fps / 0.7628 @ 7 fps** — 4-fold ensemble on the
+canonical corpus trained with `--decimate`, test split, mean over signers. That supersedes the
+legacy ensemble's **0.7755** (30 fps only; its 7 fps accuracy was never measured on this pool).
+Best single fold **0.7658**.
+
+The 30 fps gain is **+0.0032, which is inside the noise on three signers — do not sell it.** The
+win is at **7 fps**, the rate the demo actually runs: the paired fold-0 A/B measured **+0.0218**
+there and halved the frame-rate penalty (5.13 → 2.64 pts). Supporting evidence: **all four folds**
+beat their counterparts (0.7579/0.7608/0.7626/0.7636 vs 0.7544/0.7570/0.7545/0.7615), and fold 0
+reproduced the shipped model to **0.0003**.
+
+These are *means over signers*, not a promise to any one user — tell a new user **0.70–0.82**.
+**Requires `live_demo.py --canonical`.** Full detail: `MODEL_250_MVP_REPORT.md` §1.0b and
+`SESSION_HANDOFF.md` §0.6.
 
 ### The steps (run every `train.py`/eval as `!python`, NEVER in a bare cell — see gotchas)
 1. **Upload the CURRENT `train.py` fresh** to Kaggle (the copy already there is stale/old-architecture). — 5 min
