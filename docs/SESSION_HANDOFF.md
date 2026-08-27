@@ -815,7 +815,84 @@ an intervention that would fail if the mechanism were false, not more descriptio
 
 ---
 
-## 0.6 CURRENT STATE (2026-08-27) — READ THIS FIRST IF YOU ARE A NEW CHAT
+## 0.7 CURRENT STATE (2026-08-27, later) — READ THIS FIRST IF YOU ARE A NEW CHAT
+
+Supersedes §0.6 **only** on the medical track. §0.6's recognition-model numbers and its
+fold-ensemble evaluation rule are unchanged and still govern.
+
+### The medical corpus is now buildable end to end
+
+Three defects found and fixed by measurement, not inspection:
+
+| what | was | is |
+|---|---|---|
+| `--canonical-hand` on Sem-Lex | assumed to be the fix | **would delete a real hand in 41.2% of clips** |
+| the 338 double-glossed videos | last CSV row silently won | resolved by policy; 17 quarantined |
+| `.npz` → `train.py` | did not exist | built, verified through `train.py`'s own loader |
+
+**1. `--canonical-hand` is refused; `--canonical` (mirror only) replaces it.**
+`extract_canonical.py`'s header states the measurement it was designed around — GISLR has BOTH
+hands live in 1.7% of clips, so reserving block 33-53 costs nothing. Sem-Lex measures **41.2%**
+(3,000 clinical clips). `canonicalize()` ends with `a[:, RESERVED_BLOCK, :] = np.nan`, so on this
+corpus it deletes a genuinely recorded passive hand in two clips in five — and masking that hand
+on GISLR, where it was the *only* hand, already cost **0.0312 test / 0.0415 val**
+(`pick_signing_block` docstring, 2026-08-13).
+
+The real discriminator is **between corpora, not within signers**: GISLR's L-share of one-handed
+clips is 42% — near chance, uncorrelated with handedness, an arbitrary recording convention.
+Sem-Lex's is **23.5%**, tracking its measured **19.5% (8/41)** left-dominant signer rate. The
+blocks mean what they say. (A per-signer "one-handed clips split L/R" flag was tried first and
+was the wrong axis — it fires at 70/30 splits, which is MediaPipe L/R label noise plus dropout.)
+
+But the mirror half is still wanted, for parity: `live_demo.py --canonical` mirrors every live
+segment. Train un-mirrored and the medical model must run *without* `--canonical` while the
+250-word model runs *with* it. So `semlex_poses_to_75.py --canonical` means **mirror only** —
+signing arm from `wrist_travel`, negate x, `POSE_FLIP`, and **swap** the hand blocks. Opt-in,
+default OFF, prints the mirrored fraction (expect 15-20%; near 50% means wrist travel is picking
+the resting arm).
+
+**2. The 338 double-glossed videos are resolved by policy** (`build_clinical_manifest.py`).
+Three facts drive it, and the first invalidates the priority order quoted in `build_vocab.py`:
+
+* all **6,192 `signbank` rows carry a bare integer** in `label` — a SignBank reference id, not a
+  gloss (`heart` vs `3369`). So "asllex > signbank > freetext" would have labelled a video
+  `1117` over `drawn`. signbank is **dropped**, not ranked. Resolves 90 with no judgement.
+* `asllex` (curated ASL-LEX) beats `freetext` (submitter typing). Resolves 96 more — and often
+  that is the point: `NetqYFVxLCOaSt37hO7V` is `close` (freetext) / `near` (asllex), which are
+  different signs, so the asllex gloss correctly removes it from the clinical set.
+* a **tie inside one `label_type` is a real ambiguity** → quarantined, never guessed. All 17 are
+  the linguistically dangerous set: `sick`/`very_sick`, `sick`/`upset`, `tired`/`not_tired`,
+  `bad`/`badass`, `not`/`slide`, `cold`/`refrigerator`, `head`/`kiss`, `show`/`example`,
+  `strong`/`dominant`, `sneeze`/`sneeze_2`, and `hurt`/`pain` (two of OUR classes on one video —
+  no neutral choice exists). 17 of 8,102 is 0.21%; being careful is free.
+  → `docs/CLINICAL_GLOSS_REVIEW.csv`, **verdict column empty** (Sem-Lex is CC BY-NC-SA).
+
+Result: **8,102 clips / 145 concepts / 41 signers**, deterministic. Also measured: `duration` is
+**milliseconds** (median 1,936); 915 videos appear under two Sem-Lex splits; **0 videos have two
+signer_ids**, so `signer_id` is safe.
+
+**3. `npz_to_train_format.py` writes what `train.py` reads**, whole-signer, and it is verified by
+calling `train.py`'s own `load_vocab`/`load_dataset` rather than by re-implementing the contract:
+
+```
+125 classes, 6,906 rows, 6,906 arrays, 0 dropped
+fold 0..3: signer overlap 0        test: 8 signers, overlap with any fold's train 0
+```
+
+The whole-signer rule is not tidiness — `train_man = cv[cv["fold"] != fold]` means a signer in
+two folds is in fold k's *training* set while also in its val set. That is exactly the §0.6 leak.
+Buckets are filled **largest-first into the lightest bucket**, which holds 19.8-20.2% per bucket
+despite the corpus's 330× signer concentration. `is_outlier` is all False — Sem-Lex has no
+measured outlier flag and inventing one would be a hidden modelling decision.
+
+⚠️ **Scoping decision still open, and it is Salim's:** at `--min-clips 8 --min-signers 2`,
+**20 of 145 concepts are pruned**, leaving 125. Three more (`how`, `light`, `shoulder`) survive
+but land with **no test clips**, so they cannot be scored at all. Drop them, or supplement from
+ASL Citizen / a recording session.
+
+---
+
+## 0.6 STATE AS OF 2026-08-27 — ⚠️ SUPERSEDED IN PART BY §0.7, READ THAT FIRST
 
 Supersedes §0.5 **only** on the recognition model's headline number and on how to evaluate a
 fold-ensemble. Everything else in §0.5 — the refuted levers, the per-signer variance being a
