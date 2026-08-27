@@ -268,6 +268,109 @@ def main() -> None:
                 print(f"         {nm} block tracked in "
                       f"{1 - np.isnan(P[:, blk, 0]).all(axis=1).mean():.1%} of frames")
 
+    # ── [7] CANONICAL MIRROR — mirror-only, both hands KEPT ───────────────────────────────
+    # The failure this guards against is the one extract_canonical.canonicalize would cause
+    # here: NaN-ing block 33-53. 41.2% of Sem-Lex clips have a real hand in it, so a test that
+    # only checks "the dominant hand ended up at 54-74" would pass while the passive hand was
+    # silently deleted. Every check below is about what SURVIVES, not just what moves.
+    print("\n[8] CANONICAL MIRROR — orientation normalized, passive hand NOT destroyed")
+
+    # POSE_FLIP and wrist_travel are copies (Kaggle staging, see the adapter). Pin them to
+    # their originals here, where both source files exist — this is the anti-drift check.
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import sign_landmarks as SLM
+        import extract_canonical as EC
+        check("POSE_FLIP == extract_canonical.POSE_FLIP",
+              np.array_equal(SL.POSE_FLIP, EC.POSE_FLIP),
+              f"{len(SL.POSE_FLIP)} indices, identical" if np.array_equal(
+                  SL.POSE_FLIP, EC.POSE_FLIP) else "THE COPY HAS DRIFTED")
+        rng = np.random.default_rng(7)
+        probe = rng.normal(size=(12, SL.N_POINTS, 3)).astype(np.float32)
+        a, b = SL.wrist_travel(probe), SLM.wrist_travel(probe)
+        check("wrist_travel == sign_landmarks.wrist_travel",
+              all(abs(a[k] - b[k]) < 1e-6 for k in "LR"), f"{a} vs {b}")
+        check("extract_canonical still reserves 33-53 (so we are right not to use it)",
+              EC.RESERVED_BLOCK == slice(33, 54) and EC.DOM_BLOCK == slice(54, 75))
+    except (ImportError, SystemExit) as exc:
+        print(f"     [skip] extract_canonical/sign_landmarks not importable ({exc}); "
+              f"the copies cannot be pinned here (fine on Kaggle, NOT fine locally)")
+
+    def _clip(t=10, l_travel=0.0, r_travel=0.0):
+        """Normalized clip: shoulders 1.0 apart at the origin, both hand blocks populated,
+        each wrist swept horizontally by the requested path length."""
+        a = np.full((t, SL.N_POINTS, 3), np.nan, np.float32)
+        a[:, EL.L_SHOULDER, :2] = (-0.5, 0.0)
+        a[:, EL.R_SHOULDER, :2] = (0.5, 0.0)
+        for wr, blk, tv, x0 in ((15, SL.OUR_L_HAND, l_travel, -0.5),
+                                (16, SL.OUR_R_HAND, r_travel, 0.5)):
+            step = tv / max(t - 1, 1)
+            xs = x0 + step * np.arange(t)
+            a[:, wr, 0] = xs; a[:, wr, 1] = 0.30
+            a[:, blk, 0] = xs[:, None] + np.linspace(0, 0.05, SL.HAND_N)[None, :]
+            a[:, blk, 1] = 0.30
+            a[:, blk, 2] = 0.0
+        return a
+
+    # right arm moves more -> already canonical -> untouched, byte for byte
+    right = _clip(l_travel=0.1, r_travel=1.0)
+    out, st = SL.canonical_mirror(right)
+    check("right-dominant clip is NOT mirrored", st["mirrored"] is False)
+    check("right-dominant clip is returned unchanged",
+          np.array_equal(np.nan_to_num(out, nan=-9), np.nan_to_num(right, nan=-9)))
+
+    left = _clip(l_travel=1.0, r_travel=0.1)
+    out, st = SL.canonical_mirror(left)
+    check("left-dominant clip IS mirrored", st["mirrored"] is True)
+    check("travel is reported both ways", st["travel_l"] > st["travel_r"],
+          f"L {st['travel_l']} R {st['travel_r']}")
+
+    # THE test: 33-53 must still hold a hand. This is what canonicalize() would have NaN-ed.
+    check("passive hand SURVIVES at 33-53 (canonicalize would NaN this)",
+          bool(np.isfinite(out[:, SL.OUR_L_HAND, 0]).all()),
+          f"{np.isnan(out[:, SL.OUR_L_HAND, 0]).mean():.0%} of L-block x is NaN after mirroring")
+    check("dominant hand present at 54-74",
+          bool(np.isfinite(out[:, SL.OUR_R_HAND, 0]).all()))
+    check("no point count changed", out.shape == left.shape, f"{out.shape} vs {left.shape}")
+
+    # the moving hand must END UP in the R block: that is the whole point of the swap
+    tr_after = SL.wrist_travel(out)
+    check("after mirroring the RIGHT wrist is the moving one", tr_after["R"] > tr_after["L"],
+          f"L {tr_after['L']:.3f} R {tr_after['R']:.3f}")
+    src_l = left[:, SL.OUR_L_HAND, 0]
+    check("R block now holds the (negated) former LEFT hand",
+          np.allclose(out[:, SL.OUR_R_HAND, 0], -src_l, atol=1e-5))
+    check("L block now holds the (negated) former RIGHT hand",
+          np.allclose(out[:, SL.OUR_L_HAND, 0], -left[:, SL.OUR_R_HAND, 0], atol=1e-5))
+
+    # POSE_FLIP must swap the anatomical pair, not just negate — otherwise the mirrored
+    # skeleton has its shoulders crossed and every downstream distance is wrong.
+    check("shoulders stay 1.0 apart and un-crossed after the flip",
+          out[0, EL.L_SHOULDER, 0] < out[0, EL.R_SHOULDER, 0]
+          and abs(abs(out[0, EL.L_SHOULDER, 0] - out[0, EL.R_SHOULDER, 0]) - 1.0) < 1e-5,
+          f"L {out[0, EL.L_SHOULDER, 0]:.3f} R {out[0, EL.R_SHOULDER, 0]:.3f}")
+    # POSE_FLIP self-inverse, tested on the MAP — calling canonical_mirror twice would be a
+    # no-op on the second pass (the arm is already right-dominant), so that would prove nothing.
+    check("POSE_FLIP is self-inverse", np.array_equal(SL.POSE_FLIP[SL.POSE_FLIP],
+                                                      np.arange(SL.POSE_N)))
+    check("canonical_mirror is deterministic",
+          np.allclose(SL.canonical_mirror(_clip(l_travel=1.0, r_travel=0.1))[0],
+                      out, equal_nan=True))
+    # applying the transform a second time must land back on the original clip
+    twice, st2 = SL.canonical_mirror(out * np.array([-1.0, 1.0, 1.0], np.float32))
+    check("re-mirroring an already-canonical clip changes nothing", st2["mirrored"] is False,
+          "a second pass must be a no-op, not a second flip")
+
+    # no motion at all -> no coin-flip mirror
+    _, st = SL.canonical_mirror(_clip(l_travel=0.0, r_travel=0.0))
+    check("a motionless clip is never mirrored", st["mirrored"] is False)
+
+    # and the flag must actually be plumbed through the gate chain
+    import inspect
+    check("clip_to_tensor accepts canonical=",
+          "canonical" in inspect.signature(SL.clip_to_tensor).parameters)
+
     print("\n" + "=" * 74)
     if _fails:
         print(f"FAILED {len(_fails)}: " + "; ".join(_fails))
