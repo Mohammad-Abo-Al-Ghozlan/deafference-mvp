@@ -133,15 +133,36 @@ Two conclusions, and they point in opposite directions:
    **0.0312 test / 0.0415 val**, train accuracy 0.767 -> 0.498 (`pick_signing_block` docstring,
    2026-08-13). The passive hand carries signal. Do not throw it away.
 
-2. **The problem canonicalization solves is much smaller here, but the mirror is still
-   wanted.** GISLR's L-share of one-handed clips is 42% — near chance, uncorrelated with
-   handedness, i.e. a pure recording convention and free to normalize away. Sem-Lex's is
-   23.5%, and it tracks the measured left-dominant signer rate (19.5%): the blocks mean what
-   they say. So the block assignment is signal, not noise — but the ORIENTATION still varies
-   by signer, and `live_demo.py --canonical` mirrors every live segment so the signing arm
-   reads as right. Train un-mirrored and the medical model must run WITHOUT `--canonical`
-   while the 250-word model runs WITH it: two models, two preprocessing conventions, in one
-   app. `live_demo` already warns about that mismatch, which is how we know it is a footgun.
+2. **The problem canonicalization solves is much smaller here.** GISLR's L-share of one-handed
+   clips is 42% — near chance, uncorrelated with handedness, i.e. a pure recording convention
+   and free to normalize away. Sem-Lex's is 23.5%, and it tracks the measured left-dominant
+   signer rate (19.5%): the blocks mean what they say. So the block assignment is signal, not
+   noise.
+
+❌ AND THE MIRROR ITSELF BUYS NOTHING — MEASURED 2026-08-28. `--canonical` IS NOT A DEFAULT.
+------------------------------------------------------------------------------------------
+Trained both arms on **fold 2**, the only split with power to measure this (its val is 71.6%
+left-dominant clips; folds 0 and 1 contain ZERO left-dominant signers and would have returned a
+null by construction). Same seed, `--decimate 0.5` on both:
+
+    landmarks  val acc 0.7477   (epochs_run 200)
+    canonical  val acc 0.7484   (epochs_run 187)
+    difference           +0.0007        <- one clip out of 1,391
+
+Flat, on the most favourable split that exists. The mechanism is in train.py's own config line:
+
+    [cfg] layout = LEGACY (L@33-53, R@54-74) | hflip swaps hands = True
+
+`train.py`'s hflip augmentation ALREADY mirrors the clip and swaps the hand blocks on 50% of
+samples every epoch — the identical operation this function performs, applied stochastically at
+train time instead of statically here. The model is handedness-invariant before we touch it.
+
+Same verdict on GISLR: canonical-vs-legacy was +0.0032 at 30 fps. The measured win on the
+250-word model was `--decimate` (+0.0218 paired at 7 fps), never canonicalization.
+
+So `--canonical` is kept as a MEASURED-NEUTRAL option, the way `--no-trim` is kept: it makes the
+comparison reproducible, it is not advice. Reach for it only if hflip's hand-swapping is turned
+off (i.e. with `train.py --canonical-hand`, which this corpus must never use — see above).
 
 Hence `--canonical` here means **mirror only**: if the signer is left-dominant, negate x, apply
 POSE_FLIP, and **swap the two hand blocks**. Both hands survive; the layout stays 75 points;

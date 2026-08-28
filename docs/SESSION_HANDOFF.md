@@ -867,6 +867,71 @@ presence becomes the reliable signal and motion the unreliable one. **Same two s
 opposite verdicts, because the corpora were collected differently.** Never port a dominance rule
 between corpora without re-measuring it.
 
+### ❌ AND THEN CANONICALIZATION ITSELF WAS REFUTED (2026-08-28). Train on `data_medical_landmarks`.
+
+The A/B ran on **fold 2**, chosen because it is the only split with the power to measure this:
+
+| split | val clips | left-dominant signers in it | share | power |
+|---|---|---|---|---|
+| fold 0 | 1,374 | — none — | 0.0% | ⛔ cannot measure it |
+| fold 1 | 1,385 | — none — | 0.0% | ⛔ cannot measure it |
+| **fold 2** | **1,391** | **57(438), 46(380), 61(152), 76(26)** | **71.6%** | ← the one to run |
+| fold 3 | 1,373 | 53(59), 47(4) | 4.6% | too thin |
+| test | 1,373 | 11(170), 23(58), 24(4) | 16.9% | usable, 6× diluted |
+
+Whole-signer splitting put both big left-dominant signers in one bucket. **Running fold 0 would
+have returned a null by construction** and it would have read as "canonicalization doesn't help."
+Always check which held-out split contains the population an intervention targets.
+
+Result, same split, same seed, `--decimate 0.5` on both arms:
+
+```
+landmarks  val acc 0.7477   (epochs_run 200)
+canonical  val acc 0.7484   (epochs_run 187)
+CANONICAL - LANDMARKS = +0.0007        <- one clip out of 1,391
+```
+
+**Flat, on the most favourable split that exists.** And the mechanism is printed in both runs' own
+config line:
+
+```
+[cfg] layout = LEGACY (L@33-53, R@54-74) | hflip swaps hands = True
+```
+
+`train.py`'s hflip augmentation already mirrors the clip **and swaps the hand blocks** on 50% of
+samples every epoch — the identical operation `--canonical` performs, applied stochastically at
+train time instead of statically at extraction. The model was already handedness-invariant, so
+pre-canonicalizing the input is redundant.
+
+This also retro-explains §0.6: canonical-vs-legacy on the 250-word model was **+0.0032 at 30 fps**,
+likewise nothing. The measured win there was **`--decimate`** (+0.0218 paired at 7 fps), never
+canonicalization. Two corpora, two null results, one conclusion: **as long as hflip swaps hands,
+static canonicalization buys nothing.** It is only worth reaching for if that augmentation is
+turned off.
+
+`--canonical` stays in the adapter as a measured-neutral option (like `--no-trim`), not a
+recommendation. The medical model trains on **`data_medical_landmarks`** — fewer steps, no mirror,
+and it runs on `live_demo.py` *without* `--canonical`.
+
+### ⚠️ 0.7477 is a MICRO average and must not be quoted as the model's accuracy
+
+```
+worst 5 words: {'burn': 0.0, 'ear': 0.0, 'face': 0.0, 'faint': 0.0, 'heart': 0.0}
+```
+
+Five classes at **exactly zero**, and `heart` / `ear` / `face` are core clinical vocabulary. With
+**170× class imbalance** (`water` 341 clips vs 8-clip classes) the micro average is carried by a
+handful of frequent words. The macro average — mean over the 124 words — is the honest figure and
+is not yet measured; the `eval_*.json` files were lost twice to Kaggle save failures.
+
+Per-word numbers in the tail are also near-meaningless: `interpreter` has **1** val clip, so its
+"1.000 → 0.000" in the A/B is a single clip flipping, not evidence.
+
+⚠️ **Kaggle operational lesson, learned twice:** a commit that finishes its cells can still hang
+for hours in the output-save step and report `Output 0 B` — losing every artifact while the printed
+numbers survive in the Logs. **Print results into the log** (`json.dumps(report)`), never rely on
+`/kaggle/working` being saved.
+
 **2. The 338 double-glossed videos are resolved by policy** (`build_clinical_manifest.py`).
 Three facts drive it, and the first invalidates the priority order quoted in `build_vocab.py`:
 
