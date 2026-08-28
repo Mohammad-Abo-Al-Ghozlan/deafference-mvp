@@ -913,6 +913,64 @@ turned off.
 recommendation. The medical model trains on **`data_medical_landmarks`** — fewer steps, no mirror,
 and it runs on `live_demo.py` *without* `--canonical`.
 
+### 🏆 THE CLINICAL MODEL SHIPS A NUMBER (2026-08-28): 0.8245 test on 9 unseen signers
+
+4-fold ensemble, `data_medical_landmarks`, `--decimate 0.5`, scored on **`split == "test"` only**:
+
+```
+savedmodel_fold0  0.7961      mean single-model  0.7948
+savedmodel_fold1  0.7932      ENSEMBLE           0.8245   (+0.0296 vs mean, +0.0175 vs best single)
+savedmodel_fold2  0.8070      ENSEMBLE top-5     0.9512
+savedmodel_fold3  0.7830      per-word MACRO     0.7202   <- QUOTE THIS
+                              per-word median    0.8377
+```
+
+**This beats the 250-word model — 0.8245 vs 0.7787 — and on 9 held-out signers instead of 3.**
+Predicted "well below 0.7576" twice and was wrong twice: 124 classes instead of 250, studio-recorded
+prompted signs instead of in-the-wild GISLR, and the dead-air trim are each worth more than expected.
+
+**Quote the MACRO 0.7202, not 0.8245.** The gap is the 170× imbalance. And quote **top-5 0.9512**
+for the product: `live_demo` ships 1–5 fix keys, so top-5 is the real ceiling of the tap-to-fix UX.
+
+**Shippable subsets** (confidence gating already exists): **50 concepts ≥0.90 · 66 ≥0.80 · 75 ≥0.70.**
+Ship the 75, not the 124.
+
+### ⚠️ `pain` 0.222 while `hurt` 0.923 — they are THE SAME SIGN. Merge them.
+
+The most important word in a clinical vocabulary is the second-worst symptom class, and the cause is
+not the model: **HURT and PAIN are one sign in ASL**, so the classifier cannot separate them and
+collapses onto the more frequent gloss. `build_clinical_manifest.py` already caught the evidence —
+video `PBiQBaqwWVoYJYuio4u0` carries *both* glosses and was quarantined for exactly this.
+
+**Fix in `build_vocab.py`'s CONCEPTS map**, the same way `knee` absorbs `knees`:
+`"pain": ["pain", "hurt"]`. Free, and it turns two half-broken classes into one strong one.
+
+### ⚠️ BODY PARTS are the weakest category — and they are how a patient localizes a symptom
+
+Per-category survival at ≥0.70 on test:
+
+| category | ≥0.70 | the failures |
+|---|---|---|
+| object | 7/8 | pill 0.67 |
+| action | 15/24 | close 0.00, take 0.00, look 0.33 |
+| time | 14/18 | today 0.10, sometimes 0.20 |
+| symptom | 10/16 | itch 0.00, **pain 0.22**, burn/faint 0.40 |
+| people | 8/12 | child 0.00, nurse 0.33 |
+| **body** | **9/19** | **arm 0.00, throat 0.00, tongue 0.00, heart 0.17, ear 0.20** |
+| severity | 4/7 | light 0.00, strong 0.40 |
+| core | 8/18 | why 0.40, some 0.43, all 0.44 (function words — the grammar layer can absorb these) |
+
+Body is the category that matters most here and it is the worst. **Cause not yet diagnosed** — the
+confusion matrix is already written to `ensemble_test.confusion.csv`, so read it before theorising.
+One hypothesis worth testing, not yet evidence: the 75-point layout carries **33 pose + 42 hand
+points and ZERO face landmarks**, so signs separated only by contact point around the mouth/throat
+have little to distinguish them. But `nose` 1.00 / `teeth` 0.73 / `head` 1.00 argue against a simple
+version of that, and `heart` 0.17 is a chest sign, so the story is incomplete.
+
+Several zeros trace straight back to the gloss ambiguities quarantined at manifest time —
+`close` (vs NEAR), `take` (vs STEAL), `light` (weight / lamp / bright). Those are vocabulary
+defects, not model defects.
+
 ### ⚠️ 0.7477 is a MICRO average and must not be quoted as the model's accuracy
 
 ```
