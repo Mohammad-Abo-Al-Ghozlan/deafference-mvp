@@ -177,6 +177,13 @@ def main():
         "ensemble_gain_vs_mean_single": round(ens_acc - mean_single, 4),
         "ensemble_top5_acc": round(top5, 4),
         "per_word_bucket_counts": buckets,
+        # MACRO = every word counts once, regardless of how many clips it has. On a corpus with
+        # 170x class imbalance (Sem-Lex clinical: `water` 341 clips vs 8-clip classes) the
+        # ensemble_acc above is a MICRO average carried by the frequent, easy words, and it hides
+        # classes at exactly 0.000 — on 2026-08-28 those were burn / ear / face / faint / heart,
+        # all core clinical vocabulary. Quote macro for a per-word menu; micro for stream accuracy.
+        "per_word_macro_mean": round(float(vals.mean()), 4),
+        "per_word_zeros": sorted(k for k, v in per_word.items() if v == 0.0),
         "per_word_median": round(float(np.median(vals)), 4),
         "per_word_acc": {k: round(v, 3) for k, v in per_word.items()},
         "worst_words": sorted(per_word, key=per_word.get)[:15],
@@ -189,11 +196,21 @@ def main():
     print(f"\nmean single-model acc : {mean_single:.4f}")
     print(f"ENSEMBLE acc          : {ens_acc:.4f}  ({ens_acc - mean_single:+.4f} vs mean single)")
     print(f"ENSEMBLE top-5 acc    : {top5:.4f}   <- ceiling of the tap-to-fix UX")
+    print(f"per-word MACRO mean   : {vals.mean():.4f}   <- every word counts once")
     print(f"per-word median       : {np.median(vals):.4f}   buckets {buckets}")
+    print(f"words at exactly 0.00 : {len(report['per_word_zeros'])}  "
+          f"{report['per_word_zeros'][:10]}")
     print(f"worst words           : {report['worst_words'][:8]}")
     print(f"written: {args.out}")
     print("\nQUOTE THIS as the ensemble number — and note it is the TEST split "
           "(unseen participants).")
+    print("⚠️  On an imbalanced vocabulary quote the MACRO mean, not ensemble_acc: the latter is "
+          "a micro average and a class at 0.000 barely moves it.")
+    # Kaggle can finish every cell, write __results__.html, then hang in the output-save step and
+    # report `Output 0 B` — losing this file while stdout survives in Logs (happened twice on
+    # 2026-08-28). So the report goes to the LOG as well as to disk.
+    print("\n----- report (also written to disk; echoed here so a save failure cannot lose it)")
+    print(json.dumps(report, indent=1))
 
 
 if __name__ == "__main__":
