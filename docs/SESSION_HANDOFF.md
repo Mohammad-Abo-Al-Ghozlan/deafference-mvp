@@ -913,6 +913,38 @@ turned off.
 recommendation. The medical model trains on **`data_medical_landmarks`** — fewer steps, no mirror,
 and it runs on `live_demo.py` *without* `--canonical`.
 
+### ✅ v2 (2026-08-29): 0.8383 test — and the two ASL-LEX predictions both landed
+
+`semlex-medical-v2`, 123 classes (pain absorbs hurt), **same 9 test signers / 1,373 clips** as
+the 0.8245 run, so this is a paired comparison, not a fresh draw.
+
+```
+fold0 0.8099  fold1 0.7946  fold2 0.8208  fold3 0.7997   mean single 0.8063
+ENSEMBLE  0.8383  (+0.0321 vs mean single)      top-5  0.9512
+MACRO     0.7344      median 0.8421     buckets >=0.9: 50  >=0.8: 67  >=0.7: 75
+```
+
+**`pain` 0.222 -> 0.971.** The merge did exactly what the confusion matrix said it would, and
+the merged class beats what `hurt` scored alone (0.923). **`today` 0.10, `now` 0.667** — still
+confused, exactly as predicted when MERGE-02 was reverted. Two pre-registered predictions from
+one ASL-LEX lookup, both confirmed.
+
+⚠️ **Do NOT credit the merge with the whole +0.0138 micro.** Account for it honestly:
+old `pain` 9 clips @0.222 (2 right) + `hurt` 26 @0.923 (24 right) = **26 of 35**; new `pain`
+35 @0.971 = **34 of 35**. That is **+8 clips = +0.006 micro**. The measured gain is +19 clips,
+so ~11 clips came from retraining variance and one fewer competing class. The merge is real,
+worth about half a point, and the rest is noise.
+
+🔬 **`today` is now a clean natural experiment.** It and `now` differ in exactly ONE of 17
+ASL-LEX features — Repeated Movement — and the model scores 0.10 vs 0.667 on them. If
+`--decimate 0.5` plus the 64-frame resize is what erases repetition, turning decimate OFF
+should lift `today` specifically **even if overall accuracy falls** (decimate measured +0.0218
+on the 250-word model, so it should fall). That is a pre-registered, falsifiable A/B and it now
+costs **34 minutes**, not a day.
+
+⏱️ **Training is 16-17 min/fold on a T4 x2, ~70 min for all four** — not the 4 h estimated.
+Both A/Bs on this corpus are lunch-break experiments; scope experiments accordingly.
+
 ### 🏆 THE CLINICAL MODEL SHIPS A NUMBER (2026-08-28): 0.8245 test on 9 unseen signers
 
 4-fold ensemble, `data_medical_landmarks`, `--decimate 0.5`, scored on **`split == "test"` only**:
