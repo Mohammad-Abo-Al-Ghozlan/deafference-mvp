@@ -5,7 +5,7 @@ gjUjIgqMSMFc1XYpeHrd,address;block;face,face,freetext,57,2001.0,tied gloss may b
 V4eh0L9Hew47K3ySgadm,done;finish,finish,freetext,60,1135.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 tqqZMM9O7WEqixZ7uhRo,give;give_me,give,freetext,57,1830.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 BGFYE1RUGlZD3n3CA14O,head;kiss,head,asllex,7,2717.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
-PBiQBaqwWVoYJYuio4u0,hurt;pain,hurt;pain,asllex,7,2702.0,two CLINICAL concepts on one video — no neutral choice,,,
+PBiQBaqwWVoYJYuio4u0,hurt;pain,hurt;pain,asllex,7,2702.0,two CLINICAL concepts on one video — no neutral choice,SAME,,auto: ASL-LEX SignBank 489.0 for both (224+51 annotated clips) — same lexical entry. Confirm if you disagree.
 m30wKcOk4zPt0b6p3GBw,interpret;interpreter,interpreter,asllex,59,2738.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 7Jm7lbZNmodXwYHXRu6K,not;slide,not,asllex,8,1525.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 xI4PNGl8UVuO8pyzMhM9,example;show,show,asllex,62,1025.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
@@ -16,5 +16,5 @@ j5MQtiHSBIiKG1ltKR3o,sneeze;sneeze_2,sneeze,asllex,60,1136.0,tied gloss may be a
 bnnM6h44x4vJ2gIjvjmN,dominant;strong,strong,asllex,8,1355.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 WqpuLgcG8AwlVonQUlQ5,dominant;strong,strong,asllex,84,1234.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 KoTv4V9FjetMYeztJmEK,decrease;weak,weak,freetext,62,1392.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
-MERGE-01,pain;hurt,pain,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 6 of 9 test clips glossed `pain` were predicted `hurt` (hurt 0.923 / pain 0.222). Are PAIN and HURT the same sign? Write SAME in verdict_keep_as to keep them merged, or DIFFERENT to split them back apart.",,,
-MERGE-02,today;now,now,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 7 of 10 test clips glossed `today` were predicted `now` (today 0.10). Are TODAY and NOW the same sign for these signers, or does TODAY need a DAY compound? Write SAME to keep merged, DIFFERENT to split back.",,,
+MERGE-01,pain;hurt,pain,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 6 of 9 test clips glossed `pain` were predicted `hurt` (hurt 0.923 / pain 0.222). Are PAIN and HURT the same sign? Write SAME in verdict_keep_as to keep them merged, or DIFFERENT to split them back apart.",SAME,,auto: ASL-LEX SignBank 489.0 for both (51+224 annotated clips) — same lexical entry. Confirm if you disagree.
+MERGE-02,today;now,now,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 7 of 10 test clips glossed `today` were predicted `now` (today 0.10). Are TODAY and NOW the same sign for these signers, or does TODAY need a DAY compound? Write SAME to keep merged, DIFFERENT to split back.",DIFFERENT,,"auto 2026-08-29: ASL-LEX SignBank 299.0 (today) vs 517.0 (now) are TWO entries, differing in exactly one of 17 features: Repeated Movement (TODAY is NOW signed twice). Merge reverted in build_vocab.py."

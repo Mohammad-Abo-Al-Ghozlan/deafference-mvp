@@ -73,10 +73,18 @@ print(f"[src] {multi_split:,} video_ids appear under MORE THAN ONE split (train+
 #     `build_clinical_manifest.py` had already flagged the first independently: video
 #     PBiQBaqwWVoYJYuio4u0 carries BOTH glosses and was quarantined for it.
 #
-#     🚨 PENDING DEAF REVIEW — rows MERGE-01 / MERGE-02 in docs/CLINICAL_GLOSS_REVIEW.csv.
-#        If a native signer distinguishes either pair, SPLIT IT BACK: restore
-#        "hurt":["hurt"] / "today":["today"] as their own entries and rebuild. Merging two
-#        signs a signer keeps apart is worse than the confusion it fixes.
+# ✅ RESOLVED 2026-08-29 from ASL-LEX, no reviewer needed. semlex_metadata.csv carries a
+#    SignBank Reference ID per annotated clip, and that ID is the lexical identity:
+#
+#      pain / hurt   BOTH SignBank 489.0 (51 + 224 annotated clips) -> ONE entry. MERGE KEPT.
+#      today / now   SignBank 299.0 vs 517.0 -> TWO entries, differing in exactly ONE of the
+#                    17 features: Repeated Movement. TODAY is NOW signed twice.
+#                    ❌ MERGE-02 REVERTED. They are different signs and merging them would
+#                    delete a real distinction. The model's 7-of-10 confusion is a genuine
+#                    weakness at counting repetitions, not a labelling artefact — see
+#                    training/medical/gloss_phonology.py --confusions.
+#
+#     Re-check either with:  python training/medical/gloss_phonology.py --pair pain hurt
 #
 #     Effect is not free in wall-clock: this map is the single source of truth that
 #     build_clinical_manifest.py and semlex_poses_to_75.py both read, so changing it means
@@ -99,8 +107,8 @@ CONCEPTS = {
              "cramp":["cramp"],"infection":["infection"],"sneeze":["sneeze"]},
  "severity":{"bad":["bad"],"worse":["worse"],"better":["better"],"big":["big"],
              "much":["much"],"strong":["strong"],"light":["light"],"sharp":["sharp"],"very":["very"]},
- "time":    {"when":["when"],"yesterday":["yesterday"],"tomorrow":["tomorrow"],
-             "now":["now","today"],"morning":["morning"],                     # MERGE-02
+ "time":    {"when":["when"],"today":["today"],"yesterday":["yesterday"],   # MERGE-02 REVERTED
+             "tomorrow":["tomorrow"],"now":["now"],"morning":["morning"],
              "afternoon":["afternoon"],"night":["night"],
              "day":["day"],"week":["week"],"month":["month"],"year":["year"],"hour":["hour"],
              "minute":["minute"],"long":["long"],"always":["always"],"sometimes":["sometimes"],
