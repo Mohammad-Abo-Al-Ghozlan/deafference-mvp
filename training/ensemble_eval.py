@@ -169,6 +169,11 @@ def main():
     mean_single = float(np.mean([m["acc"] for m in per_model]))
     report = {
         "split": args.split, "n_models": len(srcs), "n_classes": num_classes,
+        # The row/col order of the .confusion.csv written below. WITHOUT this the CSV is
+        # unreadable: per_word_acc only holds the classes PRESENT in the split (122 of 124
+        # on the 2026-08-28 test run), so reconstructing labels from its keys silently
+        # shifts every row after the first unscored class. Carry the order in the report.
+        "class_names": list(words),
         "loaded_from": "savedmodel" if args.models else "weights.h5",
         "n_samples": int(len(ev)), "participants": parts,
         "per_model_acc": per_model,
