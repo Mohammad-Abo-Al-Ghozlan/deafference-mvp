@@ -214,11 +214,42 @@ def main() -> None:
     if quar:
         q = Path(args.quarantine)
         q.parent.mkdir(parents=True, exist_ok=True)
+
+        # NEVER clobber review work. This file is filled in by hand, one row at a time, by
+        # someone whose time is the scarcest input to the project — and the manifest gets
+        # regenerated on every vocabulary change. An unconditional write would silently
+        # delete hours of it (it deleted three resolved rows on 2026-08-29 before this
+        # existed). So: carry forward every human column for any row already present, and
+        # keep rows that are NOT auto-generated at all (MERGE-* decisions live here too).
+        HUMAN = ("verdict_keep_as", "reviewer", "notes")
+        prior, extra = {}, []
+        if q.exists():
+            with q.open(newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    prior[row["video_id"]] = row
+            auto = {r["video_id"] for r in quar}
+            extra = [r for vid, r in prior.items() if vid not in auto]
+
+        carried = 0
+        for r in quar:
+            old = prior.get(r["video_id"])
+            if not old:
+                continue
+            for col in HUMAN:
+                if old.get(col, "").strip():
+                    r[col] = old[col]
+                    carried += 1
+
+        cols = list(quar[0])
+        rows = sorted(quar, key=lambda r: r["clinical_concepts"]) + \
+            [{c: e.get(c, "") for c in cols} for e in extra]
         with q.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=list(quar[0]))
+            w = csv.DictWriter(f, fieldnames=cols)
             w.writeheader()
-            w.writerows(sorted(quar, key=lambda r: r["clinical_concepts"]))
-        print(f"[ok] wrote {q}: {len(quar)} videos for Deaf review "
+            w.writerows(rows)
+        note = (f", carried {carried} human field(s) forward" if carried else "")
+        note += (f", kept {len(extra)} non-auto row(s)" if extra else "")
+        print(f"[ok] wrote {q}: {len(quar)} videos for Deaf review{note} "
               f"(verdict_keep_as deliberately EMPTY — Sem-Lex is CC BY-NC-SA, its annotations "
               f"inform the judgement but must not be copied into a shipped label file)")
         for r in sorted(quar, key=lambda r: r["clinical_concepts"]):
