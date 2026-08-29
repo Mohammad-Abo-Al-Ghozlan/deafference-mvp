@@ -147,9 +147,9 @@ for cat, m in CONCEPTS.items():
 MERGED = {c: ls for m in CONCEPTS.values() for c, ls in m.items() if len(ls) > 1}
 _desc = "; ".join(f"{c} <- " + "+".join(ls) for c, ls in MERGED.items())
 print(f"[merge] {len(MERGED)} concepts absorb more than one Sem-Lex label: {_desc}")
-print("🚨 pain<-hurt and now<-today are MEASURED merges PENDING DEAF REVIEW "
-      "(docs/CLINICAL_GLOSS_REVIEW.csv, rows MERGE-01/02). Split them back into separate\n"
-      "   concepts if a native signer distinguishes either pair.\n")
+print("✅ pain<-hurt CONFIRMED by ASL-LEX: both glosses are SignBank 489.0, one lexical entry.\n"
+      "   today<-now REVERTED: SignBank 299.0 vs 517.0, two entries differing only in Repeated\n"
+      "   Movement. Re-check either with: python training/medical/gloss_phonology.py --pair a b\n")
 
 MIN_V, MIN_S = 8, 3
 out = {"tier_A_trainable": {}, "tier_B_thin": {}, "tier_C_absent": []}

@@ -168,20 +168,13 @@
    "signers": 16,
    "category": "body"
   },
-  "hurt": {
-   "labels": [
-    "hurt"
-   ],
-   "videos": 239,
-   "signers": 36,
-   "category": "symptom"
-  },
   "pain": {
    "labels": [
-    "pain"
+    "pain",
+    "hurt"
    ],
-   "videos": 52,
-   "signers": 22,
+   "videos": 291,
+   "signers": 37,
    "category": "symptom"
   },
   "sick": {
