@@ -929,47 +929,99 @@ savedmodel_fold3  0.7830      per-word MACRO     0.7202   <- QUOTE THIS
 Predicted "well below 0.7576" twice and was wrong twice: 124 classes instead of 250, studio-recorded
 prompted signs instead of in-the-wild GISLR, and the dead-air trim are each worth more than expected.
 
-**Quote the MACRO 0.7202, not 0.8245.** The gap is the 170× imbalance. And quote **top-5 0.9512**
-for the product: `live_demo` ships 1–5 fix keys, so top-5 is the real ceiling of the tap-to-fix UX.
+**Quote the MACRO — but say WHICH macro.** 0.7202 averages 122 classes of which **15 have ≤2 test
+clips**, and a class with one test clip scores exactly 0.00 or exactly 1.00. It measures nothing.
 
-**Shippable subsets** (confidence gating already exists): **50 concepts ≥0.90 · 66 ≥0.80 · 75 ≥0.70.**
-Ship the 75, not the 124.
+```
+test-n per class            macro restricted by evidence
+n  1-1  :  7 classes  0.286      n>= 1 : 122 classes  0.7202
+n  2-2  :  8 classes  0.438      n>= 3 : 107 classes  0.7697
+n  3-4  : 17 classes  0.789      n>= 5 :  90 classes  0.7660
+n  5-9  : 39 classes  0.660      n>= 8 :  56 classes  0.8263
+n 10-19 : 29 classes  0.800      n>=10 :  51 classes  0.8474
+n 20+   : 22 classes  0.910
+```
 
-### ⚠️ `pain` 0.222 while `hurt` 0.923 — they are THE SAME SIGN. Merge them.
+⚠️ **Do NOT read the rising right-hand column as "the model is really 0.85."** Test is a 22%
+whole-signer split, so test-n is proportional to *training* n: a thin class is both **unmeasured and
+undertrained**, and this table cannot separate the two. That `n 3-4` (0.789) sits *above* `n 5-9`
+(0.660) is proof the small buckets are variance, not signal.
 
-The most important word in a clinical vocabulary is the second-worst symptom class, and the cause is
-not the model: **HURT and PAIN are one sign in ASL**, so the classifier cannot separate them and
-collapses onto the more frequent gloss. `build_clinical_manifest.py` already caught the evidence —
-video `PBiQBaqwWVoYJYuio4u0` carries *both* glosses and was quarantined for exactly this.
+**The defensible product claim: 55 concepts at ≥0.80, each on ≥5 test clips.**
+Of the 90 measurable classes: **39 ≥0.90 · 55 ≥0.80 · 61 ≥0.70.** The earlier "50/66/75" counted
+noise at both ends — some of those words earned 1.000 on a single clip. The other **32 classes have
+<5 test clips and are unquotable in either direction** (afternoon, arm, ask, better, bleed, bone,
+can, child, choke, close, dizzy, eat, face, feet, headache, interpreter, itch, light, look, mouth,
+muscle, nose, nurse, please, thankyou, throat, tongue, touch, what, when, worse, yesterday).
+
+**micro 0.8245 is unaffected by any of this** — it is clip-weighted, and it is the right number for
+stream accuracy. Quote **top-5 0.9512** for the UX ceiling: `live_demo` ships 1–5 fix keys.
+
+### ✅ DIAGNOSED 2026-08-29: the failures are LEXICAL COLLISIONS — not landmarks, not imbalance
+
+Read from `ensemble_test.confusion.csv`. **Both standing hypotheses are refuted.**
+
+*Not imbalance.* If the 170× skew were eating small classes, `water` (341 train clips) would top the
+over-prediction list. It is not on it at all. Worst absorber is `who` at **+12 of 1,373** — the model
+is not collapsing onto frequent classes.
+
+*Not missing face landmarks.* The only face-location confusion in the whole matrix is
+`tongue → teeth/mouth`, at **n=2**. The 75-point layout is not the bottleneck. This kills a proposed
+re-extract at 100+ points.
+
+Every confusion with enough clips to mean anything is a **near-minimal pair or a true synonym**:
+
+| pair | clips | why |
+|---|---|---|
+| `today → now` | **7/10** | near-identical citation form |
+| `pain → hurt` | **6/9** | the same sign — see below |
+| `where → ask` / `where → who` | 4 + 3 | one-index wh-questions |
+| `sometimes → show` | 4 | |
+| `maybe → want` | 4 | two-handed, palms up, alternating |
+| `man → woman` / `man → father` | 3 + 3 | forehead vs chin, same handshape |
+| `lungs → tired` | 3 | two-handed chest |
+| `heart → feel` | 3 | middle finger on chest |
+
+And the genuinely weak list (n≥5, so it is real) is dominated by **function words and directional
+verbs, NOT clinical content**: take 0.00, today 0.10, sometimes 0.20, strong 0.40, why 0.40,
+some 0.43, all 0.44, maybe 0.47, come 0.50, long 0.50, give 0.54, go 0.59, not 0.59. Only 8 of the 21
+are clinical (heart 0.17, ear 0.20, pain 0.22, burn 0.40, faint 0.40, weak 0.43, back 0.50,
+lungs 0.50). **For a medical MVP that is the good failure mode** — the symptom and object nouns hold.
+
+GIVE / TAKE / COME / GO are **directional verbs**: their form carries spatial agreement, so
+within-class form variance stays high even in citation recordings. Plausible mechanism, **NOT tested**.
+
+### 🚨 `not` scores 0.59 — a negation error INVERTS a medical statement
+
+`not` (n=17, 0.59) plus the polarity/quantity words `all` 0.44, `some` 0.43, `maybe` 0.47 are exactly
+the words where being wrong is far worse than being silent ("I am *not* allergic"). The L2-confirm
+rule above (line ~285) already lists negation as never-auto-commit — **that gate is now backed by a
+measurement rather than a hunch. Do not ship `not` on the auto-commit path at any confidence.**
+
+### ⚠️ RETRACTED: "body parts are the weakest category" (claimed 2026-08-28)
+
+That table read `arm 0.00 / throat 0.00 / tongue 0.00` as a category weakness. **It was sample size:**
+arm n=2, throat n=1, tongue n=2, itch n=1, child n=1, close n=1, headache n=2. `take n=6` produced six
+*different* wrong answers — noise with no structure. Nothing about body-part signs is established.
+Line 985's warning about `interpreter` having 1 val clip was the right instinct, not applied to test.
+
+Several apparent zeros still trace to gloss ambiguities quarantined at manifest time — `close`
+(vs NEAR), `take` (vs STEAL), `light` (weight / lamp / bright). Those are vocabulary defects, not
+model defects, but they are also all thin classes now.
+
+### ⚠️ `pain` 0.222 while `hurt` 0.923 — THE SAME SIGN. Merge them. (`today`/`now` too.)
+
+Confirmed by the matrix: **6 of 9 `pain` clips are predicted `hurt`.** The most important word in a
+clinical vocabulary cannot separate from its synonym, so it collapses onto the more frequent gloss.
+`build_clinical_manifest.py` already caught the evidence — video `PBiQBaqwWVoYJYuio4u0` carries *both*
+glosses and was quarantined for exactly this. **`today → now` is the same mechanism, 7 of 10.**
 
 **Fix in `build_vocab.py`'s CONCEPTS map**, the same way `knee` absorbs `knees`:
-`"pain": ["pain", "hurt"]`. Free, and it turns two half-broken classes into one strong one.
+`"pain": ["pain", "hurt"]` and `"now": ["now", "today"]`. Free, and each turns two half-broken
+classes into one strong one.
 
-### ⚠️ BODY PARTS are the weakest category — and they are how a patient localizes a symptom
-
-Per-category survival at ≥0.70 on test:
-
-| category | ≥0.70 | the failures |
-|---|---|---|
-| object | 7/8 | pill 0.67 |
-| action | 15/24 | close 0.00, take 0.00, look 0.33 |
-| time | 14/18 | today 0.10, sometimes 0.20 |
-| symptom | 10/16 | itch 0.00, **pain 0.22**, burn/faint 0.40 |
-| people | 8/12 | child 0.00, nurse 0.33 |
-| **body** | **9/19** | **arm 0.00, throat 0.00, tongue 0.00, heart 0.17, ear 0.20** |
-| severity | 4/7 | light 0.00, strong 0.40 |
-| core | 8/18 | why 0.40, some 0.43, all 0.44 (function words — the grammar layer can absorb these) |
-
-Body is the category that matters most here and it is the worst. **Cause not yet diagnosed** — the
-confusion matrix is already written to `ensemble_test.confusion.csv`, so read it before theorising.
-One hypothesis worth testing, not yet evidence: the 75-point layout carries **33 pose + 42 hand
-points and ZERO face landmarks**, so signs separated only by contact point around the mouth/throat
-have little to distinguish them. But `nose` 1.00 / `teeth` 0.73 / `head` 1.00 argue against a simple
-version of that, and `heart` 0.17 is a chest sign, so the story is incomplete.
-
-Several zeros trace straight back to the gloss ambiguities quarantined at manifest time —
-`close` (vs NEAR), `take` (vs STEAL), `light` (weight / lamp / bright). Those are vocabulary
-defects, not model defects.
+⚠️ **Put both in front of a Deaf reviewer first**, alongside the 17 in `docs/CLINICAL_GLOSS_REVIEW.csv`.
+Merging two signs a native signer distinguishes is worse than the confusion it fixes.
 
 ### ⚠️ 0.7477 is a MICRO average and must not be quoted as the model's accuracy
 
