@@ -957,6 +957,17 @@ muscle, nose, nurse, please, thankyou, throat, tongue, touch, what, when, worse,
 **micro 0.8245 is unaffected by any of this** — it is clip-weighted, and it is the right number for
 stream accuracy. Quote **top-5 0.9512** for the UX ceiling: `live_demo` ships 1–5 fix keys.
 
+**Do not hand-curate that list.** `training/medical/select_ship_vocab.py` applies both gates
+(`n >= --min-test-clips` AND `acc >= --min-acc`) to `ensemble_test.json` + its confusion matrix and
+emits a `topic_*.json`-shaped file that `live_demo.py --words` reads directly. It separates
+*unmeasured* from *weak*, which is the distinction the first hand-made list got wrong, and it refuses
+to run if the confusion matrix and the report disagree.
+
+```
+python training/medical/select_ship_vocab.py \
+    --report .../art_medical/ensemble_test.json --out clinical_ship_vocab.json
+```
+
 ### ✅ DIAGNOSED 2026-08-29: the failures are LEXICAL COLLISIONS — not landmarks, not imbalance
 
 Read from `ensemble_test.confusion.csv`. **Both standing hypotheses are refuted.**

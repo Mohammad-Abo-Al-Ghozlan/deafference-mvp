@@ -16,3 +16,5 @@ j5MQtiHSBIiKG1ltKR3o,sneeze;sneeze_2,sneeze,asllex,60,1136.0,tied gloss may be a
 bnnM6h44x4vJ2gIjvjmN,dominant;strong,strong,asllex,8,1355.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 WqpuLgcG8AwlVonQUlQ5,dominant;strong,strong,asllex,84,1234.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
 KoTv4V9FjetMYeztJmEK,decrease;weak,weak,freetext,62,1392.0,tied gloss may be a DIFFERENT sign (negation / intensifier / compound / homonym),,,
+MERGE-01,pain;hurt,pain,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 6 of 9 test clips glossed `pain` were predicted `hurt` (hurt 0.923 / pain 0.222). Are PAIN and HURT the same sign? Write SAME in verdict_keep_as to keep them merged, or DIFFERENT to split them back apart.",,,
+MERGE-02,today;now,now,measured,,,"MERGED 2026-08-29 from the 4-fold confusion matrix: 7 of 10 test clips glossed `today` were predicted `now` (today 0.10). Are TODAY and NOW the same sign for these signers, or does TODAY need a DAY compound? Write SAME to keep merged, DIFFERENT to split back.",,,

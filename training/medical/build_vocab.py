@@ -61,6 +61,28 @@ print(f"[src] {multi_label:,} video_ids carry MORE THAN ONE label — resolve or
 print(f"[src] {multi_split:,} video_ids appear under MORE THAN ONE split (train+val only; "
       f"zero train+test, so TEST is physically clean)\n")
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+# ⚠️  MEASURED SYNONYM MERGES — added 2026-08-29 from ensemble_test.confusion.csv
+#     (4-fold ensemble, test split, 9 unseen signers). Two gloss pairs the model cannot
+#     separate because they are the same sign, or near enough that these signers produce
+#     one form for both. Merging turns two half-broken classes into one strong class.
+#
+#       pain  <- hurt    6 of 9  `pain` test clips predicted `hurt`   (hurt 0.923, pain 0.222)
+#       now   <- today   7 of 10 `today` test clips predicted `now`   (today 0.10)
+#
+#     `build_clinical_manifest.py` had already flagged the first independently: video
+#     PBiQBaqwWVoYJYuio4u0 carries BOTH glosses and was quarantined for it.
+#
+#     🚨 PENDING DEAF REVIEW — rows MERGE-01 / MERGE-02 in docs/CLINICAL_GLOSS_REVIEW.csv.
+#        If a native signer distinguishes either pair, SPLIT IT BACK: restore
+#        "hurt":["hurt"] / "today":["today"] as their own entries and rebuild. Merging two
+#        signs a signer keeps apart is worse than the confusion it fixes.
+#
+#     Effect is not free in wall-clock: this map is the single source of truth that
+#     build_clinical_manifest.py and semlex_poses_to_75.py both read, so changing it means
+#     rebuild manifest -> rebuild layout -> RETRAIN all 4 folds (~4 h GPU).
+# ─────────────────────────────────────────────────────────────────────────────────────
+
 # clinical concept -> the Sem-Lex label(s) that really are that sign
 CONCEPTS = {
  "body":    {"head":["head"],"face":["face"],"eye":["eyes"],"ear":["ear"],"nose":["nose"],
@@ -69,7 +91,7 @@ CONCEPTS = {
              "chest":["chest"],"heart":["heart"],"lungs":["lungs"],"back":["back"],
              "stomach":["stomach"],"leg":["leg"],"knee":["knee","knees"],"feet":["feet"],
              "skin":["skin"],"bone":["bone"],"blood":["blood"],"muscle":["muscle"]},
- "symptom": {"hurt":["hurt"],"pain":["pain"],"sick":["sick"],"headache":["headache"],
+ "symptom": {"pain":["pain","hurt"],"sick":["sick"],"headache":["headache"],   # MERGE-01
              "fever":["fever"],"hot":["hot"],"cold":["cold"],"cough":["cough"],
              "vomit":["vomit"],"nausea":["nausea"],"dizzy":["dizzy"],"tired":["tired"],
              "weak":["weak"],"bleed":["bleed"],"itch":["itch"],"burn":["burn"],
@@ -77,8 +99,9 @@ CONCEPTS = {
              "cramp":["cramp"],"infection":["infection"],"sneeze":["sneeze"]},
  "severity":{"bad":["bad"],"worse":["worse"],"better":["better"],"big":["big"],
              "much":["much"],"strong":["strong"],"light":["light"],"sharp":["sharp"],"very":["very"]},
- "time":    {"when":["when"],"today":["today"],"yesterday":["yesterday"],"tomorrow":["tomorrow"],
-             "now":["now"],"morning":["morning"],"afternoon":["afternoon"],"night":["night"],
+ "time":    {"when":["when"],"yesterday":["yesterday"],"tomorrow":["tomorrow"],
+             "now":["now","today"],"morning":["morning"],                     # MERGE-02
+             "afternoon":["afternoon"],"night":["night"],
              "day":["day"],"week":["week"],"month":["month"],"year":["year"],"hour":["hour"],
              "minute":["minute"],"long":["long"],"always":["always"],"sometimes":["sometimes"],
              "never":["never"],"start":["start"]},
@@ -100,6 +123,25 @@ CONCEPTS = {
              "all":["all"],"some":["some"],"maybe":["maybe"],"where":["where"],"what":["what"],
              "why":["why"],"how":["how"],"who":["who"],"which":["which"],"can":["can"]},
 }
+
+# A Sem-Lex label must map to exactly ONE clinical concept. If a merge ever duplicates a
+# label across two concepts the same video lands in two classes and the model is trained to
+# contradict itself — silently, and only visible as a stuck loss. Cheap to check.
+_seen = {}
+for cat, m in CONCEPTS.items():
+    for concept, labels in m.items():
+        for lab in labels:
+            if lab in _seen:
+                raise SystemExit(f"[err] Sem-Lex label '{lab}' maps to BOTH '{_seen[lab]}' "
+                                 f"and '{concept}' — one concept per label")
+            _seen[lab] = concept
+
+MERGED = {c: ls for m in CONCEPTS.values() for c, ls in m.items() if len(ls) > 1}
+_desc = "; ".join(f"{c} <- " + "+".join(ls) for c, ls in MERGED.items())
+print(f"[merge] {len(MERGED)} concepts absorb more than one Sem-Lex label: {_desc}")
+print("🚨 pain<-hurt and now<-today are MEASURED merges PENDING DEAF REVIEW "
+      "(docs/CLINICAL_GLOSS_REVIEW.csv, rows MERGE-01/02). Split them back into separate\n"
+      "   concepts if a native signer distinguishes either pair.\n")
 
 MIN_V, MIN_S = 8, 3
 out = {"tier_A_trainable": {}, "tier_B_thin": {}, "tier_C_absent": []}
@@ -153,6 +195,8 @@ json.dump({"words": sorted(A), "source": "Sem-Lex",
            "note": f"tier A = {len(A)} concepts. 'knee' sits at 7 videos, one below the gate, "
                    f"so it is in tier B; the gate is a round number, not a cliff — revisit if "
                    f"knee matters clinically.",
+           "merged_concepts": MERGED,
+           "merges_pending_deaf_review": ["pain<-hurt (MERGE-01)", "now<-today (MERGE-02)"],
            "score_on": "split == 'test' only; Sem-Lex's val shares 31/32 signers with train"},
           open('vocab_medical.json','w'), indent=1)
 print("\nwrote vocab_medical.json + vocab_medical_analysis.json")
