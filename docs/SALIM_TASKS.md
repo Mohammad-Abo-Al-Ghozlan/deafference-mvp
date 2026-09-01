@@ -50,7 +50,7 @@ That role change opens one gap, which is now task 2A below. It does **not** bloc
 ### ☐ 2. Rebuild the avatar handoff — and it now goes to the DESIGNER, not Ghozlan · ~15 min
 
 **Changed 2026-09-01.** With Ghozlan off the avatar, this package's recipient is the designer — at
-**P1-M2**, per Addendum 1 §6, not immediately. So the urgency is gone, but the *rebuild* still
+**P1-M2**, per the brief §11, not immediately. So the urgency is gone, but the *rebuild* still
 matters: the stale zip must not be the thing anyone reaches for later.
 
 Do it now while the reason is fresh, and park the result.
@@ -98,25 +98,28 @@ Then tell him **what changed and why**, not just "here's a new zip":
 >
 > Class 1 and 2s are byte-identical — verified exactly, not on a median.
 
-### ☐ 2A. Send Addendum 1 to the designer · ~5 min
+### ☐ 2A. Send `AVATAR_SKELETON_BRIEF.md` **v5** to the designer · ~5 min
 
-**[`docs/AVATAR_BRIEF_ADDENDUM_1.md`](AVATAR_BRIEF_ADDENDUM_1.md)** — written today, because the brief
-is already out and a rewrite would read as scope creep. It is six clarifications and one correction,
-and **none of them changes scope or price.**
+**Send the whole v5 file, not a patch.** Addendum 1 is folded into it and deleted, so there is one
+document again. The change-log block at the very top shows the designer exactly what moved since the
+v4 they already have, and every section number is unchanged — so anything they have bookmarked still
+resolves.
 
-Attach with it: **`docs/handshape_review/*.png`** (all eight files, including `contact_sheet.png`).
+**Attach with it: `docs/handshape_review/*.png`** — all eight files, including `contact_sheet.png`.
 
-The two items that matter most to the designer:
+Three things in v5 worth knowing before they reply:
 
-- **What "blockout" means.** The brief said "neutral grey blockout", which is genuinely ambiguous. It
-  does *not* mean a crude box-man — §9 needs a forearm the hand can slide along, §6.9 needs a real
-  brow ridge, §10 needs hands legible at 320 px. So: anatomically correct, cleanly topologised,
-  properly weighted, **unstyled but not unfinished.** The addendum says plainly that if they priced
-  it as something cruder they should tell you now rather than argue at P1-M3. **Expect a possible
-  price conversation here — that is the honest cost of the brief's wording.**
-- **The B/5 concern is smaller than the brief said** (see §4 of the addendum). Measured today: the
-  templates *do* separate, by 48% on fingertip spacing. They now get a numeric target instead of a
-  worry.
+- **NEW §6.12 — motion integrity.** The eleven ways this avatar's motion goes visibly wrong, each
+  with its cause and its owner. **Six are the designer's, four are ours, one is the data's.** No new
+  requirements; it explains why the existing ones exist and gives them the symptoms to watch for.
+  This is the direct answer to "no errors in motion".
+- **"Blockout" is now defined**, and this is the one item that may cost money. It does *not* mean a
+  crude box-man — §9 needs a forearm the hand slides along, §6.9 a real brow ridge, §10 hands legible
+  at 320 px. So: anatomically correct, cleanly topologised, properly weighted, **unstyled but not
+  unfinished**, hands at final quality. v5 invites them to reprice rather than argue at P1-M3.
+  **Expect that conversation — the ambiguity was our wording's fault.**
+- **The B/5 warning is corrected downward.** Measured today, the templates separate by 48% on
+  fingertip spacing. They get a numeric target instead of a worry, which is less work, not more.
 
 ### ☐ 2B. Decide who owns the runtime · a decision, not a task
 
@@ -129,12 +132,14 @@ Ghozlan's.
 Concretely, two things depend on the answer:
 
 1. **Three acceptance tests need a runtime** — 3 (distal keying), 4 (bone-length stability under
-   playback) and 7 (reference-pose retarget). Addendum 1 §1 already moves those to integration and
+   playback) and 7 (reference-pose retarget). Brief v5 already moves those to integration and
    off the designer's payment gate, so **the hire is not blocked.** But they still have to run
    eventually, and test 3 is the regression test for the entire defect this phase exists to prevent.
-2. **The test harness promised in §11** was Ghozlan's player. The addendum says it is "being
-   confirmed". If it is gone, the designer loses the ability to watch their own rig move under real
-   data at P1-M3 — which is where most rig problems would surface.
+2. **The test harness promised in §11** was Ghozlan's player. v5 marks it "being confirmed" rather
+   than promising it. If it is gone, the designer loses the ability to watch their own rig move under
+   real data at P1-M3 — and per §6.12 that is exactly where motion failure modes **#3, #4 and #5**
+   surface. They are invisible in a static pose. Losing the harness means losing the only cheap way
+   to catch three of the six errors the designer owns.
 
 **A useful way to split it:** test 1 (42 nodes in the exported `.glb`) is the *designer's*
 obligation and is fully checkable from the file. Test 3 checks whether *our* retargeter uses those
@@ -391,7 +396,7 @@ Listed so you can track it. All of it is gated only on GPU time you already have
 | **Decimate A/B** — tests the mechanism behind the whole collision diagnosis | ~34 min GPU | nothing |
 | **Public fingerspelling baseline** — the clean track's first real model | days | your task 4 + 6 |
 | **Golden-fixture parity harness** — must exist before any web inference code | ~1 day | nothing |
-| ~~**B/5 template separation**~~ — **CLOSED 2026-09-01.** Measured from the templates directly, no raw takes needed: `B` fan 18.7° / tip gap 0.129 vs `5` fan 31.4° / tip gap 0.192 — **they separate, by 48%.** Still the 2nd-closest of 21 pairs, so worth the designer's care, but not the defect I flagged. Corrected in Addendum 1 §4. | done | — |
+| ~~**B/5 template separation**~~ — **CLOSED 2026-09-01.** Measured from the templates directly, no raw takes needed: `B` fan 18.7° / tip gap 0.129 vs `5` fan 31.4° / tip gap 0.192 — **they separate, by 48%.** Still the 2nd-closest of 21 pairs, so worth the designer's care, but not the defect I flagged. Corrected in the brief §10. | done | — |
 
 ---
 

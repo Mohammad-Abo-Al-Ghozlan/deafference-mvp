@@ -2,7 +2,24 @@
 
 **For:** the contracted 3D character artist / rigger
 **From:** Deafference (Mohammed Salim, technical lead)
-**Version:** 4.0 · 2026-09-01
+**Version:** 5.0 · 2026-09-01 · **supersedes v4 and Addendum 1, both now folded in**
+
+> ## 📋 WHAT CHANGED SINCE THE VERSION YOU RECEIVED
+>
+> **All section numbers are unchanged**, so anything you have already bookmarked still points to the
+> right place. Nothing below increases scope except where it says so explicitly.
+>
+> | | What | Affects your estimate? |
+> |---|---|---|
+> | **NEW §6.12** | **Motion integrity** — the eleven ways this avatar's motion goes visibly wrong, what causes each, and who owns it. **The most important addition.** No new requirements; it explains *why* the existing ones exist and gives you the symptoms to watch for. | No |
+> | §6.6 | Expanded on **roll stability**, which is the single largest motion-error source on a rig driven the way ours is. Adds a concrete self-test. | No |
+> | §6.10 | Bind pose now specifies a **slight elbow and finger bend** rather than perfectly straight. Cheap, and it removes a class of instability. | No |
+> | **§5** | **"Blockout" defined properly.** It does *not* mean a crude box-man: anatomically correct, cleanly topologised, properly weighted, **unstyled but not unfinished**, hands at final quality. | **Possibly — see the note in §5** |
+> | §10 | The **B/5 concern is smaller than v4 said.** We measured it: the templates separate by 48%. You now get a numeric target instead of a worry. | No — this reduces work |
+> | §11 | **Seven handshape reference renders now supplied**, measured from our own corpus. v4 told you to go and search; that was lazy of us. | No — this helps you |
+> | Roles | **All technical questions go to Salim.** Acceptance tests 3, 4 and 7 move to integration and off your payment gate — see §14. | No |
+> | §6.11a | Minimum **software versions**. | No |
+> | §15 | **Review cadence**, and same-day turnaround on P1-M1. | No |
 
 > ## ⚠️ SCOPE — read this before anything else
 >
@@ -44,7 +61,8 @@
 | | 6.8 Bone lengths |
 | | 6.9 The face — bones now, blendshapes in phase 2 |
 | | 6.10 Orientation, units, bind pose |
-| | 6.11 glTF export settings |
+| | 6.11 glTF export settings · 6.11a software versions |
+| | **6.12 Motion integrity — the eleven ways the motion goes wrong** |
 | **§7** | The 21-point hand layout and what drives what |
 | **§8** | Constraints the character design will have to satisfy |
 | **§9** | What the hands touch |
@@ -90,8 +108,17 @@
 | | |
 |---|---|
 | **The artist (you)** | **Phase 1:** the skeleton, the hand rig, the blockout body, the weights, the pose library. **Phase 2 (later, separate):** the character design. |
-| **Ghozlan** (developer) | The runtime. Loads your rig in Three.js, solves the IK, blends between signs, smooths the motion. |
-| **Salim** (us) | The motion data and the sign linguistics. We ship per-word landmark clips. We never touch your rig. |
+| **Salim** (us) | The motion data, the sign linguistics, and **your single point of contact.** We ship per-word landmark clips. We never touch your rig. |
+| The runtime | Loads your rig in Three.js, aims the bones, blends between signs, smooths the motion. Owned on our side. |
+
+> **Send every technical question to Salim** — rig, data, sign language, acceptance tests, anything.
+> There is no question that should go to anyone else.
+>
+> **One consequence, and it is in your favour.** Three acceptance tests — **3** (distal keying),
+> **4** (bone-length stability under playback) and **7** (reference-pose retarget) — can only run
+> once the rig is being driven by our runtime, so they test *our* code as much as yours. They have
+> moved to integration and are **not a gate on your payment.** Your P1-M1 gate is tests 1, 2 and 4,
+> where test 4 for you means "no scale channels on bones and no stretchy IK in the exported file".
 
 You are **not animating.** You are building a **puppet driven by measured human motion** — 30 frames
 a second of real Deaf signers' hands, recorded as points in space.
@@ -111,7 +138,7 @@ meet, translated:
 |---|---|
 | **landmark** | One tracked point in space, `(x, y, z)`. Our motion data is nothing but landmarks: **75 per frame** — 33 on the upper body, 21 on each hand. Very cheap, very noisy markerless mocap. |
 | **MediaPipe** | Google's free body/hand tracking library. It watched videos of signers and produced our landmarks. Its conventions are why 33, 21 and 75 keep appearing. |
-| **retarget** | Making *your* rig reproduce *a real person's* motion despite different proportions. Ghozlan writes this; you just need the rig to be retargetable. |
+| **retarget** | Making *your* rig reproduce *a real person's* motion despite different proportions. We write this; you just need the rig to be retargetable. |
 | **IK target** | A point in space a solver drives a limb toward. We give positions, not angles, so wrists and fingertips are goals and the solver finds the rotations. See §3.1. |
 | **gloss** | The written name of a sign — `hello`, `pain`. A label for a sign, not a translation of it. |
 | **handshape** | The finger configuration, treated in sign languages as a distinct unit — like a phoneme. ASL has a fixed inventory with names like **B** (flat), **A** (fist), **1** (index pointing). We use seven (§10). |
@@ -227,6 +254,32 @@ geometry to test all of it.
 **Phase 2 dresses and details this body. It does not replace it.** The proportions, the skeleton,
 and the hand topology you deliver in phase 1 are the foundation the final character is built on. So
 build them at final quality.
+
+### What "blockout" means — please read, it affects your estimate
+
+The word "blockout" is genuinely ambiguous and we should have defined it. It does **not** mean a
+crude box-man. Several requirements elsewhere in this brief imply real anatomy:
+
+| Requirement | Implies |
+|---|---|
+| §9 — the hand *slides along* the passive forearm | A forearm with real anatomical form, not a cylinder |
+| §6.9 — a `browRaise` shape must be demonstrable | A head with a real brow ridge and enough topology |
+| §9 — contact at forehead, chin, chest | Those features exist and are landable-on |
+| §6.4 — joints at centres of rotation | Correct internal anatomy, not eyeballed |
+| §10 — seven handshapes legible at 320 px | Hands at essentially final quality |
+| §6.12 — no volume popping or self-intersection | Enough loops to deform cleanly everywhere |
+
+**So: an anatomically correct, cleanly topologised, properly weighted human body — with no
+styling.** No textures, no clothing, no hair, no facial detail beyond the brow ridge, flat grey
+material.
+
+The distinction is **untextured and unstyled, not unfinished.** The hands in particular are final
+quality in phase 1 — they are not revisited in phase 2.
+
+> **If you priced this as something cruder, say so now.** We would much rather adjust the number at
+> the start than argue about it at P1-M3. This is a clarification of what was always intended, not a
+> new requirement — but if the brief read as cruder to you, **that is our wording's fault** and we
+> will discuss it.
 
 ### ⚠️ The one design decision phase 1 cannot defer
 
@@ -538,9 +591,21 @@ can only handle it well or badly.
 
 ### 6.6 Bone orientation, roll, and symmetry
 
+**This section is the largest single motion-error source on a rig driven the way ours is.** If you
+read only one part of §6 twice, read this one.
+
 Because aiming a bone at a target fixes only two of three rotational degrees of freedom (§3.1), the
-**roll** — rotation around the bone's own length — is not determined by the data. It comes from your
-rest pose. Inconsistent roll produces fingers that twist unpredictably as they curl.
+**roll** — rotation around the bone's own length — is **not determined by the data at all.** It comes
+entirely from your rest pose.
+
+That has a consequence worth spelling out. The retargeter knows where the elbow is, because we
+measured it (landmark `13`/`14`), so it never has to *guess* the elbow — the classic IK pole-flip
+that plagues 2-bone solves does not apply here. **What it must guess is roll**, on every bone, every
+frame. Give it a stable reference and the limb is rock-solid. Give it an ambiguous one and the whole
+forearm can spin about its own axis between consecutive frames, which reads as a violent snap even
+though every joint position is correct.
+
+So:
 
 - **Bone axis along the bone.** Blender's convention (local **+Y** points from head to tail) is fine
   and is what we assume. Just be consistent.
@@ -555,6 +620,23 @@ rest pose. Inconsistent roll produces fingers that twist unpredictably as they c
   are symmetric two-handed signs where both hands do the same thing at once, so it is immediately
   visible.
 - **Zero unapplied rotation on the armature object itself.** Rotate bones, never the armature.
+- **Avoid near-collinear parent/child pairs in the rest pose.** A bone whose rest direction is almost
+  exactly its parent's has an ill-conditioned roll reference, so tiny input changes swing it a long
+  way. This is why §6.10 asks for a slight bend rather than perfectly straight limbs and fingers —
+  it costs nothing and it removes the ambiguity.
+- **Quaternions, not Euler.** glTF stores rotations as quaternions, which is what you want. Do not
+  build the export around Euler-ordered constraints or drivers that could bake a gimbal-locked axis
+  order into the rest transforms.
+
+**The roll self-test, and it takes two minutes.** For each finger, rotate the bone on its local
+flexion axis **only**, from 0° to full curl, and watch the fingertip:
+
+- **Correct:** the fingertip travels in a single clean plane, straight toward the palm.
+- **Wrong:** the fingertip drifts sideways, or the finger corkscrews as it closes.
+
+If any finger corkscrews, its roll is inconsistent with its parent's. Recalculate the roll for that
+whole chain, not just the offending bone. Do the same on both forearms, rotating on the twist axis —
+the hand should turn cleanly without the wrist wandering.
 
 ### 6.7 Skinning: weights, the 4-influence limit, and the twist problem
 
@@ -662,7 +744,7 @@ foreclose:
 | **Up axis** | **+Y up.** Standard. Our data has y pointing *down* and the runtime flips it — not your problem, and do not compensate for it. |
 | **Facing** | **+Z toward the viewer.** The avatar faces the camera. |
 | **Units** | Metres, real-world scale, ~1.7 m tall. The runtime normalises, but a sane scale prevents a class of solver problems. |
-| **Bind pose** | **A-pose**, arms ~45° down, **palms facing the body**, fingers straight and slightly separated. Better shoulder weights than a T-pose and closer to a signer's rest. |
+| **Bind pose** | **A-pose**, arms ~45° down, **palms facing the body**. Better shoulder weights than a T-pose and closer to a signer's rest. **Keep a slight bend everywhere — nothing perfectly straight:** elbows ~5–10° flexed, fingers ~5° curled at each joint, fingers slightly separated. A perfectly straight chain has an ill-conditioned roll reference (§6.6), so a small bend costs nothing and removes a class of instability. It also gives cleaner normals and easier weighting. |
 | **Rest / idle pose** | A separate **neutral signing rest pose** — arms down, hands relaxed and slightly open, in front of the body. Where the avatar sits between utterances, so the pose people see most. Deliver as a named pose, not as the bind pose. |
 | **Origin** | At the feet, centred between them. |
 | **Transforms** | No unapplied scale or rotation on the armature or any mesh. Apply everything before export. |
@@ -690,6 +772,68 @@ For Blender's **glTF 2.0** exporter. Deviate if you know better, but tell us wha
 > **⚠️ "Export Deformation Bones only" is the setting most likely to silently break this
 > delivery.** The tip bones have no weights by design (§6.3), so that option removes them — and the
 > export looks clean, loads clean, and is wrong. Confirm with §13-B every single time.
+
+### 6.11a Software versions
+
+| | |
+|---|---|
+| **Blender** | **3.6 LTS or 4.x.** The glTF exporter's leaf-bone and shape-key handling differs in older versions, and §6.11's settings assume 3.6+. |
+| **Maya** | 2022+ with a glTF exporter you have validated. Tell us which one. |
+| **Anything else** | Fine, provided you can produce clean glTF 2.0 and confirm §13-B passes. |
+
+Whatever you use, **§13-B must be run on the exported `.glb`.** The check that matters cannot be done
+in the viewport.
+
+### 6.12 Motion integrity — the eleven ways the motion goes wrong
+
+**The whole point of this project is an avatar that moves correctly.** A rig that passes every static
+check can still produce motion a fluent signer reads as wrong, so this section names each failure
+mode: what the viewer sees, what causes it, who owns it, and what prevents it.
+
+Nothing here is a new requirement. It exists so that (a) you know the *symptoms* to watch for while
+working, and (b) neither of us gets blamed for the other's failure mode. **Six of the eleven are
+yours. Four are ours. One is nobody's — it is the data.**
+
+| # | What the viewer sees | Cause | Owner | Prevented by |
+|---|---|---|---|---|
+| 1 | **Fingertips look soft and vague; fingers never fully straighten or fully close** | The distal segment is never posed — no tip node to aim at | **you** | §6.3 · tests 1, 3 |
+| 2 | **A limb flattens, or the elbow inverts through the arm** | A bone was stretched, so the depth reconstruction had no valid solution | **you** | §6.8 · test 4 |
+| 3 | **A finger corkscrews sideways as it curls** | Bone roll inconsistent down the chain | **you** | §6.6 · the roll self-test |
+| 4 | **A forearm spins about its own axis between two frames, for no visible reason** | Ill-conditioned roll reference — near-collinear rest pose, or unstable roll convention | **you** | §6.6 · §6.10's slight bend |
+| 5 | **The elbow shears into a candy-wrapper when the palm turns over** | 180° of twist through one bone under linear blend skinning | **you** | §6.7 · test 5 |
+| 6 | **Two different handshapes look identical** | MCP joints cannot abduct, so `B` and `5` collapse together | **you** | §6.5 · test 6 |
+| 7 | **The hand jumps into the middle of the chest** | A missing landmark treated as a valid position at the origin — the origin is mid-sternum in our coordinate space | *us* | our sentinel handling; missing arrives as `null`, never `[0,0,0]` |
+| 8 | **The hand blinks out, or teleports across a gap** | A `null` run not held or interpolated | *us* | runtime gap handling |
+| 9 | **Everything buzzes or shimmers, especially the fingers** | Raw landmark jitter, unsmoothed | *us* | One-Euro or moving-average filter at render time |
+| 10 | **One sign bleeds into the next, or the seam is visibly abrupt** | Transition blend mistuned — too long swallows short signs, too short reads as a cut | *us* | blend length scaled to the shorter clip |
+| 11 | **The pose is clean and the sign is still wrong** | A lexicon error — wrong handshape or wrong base placement in *our* data | *us* | Deaf review; **not a rig problem** |
+
+#### What this means for how you work
+
+**Test under motion, not under poses.** A rig can hit all seven handshapes perfectly as static poses
+and still exhibit #3, #4 and #5, because those only appear *while moving*. That is why §11 offers the
+test harness and why §15 puts a harness session at P1-M3 rather than at delivery.
+
+**Failure modes 3 and 4 are the ones people miss**, and they are the reason §6.6 got expanded. They
+are invisible in a bind pose, invisible in a single frame, and obvious the moment the limb moves —
+and they are cheap to prevent and expensive to retrofit, because fixing roll means redoing the rest
+pose and reweighting everything downstream of it.
+
+**Failure modes 7 through 10 are ours and you should not compensate for them.** If you see the hand
+jump into the chest while testing in our harness, that is our bug — tell us, do not adjust your rig
+around it. A rig that has been bent to hide a runtime bug is worse than either bug alone, because it
+breaks when we fix ours.
+
+#### One honest caveat about "no errors in motion"
+
+Six of these eleven are yours and a perfect rig eliminates all six. **The other five cannot be fixed
+by any rig**, however good — they are runtime and data problems, and #11 in particular needs a fluent
+signer rather than an engineer.
+
+So the realistic target for phase 1 is: **the rig contributes zero motion errors.** That is
+achievable, it is what the acceptance tests measure, and it is what we are paying for. Getting the
+remaining five to zero is our job, and we have named them here so that nobody mistakes one for the
+other.
 
 ---
 
@@ -839,16 +983,32 @@ templates against.
 **Look at real reference, not just our descriptions** (§17). These are real linguistic forms with
 correct and incorrect versions.
 
-> **⚠️ A specific open question you can settle for us.**
-> Our automatically-measured templates for **`B` (flat, together) and `5` (extended, spread)** may
-> not be as distinct from each other as they should be. We measured a fingertip displacement of
-> **0.178** between them — the *smallest* of all 21 shape pairs — and we could not resolve whether
-> that is a genuine problem in our data or an artefact of how we measure it.
+> **The B / 5 question — measured 2026-09-01, and the answer is better than v4 said.**
+> v4 warned that our `B` and `5` templates might not be meaningfully distinct. We have now measured
+> it properly, and we are correcting it here so you do not chase a problem larger than the real one:
 >
-> **Your hand-posed `B` and `5` would give us the clean reference we lack.** Please form them
-> deliberately and unmistakably distinct: `B` with fingers pressed together and flat, `5` with
-> fingers splayed as wide as the hand goes. This is also the direct test of the abduction
-> requirement in §6.5.
+> ```
+> B   index-to-pinky fan  18.7°    mean gap between adjacent fingertips  0.129 hand-lengths
+> 5   index-to-pinky fan  31.4°    mean gap between adjacent fingertips  0.192 hand-lengths
+>                         +12.7°                                         +48%
+> ```
+>
+> The templates **do** carry the together-versus-spread distinction, in the right direction, by a
+> real margin. What remains true is that `B` and `5` are the **second-closest of all 21 shape
+> pairs** — 0.135 against a 0.353 median across pairs. Close, but separable.
+>
+> **Your target, as a number rather than an adjective:**
+>
+> - **`B`** — adjacent fingertips **touching or nearly touching**. Gap under ~0.05 hand-lengths.
+> - **`5`** — adjacent fingertip gaps **at least 50% wider than your `B`**, and ideally more.
+>
+> Still worth doing carefully, because it is the direct test of the **finger abduction** requirement
+> in §6.5 — if your MCP joints cannot abduct, these two poses come out identical and the rig cannot
+> express a distinction our vocabulary depends on 26 times. That is motion failure mode **#6**.
+>
+> *(For completeness: `5` and `C` measure closer still, at 0.125. Neither `5` nor `O` is requested by
+> any word in the current vocabulary, so it is not load-bearing — just make `C` read as a clear
+> curve, not a slightly-cupped flat hand.)*
 
 The synthesized hand is also placed at a specific **orientation** per word. Your rig must reach all
 of these comfortably, at the wrist, without the forearm twisting past anatomical limits (§6.7):
@@ -860,14 +1020,26 @@ of these comfortably, at the wrist, without the forearm twisting past anatomical
 
 ## 11. What we give you
 
-| Item | What it is, and what to do with it |
-|---|---|
-| `reference_pose.json` | One neutral frame, 75 points, in our coordinate space. **For testing your retarget, not for modelling proportions** — see §6.8. |
-| `handshape_templates.json` | 21-point measured templates for the seven handshapes. Numeric reference for what the shapes should be. |
-| 250 per-word clips | Real landmark motion, one file per word. This is what will drive your rig. |
-| `contact_sheet.png` | Rendered stick-figure previews of the whole vocabulary. **Look at this early** — it shows the real range of motion better than any description. |
-| A test harness | Ghozlan's existing player. Load your rig and watch it move under real data *before* final delivery. **Use it at P1-M3, not at the end.** |
-| Us | Ask early and often. A question answered in week one is free; a rebuild in week four is not. |
+| Item | What it is, and what to do with it | When |
+|---|---|---|
+| **`handshape_review/*.png`** | **Eight renders: all seven handshapes plus a contact sheet**, measured from our own corpus, showing the 21-point skeleton in the palm plane with the anchor words each was measured from. **Sent with this brief.** See the two notes below. | now |
+| `handshape_templates.json` | The numeric templates behind those renders. | now |
+| `reference_pose.json` | One neutral frame, 75 points, in our coordinate space. **For testing your retarget, not for modelling proportions** — see §6.8. | now |
+| `contact_sheet.png` (vocabulary) | Stick-figure previews of all 250 words. **Look at this early** — it shows the real range of motion better than any description. | now |
+| 250 per-word clips | Real landmark motion, one file per word. This is what will drive your rig. Only useful once you have something to drive. | ask at P1-M2 |
+| A test harness | Our player: load your own rig and watch it move under real data. **This is where motion failure modes 3, 4 and 5 surface** (§6.12), so use it at P1-M3, not at the end. Availability is being confirmed — **ask before P1-M2 if you have not heard.** If it is not ready we will substitute rendered motion previews and a longer P1-M3 review. | P1-M3 |
+| Us | Ask early and often. A question answered in week one is free; a rebuild in week four is not. | always |
+
+**Two things to notice in the handshape renders:**
+
+1. **Every finger has four points beyond the wrist.** That is §6.3 made visible — the requirement is
+   not an abstraction, it is literally what the data contains.
+2. **They are 2D projections into the palm plane, drawn at different scales.** Do not compare two of
+   them by eye and conclude anything — we did exactly that and were briefly wrong about `B` versus
+   `5` (see §10). Compare numbers, not pictures.
+
+They show our *measured average*, not the canonical linguistic form, so still look at a real ASL
+handshape chart alongside them (§17).
 
 **Ask for anything else you need.** Especially: if you want video reference of real signers
 performing these signs, say so and we will point you at it. **Do not guess at what a sign looks
@@ -967,10 +1139,25 @@ actually fail.)*
 
 ### C · The rest of the list
 
+**Motion checks first — these catch the failure modes that static poses hide (§6.12):**
+
+- **The roll self-test on all ten fingers.** Rotate each bone on its flexion axis only, 0° to full
+  curl, and watch the fingertip. It must travel in one clean plane. Sideways drift or corkscrewing
+  means the roll is inconsistent — failure mode #3.
+- **Twist each forearm slowly through ±90°** and watch the elbow for candy-wrapper shear (#5) and the
+  wrist for wander (#4). Slowly, not in one step — the artefact appears mid-range.
+- **Sweep each arm through the whole signing space** — overhead, across to the opposite shoulder,
+  down to the waist — watching for any frame where a limb snaps or a bone appears to spin (#4).
+- **Drive it with our real data** in the harness, and watch specifically for #1, #3, #4 and #5.
+  Hand-authored poses will not reveal them. If you see the hand jump into the chest or blink out,
+  **that is our bug (#7, #8) — tell us, do not adjust your rig around it.**
+
+**Then the static checks:**
+
 - **Curl and extend every finger fully**, one at a time and all together. Look for tearing at the
   knuckles, palm ballooning, finger interpenetration.
-- **Spread the fingers fully** and check `B` versus `5` are unmistakably different (§6.5).
-- **Twist each forearm ±90°** and look for candy-wrapper shear at the elbow (§6.7).
+- **Spread the fingers fully** and check `B` versus `5` differ by at least 50% in adjacent-fingertip
+  gap (§6.5, §10).
 - **Pose all seven handshapes** (§10) and check each reads at 320 px tall.
 - **Reach the extremes:** a hand fully overhead, a hand across the body to the opposite shoulder,
   elbow fully flexed, both hands meeting at the chest.
@@ -992,11 +1179,12 @@ protects you as much as us, because payment is not held up by subjective back-an
 |---|---|---|---|
 | 1 | **Finger node count** | Every finger, both hands, has **4 transform nodes in the exported `.glb`**. 40 finger nodes + 2 wrists = **42**. Hard fail if any finger has 3. | **1** |
 | 2 | **Bone names** | All 55 names match §6.2 exactly. No `.001`, no `.L`/`.R`, no `mixamorig:` — or a complete map is supplied. | **1** |
-| 3 | **Distal keying** | Driven with a real clip, **every third-segment bone on both hands is actually posed.** The §6.3 regression test. | **1** |
-| 4 | **Bone-length stability** | Every bone within 0.1% of rest length across a full 250-word playback. Catches stretchy IK. | **1** |
+| 3 | **Distal keying** | Driven with a real clip, **every third-segment bone on both hands is actually posed.** The §6.3 regression test. *Runs at integration — checks our retargeter as much as your rig, so not a payment gate.* | int. |
+| 4 | **Bone-length stability** | **For you at P1-M1:** no scale channels on bones, no stretchy IK in the exported file. **At integration:** every bone within 0.1% of rest length across a full 250-word playback. | **1** + int. |
+| 4b | **Roll stability** | Every finger passes the §6.6 roll self-test — fingertip travels in one plane, no corkscrew. Both forearms twist cleanly with no wrist wander. Failure modes #3 and #4. | **1** |
 | 5 | **Forearm twist** | ±90° from neutral, no visible shear at the elbow. | **1** |
 | 6 | **Abduction / `B` vs `5`** | Fingers abduct ≥20°; `B` and `5` measurably distinct in bone-direction space. | **1** |
-| 7 | Reference-pose retarget | Driven with `reference_pose.json`, wrists land within 5% of a shoulder-width of target. | **1** |
+| 7 | Reference-pose retarget | Driven with `reference_pose.json`, wrists land within 5% of a shoulder-width of target. *Runs at integration — not a payment gate.* | int. |
 | 8 | Handshape reachability | All seven reachable and legible. | **1** |
 | 9 | Head range | Yaw ±30°, tilt ±20°, no tearing. Plus the `browRaise` shape exists. | **1** |
 | 10 | Extremes, no tearing | Full curl, full extension, arm overhead, hand to opposite shoulder, elbow fully flexed. | **1** |
@@ -1007,8 +1195,13 @@ protects you as much as us, because payment is not held up by subjective back-an
 | 15 | Brow blendshape set | Minimum three brow shapes, ARKit-52 preferred. | 2 |
 | 16 | Legibility rules | Every rule in §8.2 satisfied. | 2 |
 
-Tests **1, 3 and 4** are the ones that have actually bitten us. Expect them first, and expect tests
-1 and 2 at **P1-M1** rather than at delivery.
+Tests **1, 3 and 4** are the ones that have actually bitten us. Expect tests **1, 2, 4 and 4b at
+P1-M1** — all four are checkable from the exported `.glb` and your own viewport, which is why that
+gate comes before any mesh work.
+
+**Tests 3 and 7 run at integration and are not a gate on your payment.** They require our runtime, so
+they test our code as much as yours: if test 1 passes (all 42 nodes present) and test 3 then fails,
+the rig gave the retargeter somewhere to aim and the retargeter did not use it — our bug, not yours.
 
 ---
 
@@ -1019,10 +1212,19 @@ times than once, and we will turn reviews around quickly.
 
 | M | You deliver | We check |
 |---|---|---|
-| **P1-M1** | **Skeleton only.** All 55 bones per §6.2, correct hierarchy and names, all 42 hand nodes, joint placement, roll conventions, bone length table, proportions agreed. **Exported as `.glb`.** Plus your §6.7 twist decision. | **Tests 1, 2 and 4.** The cheapest possible moment to catch §6.3 — and the whole reason we want a `.glb` this early, before any mesh work. |
-| **P1-M2** | Blockout body at locked proportions, skinned, arms and torso weighted, forearm twist solved. | Tests 5, 7, 10, 12. Contact-zone form (§9). |
-| **P1-M3** | **Hands: final topology and weights, all seven handshapes posed.** Loaded in our test harness under real motion. | Tests 6, 8, 11. **The most important review in the project.** |
+| **P1-M1** | **Skeleton only.** All 55 bones per §6.2, correct hierarchy and names, all 42 hand nodes, joint placement, roll conventions, bone length table, proportions agreed. **Exported as `.glb`.** Plus your §6.7 twist decision and your §6.6 roll self-test result. | **Tests 1, 2, 4 and 4b.** The cheapest possible moment to catch §6.3 — and the whole reason we want a `.glb` this early, before any mesh work. **Same-day turnaround from us.** |
+| **P1-M2** | Blockout body at locked proportions, skinned, arms and torso weighted, forearm twist solved. | Tests 5, 10, 12. Contact-zone form (§9). Motion failure modes #4 and #5. |
+| **P1-M3** | **Hands: final topology and weights, all seven handshapes posed.** Loaded in our test harness under real motion. | Tests 6, 8, 11. Motion failure modes #1 and #3 under real data. **The most important review in the project.** |
 | **P1-M4** | Head/neck weights, `browRaise` shape, rest pose, final `.glb` + source + all ten deliverables from §12. | Tests 9, 13, 14, and a re-run of everything. Sign-off. |
+
+### Review cadence
+
+- **Send milestones as they are ready**, not on a schedule. We would rather see four rough gates than
+  one polished delivery.
+- **We respond within one working day.** If we take longer, chase us.
+- **P1-M1 gets same-day turnaround** — it is a script, and it is the cheapest possible moment to catch
+  the one defect this whole phase exists to prevent. **Do not build a mesh before it passes.**
+- **Ask questions at any point, about anything**, including whether a requirement is worth its cost.
 
 **Phase 2 is quoted separately** once P1-M4 is signed off and we have decided the design direction.
 
@@ -1030,7 +1232,9 @@ times than once, and we will turn reviews around quickly.
 
 - **Any character design** — style, colour, clothing, face design, hair, textures, materials.
 - **Brow blendshapes beyond the single feasibility shape** (§6.9).
-- **The retargeting solver, the runtime, transitions, smoothing** — Ghozlan's.
+- **The retargeting solver, the runtime, transitions, smoothing** — ours. Motion failure modes
+  #7–#10 in §6.12 are on that side of the line, and you should report them rather than compensate
+  for them.
 - **Which signs exist, what they look like, ASL linguistics** — ours. Ask.
 - **Animating anything.** You deliver poses, never animation clips.
 - **Full 468-point face-mesh driving.** Not in either phase yet.
@@ -1065,6 +1269,8 @@ An hour here is well spent.
 - **Watch real signing.** Search "ASL dictionary" and watch any twenty signs. Notice how much
   happens at the fingertips, how often the hands touch the face and chest, how often the palm turns
   over, and how much the eyebrows move. Those are §6.3, §9, §6.7 and §6.9 becoming obvious.
+- **Our own handshape renders** — supplied with this brief, eight PNGs (§11). Start there, then
+  compare against a canonical chart, because ours show a measured average rather than the ideal form.
 - **ASL handshape charts.** Search "ASL handshape chart" or "ASL manual alphabet" for the canonical
   forms of `A`, `B`, `C`, `O`, `S`, `1` and `5` (§10). Note how little separates `A` from `S`.
 - **Hand anatomy reference** for §6.4 — specifically where the **thumb CMC joint** sits relative to
@@ -1123,6 +1329,15 @@ Print this. Everything below is pass/fail.
 - [ ] Roll consistent down each finger chain; fingers curl on one axis
 - [ ] Perfect left/right mirror symmetry
 - [ ] Palm rigid — no metacarpal bones (unless agreed with us)
+- [ ] **Nothing perfectly straight in the bind pose** — elbows ~5–10° bent, fingers ~5° curled
+- [ ] No near-collinear parent/child pairs in the rest pose
+
+**Motion (§6.12) — test these moving, not posed**
+- [ ] **Roll self-test passes on all ten fingers** — fingertip travels in one plane, no corkscrew (#3)
+- [ ] Forearm twists ±90° with no candy-wrapper shear (#5) and no wrist wander (#4)
+- [ ] Arm sweeps the whole signing space with no snap or spin on any frame (#4)
+- [ ] Driven with our real data in the harness, not just hand-authored poses (#1, #3, #4, #5)
+- [ ] Anything that looks like #7–#10 reported to us, **not** worked around in the rig
 
 **Ranges**
 - [ ] Finger MCP 0→90° flexion, −20° hyperextension
