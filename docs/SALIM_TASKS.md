@@ -382,7 +382,7 @@ No deadline on these, but each gates something.
 | **Who owns the runtime** (task 2B) | 3 acceptance tests, the designer's test harness, and whether the rig can be driven at all | **New today.** Needed before P1-M2, not P1-M1. |
 | The 2s gate (task 8) | The avatar's final quality on 28 words | Priced, waiting on you |
 | **Record our own clinical corpus?** | Whether the medical track ever ships | Gated on task 5 **and** on my clips-per-sign curve. Do not decide before both. |
-| **The blockout price conversation** (task 2A) | Possibly the designer's estimate | The brief's word "blockout" was ambiguous; the addendum resolves it and invites them to reprice. Our wording, our problem. |
+| **The blockout price conversation** (task 2A) | Possibly the designer's estimate | The brief's word "blockout" was ambiguous; v5 §5 resolves it and invites them to reprice. Our wording, our problem. |
 
 ---
 
