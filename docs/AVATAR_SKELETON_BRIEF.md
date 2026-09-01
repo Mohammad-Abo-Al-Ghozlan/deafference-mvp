@@ -1,16 +1,48 @@
-# Avatar Design Brief — the Deafference signing avatar
+# Avatar Brief — PHASE 1: the skeleton and rig
 
 **For:** the contracted 3D character artist / rigger
 **From:** Deafference (Mohammed Salim, technical lead)
-**Version:** 2.0 · 2026-09-01
+**Version:** 3.0 · 2026-09-01 · supersedes `AVATAR_DESIGNER_BRIEF.md`
 
-> **This file is the source of truth.** A formatted web version with the three diagrams — the
-> finger-chain defect, the depth reconstruction, and the signing-space / contact-zone map — is what
-> gets sent to the designer. Update this file first, then republish.
+> ## ⚠️ SCOPE — read this before anything else
 >
-> **No prior sign-language or machine-learning knowledge is assumed.** §1 is a glossary; the rest of
-> the brief uses it. Companion documents `SIGN_ANIMATION_CONTRACT.md` and `AVATAR_LIMITS.md` do
-> **not** need to be read — everything in them that affects the artist's work is extracted here.
+> **This contract is for the SKELETON AND RIG only.** You are building a working, rigged,
+> neutral grey **blockout** body — correct proportions, correct skeleton, correct hand rig,
+> correct weights, no styling.
+>
+> **The character design is a separate later phase.** Style, silhouette, colour, clothing, face,
+> textures, hair — none of that is decided yet and none of it is in this contract. We will decide
+> it *after* we have a working skeleton, and quote it separately.
+>
+> **Why this way round:** the hardest and most expensive-to-fix requirement in this whole project
+> is a rigging requirement (§6.2), and it has already burned us once. We would rather prove the
+> skeleton works before anyone spends a day on how the avatar looks.
+>
+> §7 lists the design constraints the later phase will have to satisfy. **They are handed to you
+> now, not to design against today, but so that nothing in phase 1 forecloses them.**
+
+---
+
+## 0. The message to send with this brief
+
+*(Copy-paste for email or WhatsApp. Delete this section before sending the file itself.)*
+
+> Hi — we're building a signing avatar for a Deaf-accessibility product (speech in, sign language
+> out). We need a 3D character artist / rigger.
+>
+> We're splitting the job in two. **Right now we only want the skeleton and rig** — a working
+> rigged blockout body, no styling, no clothing, no face detail. Once that's proven we'll decide
+> the character design and quote that separately.
+>
+> The reason for that order is in the attached brief: the avatar is driven by measured motion-capture
+> data, and there's one rigging requirement that is unusual, easy to miss, and expensive to fix
+> late. We'd rather get it right before anyone works on how it looks.
+>
+> The brief is detailed on purpose — it assumes no sign-language knowledge and explains why each
+> constraint exists. Please read §0 (scope), §4 (the five things that break it), and §6 (the spec),
+> then answer the seven questions in §17 with an estimate.
+>
+> Happy to answer anything, including whether a requirement is worth what it costs.
 
 ---
 
@@ -18,17 +50,16 @@
 
 | | |
 |---|---|
-| **The artist (you)** | The character: model, textures, skeleton, hand rig, face channels, pose library. You own the visual entirely — style, silhouette, colour, materials. |
-| **Ghozlan** (developer) | The runtime. Loads your rig in Three.js, solves the IK, blends between signs, smooths the motion, drives the face channels. |
-| **Salim** (us) | The motion data and the sign linguistics. We ship per-word landmark clips. We never touch your rig or your mesh. |
+| **The artist (you)** | **Phase 1:** the skeleton, the hand rig, the blockout body, the weights, the pose library. **Phase 2 (later, separate):** the character design. |
+| **Ghozlan** (developer) | The runtime. Loads your rig in Three.js, solves the IK, blends between signs, smooths the motion. |
+| **Salim** (us) | The motion data and the sign linguistics. We ship per-word landmark clips. We never touch your rig. |
 
 You are **not animating.** You are building a **puppet driven by measured human motion** — 30 frames
 a second of real Deaf signers' hands, recorded as points in space.
 
-> **The one sentence that matters most.** A rig that is beautiful and violates §6 **will not work at
-> all** — and it will not announce itself. It will load, it will look right in your viewport, it
-> will move, and it will be silently wrong. That has already happened to us once, and §6.2 is the
-> scar.
+> **The one sentence that matters most.** A rig that looks perfect in your viewport can be
+> **silently wrong** under this data. It will load, it will move, and nothing will report an error.
+> That has already happened to us once, and §6.2 is the scar.
 
 ---
 
@@ -53,48 +84,51 @@ meet, translated:
 | **MCP · PIP · DIP · TIP** | The four joints of a finger, base to tip: knuckle, middle joint, last joint, fingertip. Thumb: CMC, MCP, IP, TIP. **Four positions per finger** — that number is the whole of §6.2. |
 | **bind rotation** | A bone's rest orientation before animation touches it. A bone nobody animates sits at its bind rotation and **looks anatomically perfect** — which is how our worst bug hid for weeks. |
 | **keyed track** | An animation channel that actually contains data for a bone. A bone with no keyed track is not animated at all. Counting these is how we found the §6.2 bug. |
-| **tier A / B / C** | Our internal grade for how well each of the 250 words was captured. A is clean, C is barely usable. Referenced for context; you cannot affect it. |
+| **blockout** | Here: an unstyled grey body at final proportions. Phase 1's deliverable. Not a throwaway — see §5. |
 
 ---
 
-## 2. What the job is
+## 2. What the product is
 
 Deafference builds two-way communication between Deaf and hearing people. One direction listens to
 speech and **signs it back**. That direction needs an avatar.
 
-The pipeline: a hearing person speaks → we transcribe → we convert the sentence to an ordered list
-of signs → we look up recorded motion per sign → **your avatar performs them** → a Deaf person
-reads it.
+The pipeline: a hearing person speaks → we transcribe → we convert the sentence into an ordered list
+of signs → we look up recorded motion per sign → **your rig performs them** → a Deaf person reads it.
 
 Current vocabulary is **250 American Sign Language words**, played one after another. A clinical
-vocabulary — symptoms, body parts, medication, hospital staff — is next. Our market is Lebanon.
+vocabulary — symptoms, body parts, medication, hospital staff — is next. Our market is Lebanon, and
+the eventual users are Deaf patients in clinics.
+
+You do not need to know any of this to build the skeleton. It is here because §7's constraints only
+make sense against it.
 
 ---
 
-## 3. Why this is not normal character work
+## 3. Why this is not normal rigging work
 
-Three things here will be unfamiliar if you have rigged for games or film. They are the source of
-almost every requirement in §6.
+Three things will be unfamiliar if you have rigged for games or film. They are the source of almost
+every requirement in §6.
 
 ### 3.1 We send positions, not rotations
 
-Normally a rig receives *rotations* — an animator or mocap solve tells each bone what angle to sit
+Normally a rig receives *rotations* — an animator or a mocap solve tells each bone what angle to sit
 at. **Our data has no angles in it at all.** It is a cloud of 75 point positions per frame, measured
 off video.
 
 So the runtime treats those points as **IK targets**: "put the wrist here, put the index fingertip
-here", and solves backwards for rotations. Two consequences:
+here", and solves backwards for the rotations. Two consequences:
 
 - **Bones cannot stretch.** A solver reaching for a target will happily lengthen a bone if allowed,
   which tears the mesh and destroys §3.2. Lock it down.
 - **Every point we send needs somewhere to go.** If our data has a fingertip position and your rig
-  has no fingertip node, that data is silently discarded. This is §6.2, the most important paragraph
-  in this document.
+  has no fingertip node, that data is silently discarded. This is §6.2 — the most important
+  paragraph in this document, and the reason phase 1 exists as its own contract.
 
 ### 3.2 Depth is half-missing, and bone length is how we recover it
 
-MediaPipe's depth (`z`) is unreliable as a *value*. What it gets right is the *sign* — whether a
-hand is in front of or behind the plane. So the runtime reads one bit from `z` and reconstructs the
+MediaPipe's depth (`z`) is unreliable as a *value*. What it gets right is the *sign* — whether a hand
+is in front of or behind the plane. So the runtime reads one bit from `z` and reconstructs the
 magnitude from your rig's known bone length:
 
 ```
@@ -114,59 +148,78 @@ Landmarks jitter. Points drop out — on two-handed signs the tracker loses the 
 than half the time**, and the runtime holds or interpolates across the gap. This is a property of
 the source recordings, not a bug awaiting a fix.
 
-So your character must look acceptable *under imperfect motion*. This is the strongest argument for
-a stylized design over a photorealistic one; §7.3 makes the case properly.
+For phase 1 this means: **test your rig under bad input, not only under clean poses.** A rig that
+only looks right at hand-authored keyframes is not delivered. Our test harness (§10) lets you drive
+it with the real, messy data.
 
 ---
 
 ## 4. Five things that break the delivery silently
 
 Each fails **without an error message.** The rig loads, the avatar moves, and it is wrong in a way
-nobody notices for weeks.
+nobody notices for weeks. Four of the five are phase 1.
 
-| # | Requirement | What happens if missed |
-|---|---|---|
-| **1** | **Every finger has four nodes** — three phalanx bones plus a tip node. | The last finger segment is never posed. On our current rig this left **the dominant hand's fingertips unposed on all 250 words**, including the 163 one-handed signs where that hand *is* the entire sign. Nobody saw it, because a bone at its bind rotation looks anatomically perfect. **§6.2** |
-| **2** | **Bone lengths fixed and documented.** No stretchy IK, no scale channels on bones. | Depth is reconstructed from bone length (§3.2). A bone that can stretch makes it unsolvable, and the arms go flat or inside-out. **§6.3** |
-| **3** | **A brow channel and a head-rotation channel from day one.** | Four grammatical markers ride on brow and head, not on the hands — a statement and a yes/no question are *identical* on the hands. Retrofitting a face onto a finished character costs several times what including it now costs. **§6.4** |
-| **4** | **Bare forearms, as clean contact surfaces.** | Six signs contact the passive **forearm or wrist**, not the hand. Long sleeves hide the target; a forearm modelled as a plain tube makes the contact read as a collision. **§8** |
-| **5** | **The hands carry the polygon budget** — not the face, not the clothing. | The hands are the entire information channel. A beautiful face with mushy knuckles is exactly backwards for this product. **§11** |
+| # | Requirement | Phase | What happens if missed |
+|---|---|---|---|
+| **1** | **Every finger has four nodes** — three phalanx bones plus a tip node. | **1** | The last finger segment is never posed. On our current rig this left **the dominant hand's fingertips unposed on all 250 words**, including the 163 one-handed signs where that hand *is* the entire sign. Nobody saw it, because a bone at its bind rotation looks anatomically perfect. **§6.2** |
+| **2** | **Bone lengths fixed and documented.** No stretchy IK, no scale channels on bones. | **1** | Depth is reconstructed from bone length (§3.2). A bone that can stretch makes it unsolvable, and the arms go flat or inside-out. **§6.3** |
+| **3** | **`Head` and `Neck` bones exist and are properly weighted.** | **1** | Two of the four ASL grammar markers are a headshake and a head tilt. Bones survive a mesh change, so this is phase-1 work; the *brow blendshapes* are phase 2. **§6.4** |
+| **4** | **Bare forearms with real anatomical form.** | **1** | Six signs contact the passive **forearm or wrist**, not the hand. A forearm modelled as a plain cylinder makes that contact read as a collision. **§8** |
+| **5** | **The hands carry the polygon budget** — not the face, not the body. | **1** | The hands are the entire information channel. Even in a blockout, hand topology is where the quality has to be. **§11** |
 
 ---
 
-## 5. One sign, start to finish
+## 5. What "the skeleton phase" actually delivers
 
-Abstract requirements are hard to build against, so here is the whole chain for one word. Take
-**`pain`** — the most important sign in a clinical vocabulary. In ASL it is two index fingers
-pointing at each other, jabbed toward each other near the part of the body that hurts. A
-*two-handed symmetric* sign.
+The deliverable is **a rigged, skinned, neutral grey blockout human at final proportions** — not a
+bare armature. Here is why, and why it is not throwaway work.
 
-1. **We send one file:** `pain.json`. Inside is a list of frames — say 34 of them at 30 fps, so just
-   over a second. Each frame is 75 `(x, y, z)` points.
-2. **Some points are missing.** The hands move toward each other and occlude, so the tracker loses
-   one. A missing point arrives as `null`, and the runtime holds the last good value across the gap.
-3. **The passive hand is missing entirely.** Our corpus recorded one hand per signer. So the file
-   carries an instruction: *this is a symmetric sign — mirror the dominant handshape onto the
-   passive hand.* The passive **wrist** position is real; only its shape is synthesized.
-4. **The runtime flips the vertical axis** (our y points down, yours up), scales our signer's
-   proportions onto yours, and sets IK targets: right wrist here, each right fingertip here, left
-   wrist here.
-5. **Your rig solves it.** Both index fingers must end up crisply extended with the other fingers
-   closed — handshape **`1`** — and *the fingertips must actually point at each other.* If your
-   index finger's last segment is unposed (failure #1), both hands render with a slightly bent,
-   vague index and the sign becomes unreadable.
-6. **The face does nothing here** — unless the sentence was a question, in which case the brow is
-   raised for the whole duration. A separate channel, driven by rule, not by data.
-7. **Then the next word starts** and the runtime blends between poses. Your rig has to look correct
-   in the interpolated middle too, not only at the keyframes.
+A bare armature with no mesh can only be tested for two things: node count and hierarchy. It cannot
+be tested for **skinning, tearing at extremes, handshape legibility, or contact-zone behaviour** —
+and those are half of what we need proven. So the blockout carries just enough geometry to test all
+of it.
 
-**What this asks of you, concretely:** a hand that can hold a crisp, unambiguous handshape `1`
-(index fully straight, other three fully curled, thumb closed over them) with a **fully posed
-fingertip**, while the wrist is driven to an arbitrary position near the chest, without the mesh
-tearing at the knuckles — and that still reads correctly when the motion driving it is jittery and
-partly interpolated.
+**Phase 2 dresses and details this body. It does not replace it.** The proportions, the skeleton,
+and the hand topology you deliver in phase 1 are the foundation the final character is built on. So
+build them at final quality.
 
-That is the job. Everything in §6 is a restatement of it.
+### ⚠️ The one design decision phase 1 cannot defer
+
+**How stylized the final character will be affects its proportions** — and proportions are exactly
+what phase 1 locks. If we defer that decision entirely and later choose a heavily stylized look,
+part of your phase-1 work becomes disposable.
+
+So we are pinning it now, and only it:
+
+> **The character will be a normally proportioned adult human, roughly 1.7 m, with hands 5–10%
+> larger than photoreal.** Not chibi, not heroic, not heavily stylized in proportion.
+
+That protects phase 1 while leaving every genuinely aesthetic choice — surfacing style, colour,
+clothing, face, hair, gender presentation, regional read — fully open for phase 2. Hands are
+oversized for a functional reason, not an aesthetic one: legibility at phone size (§7.2).
+
+### What is locked in phase 1
+
+| Locked now | Why it cannot wait |
+|---|---|
+| Skeleton hierarchy and bone names | The runtime already drives these names (§6.1). |
+| **4 nodes per finger** | The defect. §6.2. |
+| Bone lengths, fixed and documented | Depth reconstruction. §6.3. |
+| Overall proportions, ~1.7 m adult human | Phase 2 builds on them; changing them later is rework. |
+| Hands 5–10% oversized | Functional legibility, not style. |
+| Hand topology and weights | Half the project's quality lives here. |
+| `Head` / `Neck` bones and their weights | Bones survive a mesh change; blendshapes do not. |
+| Bare forearms with anatomical form | Contact zones. §8. |
+| A-pose bind + a neutral signing rest pose | Both are structural. §6.5. |
+
+### What is deferred to phase 2
+
+Style · silhouette · colour palette · clothing and costume · face design · hair · skin and material
+treatment · textures · gender presentation · regional read · **brow blendshapes** (they are per-mesh,
+so building them on a blockout head would be wasted) · the ARKit-52 set.
+
+**§7 constrains all of it.** Read §7 now even though you are not designing yet — it exists so phase 1
+does not paint phase 2 into a corner.
 
 ---
 
@@ -176,8 +229,8 @@ Pass/fail, and checked by script (§13).
 
 ### 6.1 Skeleton — required joints
 
-Use **Mixamo naming**. Not a preference: we extracted every animated bone name from the existing
-runtime, and these are the names it already drives.
+Use **Mixamo naming**. This is not a preference: we extracted every animated bone name from the
+existing runtime, and these are the names it already drives.
 
 ```
 Spine  Spine1  Spine2  Neck  Head
@@ -207,7 +260,7 @@ Hips
 | `Left/RightForeArm` | yes | IK mid-chain, and a contact surface in its own right — §8. |
 | `Left/RightHand` | yes | Wrist. The primary IK target. |
 | 5 fingers × 4 nodes, both hands | yes | **§6.2 — the one to get right.** |
-| Legs | optional | Framing is waist-up. Include if free; never driven. |
+| Legs | optional | Framing is waist-up. Include if free; they are never driven. |
 
 **Both arms must be fully articulated and drivable.** Do not optimise for a single dominant hand —
 the passive hand is a fully posed hand on 87 of 250 words.
@@ -251,10 +304,10 @@ Nothing caught this for weeks, because every quality check we had scored the pos
 produced. None of them asked whether a bone had been keyed at all.
 
 > **⚙️ Blender specifics — this is where the trap is.**
-> In Blender a finger of **3 bones** already gives 4 joint *positions* (three heads plus the last
-> bone's tail), so it looks correct while you work. But **glTF export writes one node per bone.**
-> The final tail is not a bone, so it does not become a node, and the exported `.glb` has only
-> three.
+> In Blender a finger of **3 bones** already gives 4 joint *positions* (three bone heads plus the
+> last bone's tail), so it looks correct while you work. But **glTF export writes one node per
+> bone.** The final tail is not a bone, so it does not become a node, and the exported `.glb` has
+> only three.
 >
 > **The fix: give every finger a fourth bone.** A short tip bone, parented to the distal phalanx,
 > with no vertex weights. It carries no deformation — it exists so the exported file has a node at
@@ -263,7 +316,7 @@ produced. None of them asked whether a bone had been keyed at all.
 >
 > **Verify on the exported file, not in the viewport.** §12 has a paste-in check.
 
-**Topology and weighting, hands:**
+**Topology and weighting, hands.** This is the highest-value work in phase 1 — spend the time here.
 
 - **At least 3 edge loops per finger segment, 4+ across each knuckle.** Fingers reach full extension
   and full curl within the same second, repeatedly, all day.
@@ -295,41 +348,47 @@ needs it for §3.2.
 > arm happened to be angled toward the lens. A rig built to those numbers would be visibly
 > deformed.
 >
-> **Build a normally proportioned human.** The reference pose exists to *test the retarget*, not to
-> model from. Proportion mismatch is expected and handled — the runtime derives per-limb scale
-> factors at load. Your job is to be internally consistent and documented.
+> **Build a normally proportioned human** (§5). The reference pose exists to *test the retarget*,
+> not to model from. Proportion mismatch between our signers and your character is expected and
+> handled — the runtime derives per-limb scale factors at load. Your job is to be internally
+> consistent and documented.
 >
 > Sanity figures only, in shoulder-widths: shoulder→hip ≈ **1.00** · nose→shoulder-midpoint ≈
 > **0.70** · wrist→middle-fingertip ≈ **0.19**.
 
-### 6.4 Face — two channels, required in v1
+### 6.4 The face — bones now, blendshapes in phase 2
 
-**ASL grammar is not carried by the hands alone.** A raised eyebrow turns a statement into a yes/no
-question. A headshake is how you negate. Held *across* the sign, simultaneously with it. Today our
-system emits the **identical** hand motion for "you have pain" and "do you have pain?", and there is
-no way to tell them apart. The brow is the only thing that would.
+**Why the face matters at all.** ASL grammar is not carried by the hands alone. A raised eyebrow
+turns a statement into a yes/no question. A headshake is how you negate. Held *across* the sign,
+simultaneously with it. Today our system emits the **identical** hand motion for "you have pain" and
+"do you have pain?", and there is no way to tell them apart.
 
-| marker | grammar | rendered as |
-|---|---|---|
-| `q` | yes/no question | **brow raise**, held for the whole sign |
-| `wh` | wh-question — who, what, where, why | **brow furrow** + slight head tilt |
-| `neg` | negation | **headshake** across the sign |
-| `top` | topic marker | brow raise on the topicalised sign only |
+| marker | grammar | rendered as | phase |
+|---|---|---|---|
+| `q` | yes/no question | brow raise, held for the whole sign | 2 |
+| `wh` | wh-question — who, what, where, why | brow furrow + slight head tilt | 2 + **1** |
+| `neg` | negation | **headshake** across the sign | **1** |
+| `top` | topic marker | brow raise on the topicalised sign only | 2 |
 
-All four are covered by two independently drivable channels:
+**Phase 1 requirement — the head and neck bones.**
 
-1. **Brow — raise and furrow, as blendshapes.** Absolute minimum three: `browInnerUp`,
-   `browDownLeft`, `browDownRight`. If you are building a face anyway, deliver the **ARKit 52** set
-   — a superset, what Three.js tooling expects, and it future-proofs the mouth shapes we need later.
-2. **Head rotation — the `Head` and `Neck` bones**, freely rotatable, weighted to survive a ±30°
-   shake and a ±20° tilt with no collar tearing and no neck pinching.
+`Head` and `Neck` must be freely rotatable and weighted to survive a **±30° shake** and a **±20°
+tilt** with no collar tearing and no neck pinching. Bones survive a mesh change, so this work is
+permanent even though the head geometry is not.
 
-> **Two easy ways to fail this.**
-> **Timing** — retrofitting a face rig onto a finished character costs several times what including
-> it now costs. If v1 ships without these channels, grammatical signing is dead for a year.
-> **Visibility** — the brows must be *visible*. No fringe over the forehead, no glasses, no
-> brow-obscuring hair. A brow channel nobody can see is not a channel, and it is easy to design one
-> away without noticing.
+**Phase 2 requirement — the brow channel.** Blendshapes are per-mesh, so building them on a blockout
+head would be wasted. They get built natively on the final head. Two things phase 1 must not
+foreclose:
+
+1. **The blockout head must have brow geometry** — enough of a brow ridge and enough topology that a
+   raise and a furrow are demonstrably achievable. A featureless egg head fails this.
+2. **A one-shape proof.** Deliver a single crude `browRaise` shape on the blockout, purely to prove
+   the topology supports it. Not a full set, not final quality — a feasibility check.
+
+> **Carried forward as a locked constraint on phase 2:** the final head ships at minimum
+> `browInnerUp`, `browDownLeft`, `browDownRight`, and preferably the full **ARKit 52** set. And the
+> brows must be **visible** — no fringe over the forehead, no glasses, no brow-obscuring hair. A brow
+> channel nobody can see is not a channel, and it is easy to design one away without noticing.
 
 ### 6.5 Orientation, units, bind pose
 
@@ -342,104 +401,90 @@ All four are covered by two independently drivable channels:
 | **Rest / idle pose** | A separate **neutral signing rest pose** — arms down, hands relaxed and slightly open, in front of the body. Where the avatar sits between utterances, so the pose people see most. |
 | **Origin** | At the feet, centred between them. |
 | **Transforms** | No unapplied scale or rotation on the armature or any mesh. Apply everything before export. |
-| **Mesh** | Single skinned mesh preferred, or as few as possible. No modifiers left unapplied except the armature. |
+| **Mesh** | Single skinned mesh preferred. No modifiers left unapplied except the armature. |
 
 ---
 
-## 7. The character
+## 7. Constraints the character design will have to satisfy
 
-Everything above is engineering. This is where your judgement is what we are paying for.
+**You are not designing yet.** This section exists so that phase 1 does not foreclose phase 2, and
+so you know the box the design will have to fit inside when we get there. Read it; do not act on it
+beyond §5's locked proportions.
 
-### 7.1 Who is watching
+### 7.1 Who the character is for
 
 A **Deaf or hard-of-hearing person, in a clinic or hospital, possibly frightened, trying to
 understand a doctor.** Our market is Lebanon. The near-term vocabulary is clinical.
 
-- **Trustworthy and calm.** This character delivers medical information. Not cute, not cool, not a
-  mascot, no personality quirks.
-- **Professionally plausible.** Clinic-appropriate is right, and scrubs or a simple uniform is a
-  good direction that conveniently solves the sleeve problem in §7.2. But do **not** imply a
-  specific real hospital, employer, or credential.
-- **Regionally plausible.** A character that reads as Levantine will land better with our users than
-  a generic Western default. Execution is yours — flag your intent at M1 so we can react early.
-- **Respectful of the Deaf community.** This is their language and they are the users. Nothing that
-  reads as mimicry, caricature, or novelty.
-- **Adult. Gender is your call** — but say which and why. We have no fixed requirement and would
-  rather hear your reasoning.
+The eventual design will need to be: **trustworthy and calm** (this character delivers medical
+information — not cute, not a mascot); **professionally plausible** without implying a specific real
+hospital or credential; **regionally plausible** for a Levantine audience; and **respectful of the
+Deaf community**, whose language this is.
 
-### 7.2 Legibility rules — these override aesthetics
+### 7.2 Legibility rules — these will override aesthetics
 
 The hands carry **100% of the lexical content.** Anything that reduces hand legibility is a
-functional defect, not a style choice. If one of these conflicts with a design you like, the rule
-wins — or you make the case to us and we decide together.
+functional defect, not a style choice. These bind phase 2:
 
 - **Hands must contrast strongly against the torso.** Very many signs are performed directly in
-  front of the chest, so a skin-toned top makes those signs vanish. Use a mid-to-dark, **solid,
+  front of the chest, so a skin-toned top makes those signs vanish. Mid-to-dark, **solid,
   unpatterned** torso. No stripes, no logos, no busy texture.
 - **Sleeves end at or above the elbow.** Six signs contact the passive forearm or wrist (§8).
-- **No jewellery, watch, rings, gloves, bracelets, or long nails.** All of it occludes handshape and
-  adds silhouette noise.
-- **Hands slightly larger than photoreal** — about 5–10%. Standard for signing avatars, and it buys
-  real legibility at phone size. Do not push into cartoon proportions.
+- **No jewellery, watch, rings, gloves, bracelets, or long nails.** All of it occludes handshape.
+- **Hands 5–10% larger than photoreal.** Already locked in §5 — functional, not aesthetic.
 - **Face clear:** brows visible, no glasses, hair off the forehead, no beard obscuring the chin —
   several signs contact the chin (§8).
-- **Fingertips subtly distinguishable** — a slight value shift at the tips or nails helps handshape
-  read. Test at real viewing size; overdone, it looks diseased.
-- **Test everything at 320 px tall.** Roughly the real size on a phone. A design that only works at
-  4K is not delivered.
+- **Everything must read at 320 px tall.** Roughly the real size on a phone.
 
-### 7.3 Style: stylized, not realistic — and this is a technical decision
+### 7.3 Style: stylized, not realistic — and this is a technical argument
 
-**Recommended: stylized-realistic.** Clean, appealing, recognisably human, clearly not photoreal.
-Think a well-made explainer character rather than a game hero or a MetaHuman.
+When we get to phase 2 the recommendation will be **stylized-realistic**: clean, appealing,
+recognisably human, clearly not photoreal. Think a well-made explainer character rather than a game
+hero or a MetaHuman.
 
 The reason is not taste. Re-read §3.3: our motion is jittery, drops out, and is interpolated. A
 *photorealistic* human moving with those artefacts sits squarely in the uncanny valley and reads as
-unsettling — the worst possible register for a medical accessibility tool used by someone already
-anxious. A stylized character with identical motion reads as *animated*, and the same artefacts
-become stylistic instead of disturbing.
+unsettling — the worst possible register for a medical tool used by someone already anxious. A
+stylized character with identical motion reads as *animated*, and the same artefacts become
+stylistic instead of disturbing.
 
-Avoid chibi or childish proportions, which undermine the clinical register; and any style whose
-appeal depends on micro-expression or subtle secondary motion we cannot supply.
+**This is why §5 pins proportions but not surfacing.** Stylized-realistic keeps human proportions,
+so phase 1's blockout stays valid.
 
 ### 7.4 Framing and the signing space
 
 - The camera sees roughly **top of head to waist**, front-on.
 - The **signing space** extends about **±0.75 shoulder-widths** either side of body centre, and from
   just above the head to the waist — a box about 1.5 shoulder-widths wide. Signs go above the head
-  and out to the sides; the character must read well with a hand anywhere in that box, not only in
-  the A-pose.
-- Design for a portrait-ish or square crop as well as landscape. This will run on phones.
-- Assume a plain background supplied by the app. Do not build an environment.
+  and out to the sides; **the rig must work with a hand anywhere in that box**, which is a phase-1
+  concern, not just a framing one.
+- Plain background supplied by the app. No environment, ever.
 
 ---
 
 ## 8. What the hands touch
 
 ASL signs make contact with the signer's **own body** — at speed, repeatedly, driven by an IK solver
-with **no collision handling whatsoever.**
+with **no collision handling whatsoever.** This is a phase-1 concern because it constrains the
+blockout's *form*, not just its styling.
 
-| Target | Example signs | What you must ensure |
+| Target | Example signs | What the blockout must support |
 |---|---|---|
-| **Forehead** | man, father | Clean forehead surface; hair not in the way; the hand arrives flat against it. |
-| **Chin / lower face** | woman, mother | Reachable chin, not sunk into a collar; no obscuring beard. |
-| **Mouth / teeth** | eat, drink, tongue, teeth | The hand comes very close to the mouth. Keep the area clean and unobstructed. |
-| **Chest / sternum** | heart, feel, lungs, tired, sick | A broad, clean, near-flat chest plane. Keep clothing folds shallow here. |
-| **Passive forearm** | arm, table, tree, flag, morning | **Bare, anatomical forearm.** The dominant hand *slides along* it — a plain cylinder reads as a collision. |
-| **Passive wrist** | time | Precise contact on a small target. Keep the wrist form readable. |
-| **Passive hand** | 29 of the 35 asymmetric signs | Hand-on-hand contact — palms and knuckles meet, one hand rests on the other. |
-| **Ear · nose · eye · head** | ear, nose, eye, head | Reachable, and not buried in hair volume. |
+| **Forehead** | man, father | Clean forehead surface; the hand arrives flat against it. |
+| **Chin / lower face** | woman, mother | Reachable chin, not sunk into the neck. |
+| **Mouth area** | eat, drink, tongue | The hand comes very close. Keep it unobstructed. |
+| **Chest / sternum** | heart, feel, lungs, tired, sick | A broad, clean, near-flat chest plane. |
+| **Passive forearm** | arm, table, tree, flag, morning | **Bare forearm with real anatomical form.** The dominant hand *slides along* it — a plain cylinder reads as a collision. |
+| **Passive wrist** | time | Precise contact on a small target. Readable wrist form. |
+| **Passive hand** | 29 of the 35 asymmetric signs | Hand-on-hand contact — palms and knuckles meet. |
+| **Ear · nose · eye · head** | ear, nose, eye, head | Reachable, with enough form to land on. |
 
-Note the front-view orientation: since the dominant hand is always the **right** one, the passive
-forearm and wrist the dominant hand acts on are on the signer's **left** — the viewer's right.
-
-**Practical consequence.** Avoid geometry that makes contact look broken: deep chest folds, a collar
-the chin sinks into, sleeves that bunch at the elbow, hair volumes a hand passes through, a forearm
-with no anatomical landmarks. Where a small design change makes a contact zone cleaner, take it —
-and tell us, so we know it was deliberate.
+Note the orientation: the dominant hand is always the **right** one, so the passive forearm and
+wrist it acts on are on the signer's **left** — the viewer's right in a front view.
 
 We are **not** asking for collision solving. We are asking for a body whose contact surfaces are
-forgiving when a hand lands on them approximately.
+forgiving when a hand lands on them approximately. **Phase 2 must not undo this** — that is why
+sleeves and hair are constrained in §7.2.
 
 ---
 
@@ -458,10 +503,10 @@ standard names. Our synthesized passive hand uses seven. On the current vocabula
 | **5** | All five fingers extended and **spread wide apart**. The spread is the point. | not used yet |
 | **O** | Fingertips and thumb tip meeting to form a closed round O. | not used yet |
 
-**Deliverable: hand-pose all seven, as named poses.** Save them as named pose assets in the source
-file and deliver reference renders (front and side of the hand). Two reasons: it proves the hand rig
-can hit them crisply, and it gives us a human-authored reference to check our measured templates
-against.
+**Phase-1 deliverable: hand-pose all seven, as named poses.** Save them as named pose assets in the
+source file and deliver reference renders (front and side of the hand). Two reasons: it proves the
+hand rig can hit them crisply, and it gives us a human-authored reference to check our measured
+templates against.
 
 **Look at real reference, not just our descriptions** (§16). These are real linguistic forms with
 correct and incorrect versions — the difference between `A` and `S` is only where the thumb goes,
@@ -491,9 +536,9 @@ of these comfortably, at the wrist, without the forearm twisting past anatomical
 |---|---|
 | `reference_pose.json` | One neutral frame, 75 points, in our coordinate space. **For testing your retarget, not for modelling proportions** — see §6.3. |
 | `handshape_templates.json` | 21-point measured templates for the seven handshapes. Numeric reference for what the shapes should be. |
-| 250 per-word clips | Real landmark motion, one file per word. This is what will drive your rig, so Ghozlan can test it the day you deliver. |
+| 250 per-word clips | Real landmark motion, one file per word. This is what will drive your rig. |
 | `contact_sheet.png` | Rendered stick-figure previews of the whole vocabulary. **Look at this early** — it shows the real range of motion better than any description. |
-| A test harness | Ghozlan's existing player. Load your own rig and watch it move under real data *before* final delivery. Use it at M3, not M5. |
+| A test harness | Ghozlan's existing player. Load your rig and watch it move under real data *before* final delivery. **Use it at P1-M3, not at the end.** |
 | Us | Ask early and often. A question answered in week one is free; a rebuild in week four is not. |
 
 **Ask for anything else you need.** Especially: if you want video reference of real signers
@@ -502,31 +547,30 @@ like** — specifying that is our job, not yours to invent.
 
 ---
 
-## 11. What you deliver
+## 11. What you deliver in phase 1
 
 | # | Deliverable | Format & notes |
 |---|---|---|
-| 1 | **Rigged character** | **glTF 2.0 `.glb`**, single file, embedded textures. The production asset — loads directly in Three.js. |
+| 1 | **Rigged blockout character** | **glTF 2.0 `.glb`**, single file. Neutral grey, no styling, final proportions, fully skinned. |
 | 2 | Editable source | `.blend` preferred, or `.ma`/`.mb`, with the full rig stack intact and nothing collapsed. |
 | 3 | **Bone length table** | JSON or CSV — every bone, rest length, in rig units (§6.3). |
 | 4 | Bone name map | JSON. *Only* if you deviated from the §6.1 names. |
 | 5 | **Seven handshape poses** | Named pose assets in the source + front/side reference renders (§9). |
-| 6 | Neutral rest pose | A named pose, plus a render (§6.5). |
-| 7 | Face channel list | The blendshape names you shipped, and which drive brow raise vs furrow. |
-| 8 | Texture sources | Layered source files at working resolution. |
-| 9 | Turnaround renders | Front, side, back, plus hand close-ups. For documentation and supervisor review. |
-| 10 | A short readme | Anything non-obvious: rig setup, constraints, correctives, known limits, what you would fix with more time. |
+| 6 | Neutral signing rest pose | A named pose, plus a render (§6.5). |
+| 7 | **`browRaise` feasibility shape** | One crude blendshape on the blockout head, proving the topology supports a brow channel (§6.4). |
+| 8 | Turnaround renders | Front, side, back, plus hand close-ups at full curl and full extension. |
+| 9 | A short readme | Rig setup, constraints used, known limits, and **anything phase 2 must not break**. |
 
 **Budgets** — this runs in a browser, on phones, next to a live camera feed:
 
 | | |
 |---|---|
-| **Triangles** | **30k–60k** for the whole character. **Weight it toward the hands** — spending a quarter of the budget on two hands that are 3% of the volume is *correct* here, not a mistake. |
-| **Textures** | 2K maximum. Fewer materials is better; one skin + one clothing is ideal. Avoid a material per body part. |
-| **`.glb` size** | Under ~15 MB. Under 8 MB is better. |
-| **Blendshapes** | Brow minimum, ARKit-52 preferred. No hundreds of correctives. |
+| **Triangles** | **Blockout: 20k–40k.** Final character will be 30k–60k. **Weight it toward the hands** — spending a quarter of the budget on two hands that are 3% of the volume is *correct* here. |
+| **Textures** | None needed in phase 1. Flat grey material. |
+| **`.glb` size** | Trivially small without textures. Keep it clean. |
+| **Blendshapes** | One (`browRaise`, item 7). Nothing else. |
 | **Bones** | No hard cap, but every bone costs. No twist chains or helper bones the runtime cannot drive. |
-| **Forbidden** | **No** rigid-body, cloth, hair, or physics of any kind. **No** drivers or constraints in the exported file. Everything deterministic under IK. |
+| **Forbidden** | **No** rigid-body, cloth, hair, or physics. **No** drivers or constraints in the exported file. Everything deterministic under IK. |
 
 ---
 
@@ -571,8 +615,8 @@ for side in ('Left','Right'):
 ```
 
 *(Verified 2026-09-01 against a synthetic `.glb` with one finger deliberately at 3 nodes — it
-correctly reports `*** FAIL ***` on that finger and `OK` on the rest, so the check can actually
-fail.)*
+correctly reports `*** FAIL ***` on that finger and `OK` on the other nine, so the check can
+actually fail.)*
 
 ### C · The rest of the list
 
@@ -582,12 +626,10 @@ fail.)*
 - **Reach the extremes:** a hand fully overhead, a hand across the body to the opposite shoulder,
   elbow fully flexed, both hands meeting at the chest.
 - **Put a hand on every contact zone in §8.** No gross interpenetration.
-- **Drive the face:** brow full raise, full furrow, head shake ±30°, head tilt ±20°. No collar
-  tearing, no neck pinch.
+- **Rotate the head:** shake ±30°, tilt ±20°. No collar tearing, no neck pinch.
+- **Drive it with our real data** in the test harness. Not just hand-authored poses — §3.3.
 - **Check for unapplied transforms** on the armature and every mesh.
 - **Load the `.glb` in a viewer** and confirm zero warnings.
-- **Check the budgets** in §11.
-- **View it at 320 px tall** against a plain background — how users will actually see it.
 
 ---
 
@@ -596,44 +638,51 @@ fail.)*
 Run by script on delivery. They exist so "done" is a measurement rather than an opinion — which
 protects you as much as us, because payment is not held up by subjective back-and-forth.
 
-| # | Test | Pass condition |
-|---|---|---|
-| 1 | **Finger node count** | Every finger, both hands, has **4 transform nodes in the exported `.glb`**. 40 finger nodes + 2 wrists = **42**. Hard fail if any finger has 3. |
-| 2 | **Distal keying** | Driven with a real clip, **every third-segment bone on both hands is actually posed.** The §6.2 regression test. |
-| 3 | **Bone-length stability** | Every bone within 0.1% of rest length across a full 250-word playback. Catches stretchy IK. |
-| 4 | Reference-pose retarget | Driven with `reference_pose.json`, wrists land within 5% of a shoulder-width of target. |
-| 5 | Handshape reachability | All seven reachable and legible; **`B` and `5` measurably distinct** in bone-direction space. |
-| 6 | Face channels | Brow raise, brow furrow, head shake ±30°, head tilt ±20° — all drivable, no tearing. |
-| 7 | Extremes, no tearing | Full curl, full extension, arm overhead, hand to opposite shoulder, elbow fully flexed. |
-| 8 | Contact zones | A hand at each §8 target: no gross interpenetration. |
-| 9 | Budgets | Triangles, textures, file size within §11. |
-| 10 | Loads clean | Loads in Three.js with no warnings; no unapplied transforms; no unsupported features. |
+| # | Test | Pass condition | Phase |
+|---|---|---|---|
+| 1 | **Finger node count** | Every finger, both hands, has **4 transform nodes in the exported `.glb`**. 40 finger nodes + 2 wrists = **42**. Hard fail if any finger has 3. | **1** |
+| 2 | **Distal keying** | Driven with a real clip, **every third-segment bone on both hands is actually posed.** The §6.2 regression test. | **1** |
+| 3 | **Bone-length stability** | Every bone within 0.1% of rest length across a full 250-word playback. Catches stretchy IK. | **1** |
+| 4 | Reference-pose retarget | Driven with `reference_pose.json`, wrists land within 5% of a shoulder-width of target. | **1** |
+| 5 | Handshape reachability | All seven reachable and legible; **`B` and `5` measurably distinct** in bone-direction space. | **1** |
+| 6 | Head range | Shake ±30°, tilt ±20°, no tearing. Plus the `browRaise` feasibility shape exists. | **1** |
+| 7 | Extremes, no tearing | Full curl, full extension, arm overhead, hand to opposite shoulder, elbow fully flexed. | **1** |
+| 8 | Contact zones | A hand at each §8 target: no gross interpenetration. | **1** |
+| 9 | Budgets | Triangles and file size within §11. | **1** |
+| 10 | Loads clean | Loads in Three.js with no warnings; no unapplied transforms; no unsupported features. | **1** |
+| 11 | Brow blendshape set | Minimum three brow shapes, ARKit-52 preferred. | 2 |
+| 12 | Legibility rules | Every rule in §7.2 satisfied. | 2 |
 
 Tests **1, 2 and 3** are the ones that have actually bitten us. Expect them first, and expect test 1
-at M2 rather than at delivery.
+at **P1-M1** rather than at delivery.
 
 ---
 
-## 14. Milestones and scope
+## 14. Phase 1 milestones
+
+Each gate is cheap to fix at that point and expensive to fix later. We would rather review four
+times than once, and we will turn reviews around quickly.
 
 | M | You deliver | We check |
 |---|---|---|
-| **M1** | Concept: 2–3 style directions, silhouette, palette, your reasoning on §7.1. Blockout at correct proportions. | Register, legibility (§7.2), regional read. **Before any detailed modelling.** |
-| **M2** | Skeleton only, no mesh detail. Full hierarchy, all 42 hand nodes, bone length table, **exported as `.glb`**. | **Tests 1 and 3.** The cheapest possible moment to catch §6.2 — and the reason we want a `.glb` this early. |
-| **M3** | Hands: final topology, weights, all seven handshapes posed. Loaded in our test harness under real motion. | Tests 5 and 7. Hand quality review — the most important review in the project. |
-| **M4** | Body, clothing, textures, face channels, rest pose. | Tests 6 and 8, plus every rule in §7.2. |
-| **M5** | Final `.glb`, source, all ten deliverables from §11. | All ten tests. Sign-off. |
+| **P1-M1** | **Skeleton only.** Full hierarchy, all 42 hand nodes, bone length table, proportions agreed. **Exported as `.glb`.** | **Tests 1 and 3.** The cheapest possible moment to catch §6.2 — and the whole reason we want a `.glb` this early, before any mesh work. |
+| **P1-M2** | Blockout body at locked proportions, skinned, with the arms and torso weighted. | Tests 4 and 7. Contact-zone form (§8). |
+| **P1-M3** | **Hands: final topology and weights, all seven handshapes posed.** Loaded in our test harness under real motion. | Tests 5 and 8. **The most important review in the project.** |
+| **P1-M4** | Head/neck weights, `browRaise` shape, rest pose, final `.glb` + source + all nine deliverables from §11. | Tests 6, 9, 10, and a re-run of everything. Sign-off. |
 
-### Out of scope
+**Phase 2 is quoted separately** once P1-M4 is signed off and we have decided the design direction.
 
+### Out of scope for phase 1
+
+- **Any character design** — style, colour, clothing, face design, hair, textures, materials.
+- **Brow blendshapes beyond the single feasibility shape** (§6.4).
 - **The retargeting solver, the runtime, transitions, smoothing** — Ghozlan's.
 - **Which signs exist, what they look like, ASL linguistics** — ours. Ask.
 - **Animating anything.** You deliver poses, never animation clips.
-- **Full 468-point face-mesh driving.** v2. Build the two channels in §6.4 and stop.
-- **Lip sync and mouth shapes.** v2 — though ARKit-52 gets us there for free.
+- **Full 468-point face-mesh driving.** Not in either phase yet.
+- **Lip sync and mouth shapes.** Later.
 - **Legs, walking, locomotion, sitting.** Framing is waist-up.
 - **Environments, lighting rigs, backgrounds, UI.**
-- **Multiple characters, outfits, or customisation.** One character, done well.
 
 ---
 
@@ -643,11 +692,12 @@ Listed so nothing is discovered late. Figures are to be agreed — this is a che
 
 | | |
 |---|---|
-| **Fee & schedule** | Total, and how it splits across the five milestones in §14. |
+| **Phase 1 fee & schedule** | Total for phase 1, and how it splits across the four milestones in §14. |
+| **Phase 2** | Indicative range only, so we can budget. Not committed on either side yet. |
 | **Timeline** | Target date per milestone, and what happens if a gate fails and needs rework. |
 | **Revisions** | How many rounds are included per milestone, and what counts as a new request rather than a revision. |
-| **IP & ownership** | We need full commercial rights to the character and the source files, including the right to modify them and ship them inside a commercial product. Say now if that is not your normal arrangement. |
-| **Third-party assets** | **Declare every base mesh, texture pack, brush set, HDRI, or scan you use, with its licence.** Anything that cannot be redistributed commercially inside an application is unusable to us, however good it looks. |
+| **IP & ownership** | We need full commercial rights to the rig and the source files, including the right to modify them and ship them inside a commercial product — **and the right to have phase 2 done by someone else if we choose.** Say now if that is not your normal arrangement. |
+| **Third-party assets** | **Declare every base mesh, rig, texture pack, or scan you use, with its licence.** Anything that cannot be redistributed commercially inside an application is unusable to us, however good it looks. This matters most for base rigs. |
 | **Credit** | Whether you want to be credited, and how. |
 | **Handover** | How files are transferred, and where they live afterwards. |
 
@@ -656,6 +706,7 @@ Listed so nothing is discovered late. Figures are to be agreed — this is a che
 ## 16. Reference material
 
 You do not need to learn ASL. You do need to see enough that the requirements stop being abstract.
+An hour here is well spent.
 
 - **Watch real signing.** Search "ASL dictionary" and watch any twenty signs. Notice how much
   happens at the fingertips, how often the hands touch the face and chest, and how much the eyebrows
@@ -679,14 +730,14 @@ You do not need to learn ASL. You do need to see enough that the requirements st
 2. Are you comfortable with the **Mixamo naming convention** in §6.1, or would you rather deliver a
    name map?
 3. Have you rigged hands for **IK-driven, position-target** animation before? If not, say so — it is
-   learnable, and we would much rather plan for it than discover it at M3.
-4. Can you deliver **ARKit-52 blendshapes**, or is the three-shape brow minimum more realistic for
-   your pipeline?
-5. Starting from scratch, or from a base mesh or commercial base (Avaturn, Ready Player Me,
-   MetaHuman, Character Creator)? **A base is fine** — but many bases fail §6.2, so if you use one,
-   **test 1 must pass at M2**, not at delivery. And confirm the base's licence permits commercial
-   use and redistribution inside an application (§15).
-6. Your estimate and rate against the five milestones in §14.
+   learnable, and we would much rather plan for it than discover it at P1-M3.
+4. Starting from scratch, or from a base mesh or base rig (Avaturn, Ready Player Me, MetaHuman,
+   Character Creator, Rigify)? **A base is fine** — but many bases fail §6.2, so if you use one,
+   **test 1 must pass at P1-M1.** And confirm the licence permits commercial use and redistribution
+   inside an application (§15).
+5. **Your estimate and rate for phase 1**, against the four milestones in §14.
+6. **Do you also want phase 2** (the character design), and roughly what would that cost? Not a
+   commitment — we want to know whether to plan for one artist or two.
 7. **Anything in this brief that looks wrong, unusual, or more expensive than it needs to be.** You
    will know things about rigging that we do not. Say so early — we would rather change the brief
    than pay for a workaround.
@@ -695,8 +746,8 @@ You do not need to learn ASL. You do need to see enough that the requirements st
 
 ## Appendix — why the constraints are shaped this way
 
-Not required reading. Here because a designer who understands the *why* makes better decisions on
-the hundred things a brief cannot cover.
+Not required reading. Here because someone who understands the *why* makes better decisions on the
+hundred things a brief cannot cover.
 
 **Our source data recorded one hand per signer.** In the corpus behind the 250-word vocabulary, both
 hands are present in **1.7%** of clips. So on every two-handed sign the passive hand is absent from
@@ -710,16 +761,16 @@ a 1.5× ratio. Two-handed signs are exactly where the hands cross and occlude ea
 dominant hand drops out most on the words that need it most. Of 87 two-handed words, **3 reach our
 top quality tier and 39 fall to the bottom one.** Of 163 one-handed words, **zero** fall to the
 bottom tier. This is a property of the source recordings, not of unfinished work — and it is the
-concrete reason your character must look acceptable under interpolated, imperfect motion (§7.3).
+concrete reason the rig must be tested under real, messy data (§3.3) rather than hand-authored poses.
 
 **The face channel does not exist in our data.** We could recover 468 face landmarks from the
 original video, but the corpus is *isolated single words* — signers performing one word at a time —
 so their expressions are neutral and inconsistent rather than grammatical. A face rig driven by that
 data would move without meaning anything. So the non-manual markers in §6.4 are **generated from
-rules on our side**, keyed off the sentence we already parse. That needs no data at all — only a
-rule and a rig. It is the one place in this entire system where we can add real linguistic structure
-rather than replay recorded motion, and it is gated entirely on your rig having the two channels.
-That is why §6.4 is a v1 requirement and not a v2 nice-to-have.
+rules on our side**, keyed off the sentence we already parse. That needs no data at all — only a rule
+and a rig. It is the one place in this entire system where we can add real linguistic structure
+rather than replay recorded motion, which is why the head bones are a phase-1 requirement even
+though the face design is deferred.
 
 **Two of our lexicons are unreviewed by a Deaf signer.** The handshape templates and the
 passive-hand placements were written from published phonology by a hearing developer. They are
