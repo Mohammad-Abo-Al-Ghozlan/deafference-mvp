@@ -98,28 +98,51 @@ Then tell him **what changed and why**, not just "here's a new zip":
 >
 > Class 1 and 2s are byte-identical — verified exactly, not on a median.
 
-### ☐ 2A. Send `AVATAR_SKELETON_BRIEF.md` **v5** to the designer · ~5 min
+### ☐ 2A. Send `AVATAR_BRIEF_COMPLETE.md` to the designer · ~2 min
 
-**Send the whole v5 file, not a patch.** Addendum 1 is folded into it and deleted, so there is one
-document again. The change-log block at the very top shows the designer exactly what moved since the
-v4 they already have, and every section number is unchanged — so anything they have bookmarked still
-resolves.
+**Send `docs/AVATAR_BRIEF_COMPLETE.md` — one file, nothing attached.** It is v6: everything from v5
+plus six appendices that fold in the content of every file we used to attach. The PNGs, the reference
+pose and the templates are all inline as numbers now, so the designer needs nothing but this
+document. Every section number from v4 and v5 is unchanged, so anything they bookmarked resolves.
 
-**Attach with it: `docs/handshape_review/*.png`** — all eight files, including `contact_sheet.png`.
+*(`AVATAR_SKELETON_BRIEF.md` — v5 — is kept as-is for history. Do not send both.)*
 
-Three things in v5 worth knowing before they reply:
+**Optional extras if they ask:** `docs/handshape_review/*.png` (eight renders) and
+`animation_handoff/contact_sheet.png` (all 250 words as stick figures). Neither is required.
 
-- **NEW §6.12 — motion integrity.** The eleven ways this avatar's motion goes visibly wrong, each
-  with its cause and its owner. **Six are the designer's, four are ours, one is the data's.** No new
-  requirements; it explains why the existing ones exist and gives them the symptoms to watch for.
-  This is the direct answer to "no errors in motion".
-- **"Blockout" is now defined**, and this is the one item that may cost money. It does *not* mean a
-  crude box-man — §9 needs a forearm the hand slides along, §6.9 a real brow ridge, §10 hands legible
-  at 320 px. So: anatomically correct, cleanly topologised, properly weighted, **unstyled but not
-  unfinished**, hands at final quality. v5 invites them to reprice rather than argue at P1-M3.
-  **Expect that conversation — the ambiguity was our wording's fault.**
-- **The B/5 warning is corrected downward.** Measured today, the templates separate by 48% on
-  fingertip spacing. They get a numeric target instead of a worry, which is less work, not more.
+**Three corrections are the reason to send this rather than leave v5 standing.** All three are
+numbers we had already given them, and two would have cost real work:
+
+- **§6.8 — a hand sized from our figure would be less than half the right size.** v5's three "sanity
+  figures" were all read off the single reference frame it tells you not to model from.
+  `wrist→middle-fingertip ≈ 0.19` shoulder-widths is **7.5 cm**; measured over 11,292 frames it is
+  **0.45**. A second figure was mislabelled — `0.70` was the distance to the shoulder *joint*, not the
+  midpoint (0.41). Corrected, with the measured replacements and the reason each was wrong.
+- **§8.4 — the signing space is wider than we said.** `±0.75` shoulder-widths covers only 60% of
+  frames; the median is 0.69 and 25% of frames put a wrist above the shoulder line. Real box is
+  ~**±1.1** laterally. This is a shoulder-and-clavicle weighting requirement, so it is phase-1 work.
+- **§10 — the B/5 requirement is now isolated.** Same finding as v5, but the number that constrains
+  the rig is separated out: `5` needs **27°** of knuckle fan where `B` has **1.5°**. That is pure MCP
+  abduction with curl removed, which is the thing a rig either can or cannot do.
+
+And two things that are new capability rather than correction:
+
+- **Appendix A — the seven handshapes as numbers**, replacing the PNGs. Wrist-to-fingertip
+  signatures, spread, thumb geometry, joint angles, and per-shape provenance. Checkable with a
+  ruler. It also flags that **`O` is the one template not to trust** (scatter 0.286, marked unusable),
+  and that **`S` rests on a single word**.
+- **Appendix B — all 35 passive-hand poses, word by word.** Handshape, the *named surface* the other
+  hand lands on, palm and finger orientation. Eleven distinct contact surfaces appear, and **nine of
+  the 35 words land on the back, side or underside of the passive hand** — so a hand that only reads
+  from the front fails nine words. That was implicit in §9 before; now it is a list.
+
+Still true from v5, and still the one item that may cost money:
+
+- **"Blockout" is defined.** It does *not* mean a crude box-man — §9 needs a forearm the hand slides
+  along, §6.9 a real brow ridge, §10 hands legible at 320 px. So: anatomically correct, cleanly
+  topologised, properly weighted, **unstyled but not unfinished**, hands at final quality. §5 invites
+  them to reprice rather than argue at P1-M3. **Expect that conversation — the ambiguity was our
+  wording's fault.**
 
 ### ☐ 2B. Decide who owns the runtime · a decision, not a task
 
