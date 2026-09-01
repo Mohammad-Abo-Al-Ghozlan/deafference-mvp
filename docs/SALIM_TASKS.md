@@ -27,29 +27,39 @@ nothing for you to do in that section.
 
 ---
 
-## NOW — today. All four together are under an hour of your time.
+## ✅ CLOSED on 2026-09-01
 
-### ☐ 1. Rotate the three burned credentials · ~20 min
+### ✅ 1. Rotate the three burned credentials — **DONE**
 
-**AWS access key · Gemini keys · Supabase DB password.** All three were pasted in chat weeks ago and
-none has been rotated.
+AWS · Gemini · Supabase. **The only item on the board with unbounded downside, and it is closed.**
 
-This is first for one reason: it is **the only item on the whole board with unbounded downside.**
-Leaked AWS keys get scraped and used, and the cost is not capped by anything. Everything else on
-this list costs time if it slips; this one can cost money.
+One thing to confirm once if you have not: the new values are in the gitignored `.env` only, and
+nothing was written into `.env.example` or a notebook cell.
 
-- Rotate in each provider's console.
-- New values go **only** into the gitignored `.env`. Never into `.env.example`, never into a
-  notebook cell, never into chat.
-- Confirm `.env` is still gitignored before you finish.
+### ✅ 3. Send the skeleton brief to a 3D artist — **DONE, and one is hired**
 
-### ☐ 2. Rebuild the avatar handoff and send it to Ghozlan · ~15 min
+`AVATAR_SKELETON_BRIEF.md` sent; a designer is engaged. **Ghozlan is no longer responsible for the
+avatar** — the designer owns it.
 
-**He is blocked right now** and has been since Aug 26 — he is building his renderer against 35 word
-files that no longer exist in that form, plus two lexicons that have changed. Every day this waits
-is a day of his work aimed at superseded data.
+That role change opens one gap, which is now task 2A below. It does **not** block the designer.
 
-Rebuild first (see the correction above):
+---
+
+## NOW — today
+
+### ☐ 2. Rebuild the avatar handoff — and it now goes to the DESIGNER, not Ghozlan · ~15 min
+
+**Changed 2026-09-01.** With Ghozlan off the avatar, this package's recipient is the designer — at
+**P1-M2**, per Addendum 1 §6, not immediately. So the urgency is gone, but the *rebuild* still
+matters: the stale zip must not be the thing anyone reaches for later.
+
+Do it now while the reason is fresh, and park the result.
+
+If Ghozlan is still on the project in any capacity — the runtime, the web app — **he should still get
+the corrected files and the note below**, because he built against the superseded export for a week
+and deserves to know why his results looked wrong.
+
+Rebuild (see the correction above):
 
 ```bash
 cd "c:/Users/1mhmd/OneDrive/Desktop/Deaffearance/Deafference"
@@ -88,42 +98,155 @@ Then tell him **what changed and why**, not just "here's a new zip":
 >
 > Class 1 and 2s are byte-identical — verified exactly, not on a median.
 
-Also worth telling him, since it affects his planning: **we are hiring a 3D artist for the avatar
-skeleton** (task 3), and the tip-node defect found in his current rig is requirement #1 in that
-brief. That is not a criticism of his work — the mechanism was invisible to every check either of us
-had.
+### ☐ 2A. Send Addendum 1 to the designer · ~5 min
 
-### ☐ 3. Send the skeleton brief to 3D artist candidates · ~15 min
+**[`docs/AVATAR_BRIEF_ADDENDUM_1.md`](AVATAR_BRIEF_ADDENDUM_1.md)** — written today, because the brief
+is already out and a rewrite would read as scope creep. It is six clarifications and one correction,
+and **none of them changes scope or price.**
 
-**Longest lead time on the board.** A hire takes days to weeks to land, so starting it today costs
-nothing and starting it in a week costs a week.
+Attach with it: **`docs/handshape_review/*.png`** (all eight files, including `contact_sheet.png`).
 
-- File: **[`docs/AVATAR_SKELETON_BRIEF.md`](AVATAR_SKELETON_BRIEF.md)**
-- **§0 is a paste-in covering message.** Delete §0 from the file before attaching it.
-- Point them at §4, §6.2 and §6.3 if they are short on time.
-- Ask for answers to the eight questions in §18, with an estimate.
+The two items that matter most to the designer:
 
-**Send it to two or three candidates, not one.** §18 question 7 asks whether they also want phase 2
-(the character design), which tells you whether to plan for one artist or two — and comparing two
-answers to §18 question 4 (the forearm twist) is the fastest read on who actually knows hand
-rigging.
+- **What "blockout" means.** The brief said "neutral grey blockout", which is genuinely ambiguous. It
+  does *not* mean a crude box-man — §9 needs a forearm the hand can slide along, §6.9 needs a real
+  brow ridge, §10 needs hands legible at 320 px. So: anatomically correct, cleanly topologised,
+  properly weighted, **unstyled but not unfinished.** The addendum says plainly that if they priced
+  it as something cruder they should tell you now rather than argue at P1-M3. **Expect a possible
+  price conversation here — that is the honest cost of the brief's wording.**
+- **The B/5 concern is smaller than the brief said** (see §4 of the addendum). Measured today: the
+  templates *do* separate, by 48% on fingertip spacing. They now get a numeric target instead of a
+  worry.
 
-You do **not** need the file bundle (§11) ready to send the brief. That only matters once someone is
-hired, and task 2 rebuilds most of it anyway.
+### ☐ 2B. Decide who owns the runtime · a decision, not a task
 
-### ☐ 4. Fingerspelling `--report` on one real shard · ~5 min
+**This is the gap the role change opens, and it needs an answer before P1-M2 — not before P1-M1.**
 
-Unblocks **the only licence-clean track that can carry a clinical vocabulary.** Five minutes of your
-time buys days of mine.
+The designer delivers a *rig*. Something has to **drive** it: read our landmark files, solve the IK,
+blend between signs, smooth the motion. A 3D artist does not normally write that, and it was
+Ghozlan's.
 
-On Kaggle, with the competition attached and `subset_landmarks.py` uploaded:
+Concretely, two things depend on the answer:
+
+1. **Three acceptance tests need a runtime** — 3 (distal keying), 4 (bone-length stability under
+   playback) and 7 (reference-pose retarget). Addendum 1 §1 already moves those to integration and
+   off the designer's payment gate, so **the hire is not blocked.** But they still have to run
+   eventually, and test 3 is the regression test for the entire defect this phase exists to prevent.
+2. **The test harness promised in §11** was Ghozlan's player. The addendum says it is "being
+   confirmed". If it is gone, the designer loses the ability to watch their own rig move under real
+   data at P1-M3 — which is where most rig problems would surface.
+
+**A useful way to split it:** test 1 (42 nodes in the exported `.glb`) is the *designer's*
+obligation and is fully checkable from the file. Test 3 checks whether *our* retargeter uses those
+nodes — that is our bug surface, not theirs. So the rig can be accepted on file-level evidence, and
+the runtime question bites at integration.
+
+Tell me which way this lands and I will write whatever fills the gap — including a standalone
+file-level verifier that covers tests 1, 2, 6, 12, 13 and 14 with no runtime at all.
+
+### ☐ 4. Fingerspelling `--report` on one real shard · ~15 min, mostly waiting
+
+Unblocks **the only licence-clean track that can carry a clinical vocabulary.** Fifteen minutes of
+your time buys days of mine.
+
+Fingerspelling matters more than "26 letters" sounds. Twenty-six letters is the only thing that makes
+**vocabulary size stop mattering** — patient names, street names, drug names, dosages. No lexicon
+will ever contain them, the current system has zero single-letter entries, and in a clinic that is
+not a nice-to-have.
+
+**This is a CPU job.** Do not turn the GPU on; it does nothing here and burns your 30-hour budget.
+
+---
+
+#### Step 1 — accept the competition rules *(one time only)*
+
+1. Open Kaggle → search **"Google — American Sign Language Fingerspelling Recognition"**.
+2. **Rules** tab → **I Understand and Accept**.
+
+Competition data stays available after a competition closes; accepting the rules is what unlocks it.
+**No email, no negotiation, no licence problem** — this is the clean track.
+
+#### Step 2 — put `subset_landmarks.py` where Kaggle can see it
+
+Create a **new private dataset** with that one file:
+
+1. Kaggle → **Datasets** → **New Dataset**.
+2. Drag **only** `training/fingerspelling/subset_landmarks.py`.
+3. Name it something like `deafference-fs-code`. **Visibility: Private.**
+
+> ⚠️ **Drag the single file, not the folder and never the repo root.** The repo contains `.env`, and
+> a public Kaggle dataset would publish it.
+
+#### Step 3 — new notebook, attach both inputs
+
+New Notebook → right panel → **Add Input**:
+
+- **Competitions** → the fingerspelling competition
+- **Datasets** → `deafference-fs-code`
+
+Accelerator: **None**. Persistence: off.
+
+#### Step 4 — find the real paths *(do this before anything else)*
+
+The folder slug may not be what I guessed. Run this first:
 
 ```python
-!python subset_landmarks.py --base /kaggle/input/asl-fingerspelling --report --limit-files 1
+import os, glob
+for r in sorted(glob.glob("/kaggle/input/*")):
+    print(r)
+    for sub in sorted(glob.glob(r + "/*"))[:8]:
+        n = len(glob.glob(sub + "/*")) if os.path.isdir(sub) else ""
+        print(f"    {os.path.basename(sub)}   {n}")
 ```
 
-It writes nothing. **Paste me the output.** The number that matters is **sequences with a gap > 10
-frames** — it settles the CTC design before a line of it is written.
+You are looking for a directory holding **`train.csv`** and **`train_landmarks/`** with a few hundred
+`.parquet` files. Whatever its full path is, that is your `--base`.
+
+#### Step 5 — prove the script works *before* touching real data
+
+```python
+!cp /kaggle/input/deafference-fs-code/subset_landmarks.py .
+!python subset_landmarks.py --selftest
+```
+
+Must end with **`ALL CHECKS PASSED`**. This takes about a second and validates that every one of the
+75×3 landmarks lands in the right slot — each test value encodes its own point and axis, so a
+transposed reshape cannot pass. If this fails, stop and send me the output; nothing downstream is
+trustworthy.
+
+#### Step 6 — the measurement *(writes nothing)*
+
+Substitute the `--base` you found in step 4:
+
+```python
+!python subset_landmarks.py \
+    --base /kaggle/input/asl-fingerspelling \
+    --report --limit-files 1
+```
+
+One shard, read-only, a few minutes. **Paste me the whole output.**
+
+---
+
+#### What I am looking for, and why
+
+The single number that decides the model design:
+
+> **How many sequences have a dominant-hand gap longer than 10 frames.**
+
+We know **45% of frames have no tracked hand**, that dropout is **3.6× motion-correlated**, and that
+interpolation recovers only **12%**. What we do not know is the *shape* of the loss:
+
+| If the gaps are | Then |
+|---|---|
+| **many short gaps** (1–3 frames) | Interpolation is defensible and the model can treat the hand as continuous. |
+| **fewer long gaps** (>10 frames) | Absence must be a **first-class input** — the model has to learn "no hand here" rather than be fed an invented one. That is a different architecture, and knowing it now saves building the wrong one. |
+
+Also in the output and worth having: per-sequence length distribution, dominant-hand presence rate,
+and how many sequences are left-dominant.
+
+**Then, and only then, task 6** subsets four shards for real. Do not skip step 6 to save time — a
+`--report` that reveals long gaps changes what task 6 is even for.
 
 ---
 
@@ -224,14 +347,23 @@ What is waiting: 16 gloss rows (`docs/CLINICAL_GLOSS_REVIEW.csv`) · 22 handshap
 (`docs/HANDEDNESS_CROSSCHECK.csv`) · `asl_2a_base_placement.json`, which is **blocking Ghozlan** ·
 the 250 exemplars.
 
-### ☐ 11. Decide the designer hire — after quotes come back
+### ☐ 11. Get the designer's answers to §18 — even though they are hired
 
-Depends on task 3. When the answers to §18 arrive, the two that tell you most:
+The hire is done, but **§18's eight questions are still worth collecting**, because three of them
+change what happens next rather than whether to hire:
 
-- **Q4 — the forearm twist.** Weights or a twist bone? Anyone who answers this confidently knows
-  hand rigging. Anyone who has not thought about it will discover it at P1-M2.
+- **Q4 — the forearm twist.** Weights, or a twist bone? If a twist bone, **we must know at P1-M1**,
+  because the runtime has to drive it explicitly and an undocumented extra bone sits at bind
+  rotation forever. This is the one answer with a hard deadline.
 - **Q5 — base mesh and its licence.** A base is fine, but many bases fail §6.3, and a base that
-  cannot be redistributed commercially is unusable to us however good it looks.
+  cannot be redistributed commercially inside an application is unusable to us however good it
+  looks. Cheaper to learn at P1-M1 than at P1-M4.
+- **Q2 — naming and auto-riggers.** If they use Rigify or an auto-rigger, producing our exact 55
+  names is extra work they need to have budgeted (see §6.1's three naming traps).
+
+Q4 and Q5 are also the fastest read on whether they have actually rigged hands for position-driven
+IK before — which §18 Q3 asks directly, and which is worth knowing kindly and early rather than
+discovering at P1-M3.
 
 ---
 
@@ -241,10 +373,11 @@ No deadline on these, but each gates something.
 
 | Decision | Gates | Status |
 |---|---|---|
-| **Push the 7 unpushed commits?** | Nothing technical, but the work is only on your machine | Standing rule: I never push without asking. Asked 4 times, still open. |
+| **Push the 8 unpushed commits?** | Nothing technical, but the work is only on your machine | Standing rule: I never push without asking. Asked 5 times, still open. |
+| **Who owns the runtime** (task 2B) | 3 acceptance tests, the designer's test harness, and whether the rig can be driven at all | **New today.** Needed before P1-M2, not P1-M1. |
 | The 2s gate (task 8) | The avatar's final quality on 28 words | Priced, waiting on you |
-| The designer hire (task 11) | The whole avatar track | Waiting on quotes |
 | **Record our own clinical corpus?** | Whether the medical track ever ships | Gated on task 5 **and** on my clips-per-sign curve. Do not decide before both. |
+| **The blockout price conversation** (task 2A) | Possibly the designer's estimate | The brief's word "blockout" was ambiguous; the addendum resolves it and invites them to reprice. Our wording, our problem. |
 
 ---
 
@@ -258,7 +391,7 @@ Listed so you can track it. All of it is gated only on GPU time you already have
 | **Decimate A/B** — tests the mechanism behind the whole collision diagnosis | ~34 min GPU | nothing |
 | **Public fingerspelling baseline** — the clean track's first real model | days | your task 4 + 6 |
 | **Golden-fixture parity harness** — must exist before any web inference code | ~1 day | nothing |
-| **B/5 template separation** — closes the open handshape measurement | hours | you pointing me at the raw takes |
+| ~~**B/5 template separation**~~ — **CLOSED 2026-09-01.** Measured from the templates directly, no raw takes needed: `B` fan 18.7° / tip gap 0.129 vs `5` fan 31.4° / tip gap 0.192 — **they separate, by 48%.** Still the 2nd-closest of 21 pairs, so worth the designer's care, but not the defect I flagged. Corrected in Addendum 1 §4. | done | — |
 
 ---
 
