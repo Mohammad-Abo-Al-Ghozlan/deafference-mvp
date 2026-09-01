@@ -125,19 +125,36 @@ package preserved them.
 
 > **Why this is not pedantry.** The retargeter aims each bone at its child. The third segment has
 > no child unless a tip node exists, so it is never aimed and stays at its bind rotation. We
-> counted the keyed bone tracks across all 250 exported clips:
+> counted the keyed animation tracks across all 250 exported clips, per bone:
 >
 > ```
-> distal (segment-3) tracks, across 250 clips:
->   LeftHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3    52 clips each
->   RightHandIndex3 / Middle3 / Ring3 / Pinky3 / Thumb3    0 clips  — never, on any word
+> LeftHandIndex1  250 clips     RightHandIndex1  250 clips     <- has a child, gets aimed
+> LeftHandIndex2  250 clips     RightHandIndex2  250 clips     <- has a child, gets aimed
+> LeftHandIndex3   52 clips     RightHandIndex3    0 clips     <- needs a TIP node
+>                                                                 that does not exist
+> (identical pattern on Middle, Ring, Pinky and Thumb)
 > ```
 >
-> The right hand is the dominant hand. **Its fingertips were never posed on a single word.** The
-> only reason the left hand escaped is that it is driven by a different code path that copies
-> rotations wholesale and never asks for a child. Nothing caught this for weeks because every
-> quality check we had scored poses that *were* produced — none of them asked whether a bone had
-> been keyed at all.
+> Segments 1 and 2 are posed on every word, because each has a child bone to aim at. **Segment 3
+> has nothing to aim at, so it is never touched.** The right hand is the dominant hand — its
+> fingertips were never posed on a single word. The left escaped only on the 52 symmetric signs,
+> where a different code path copies rotations wholesale and never asks for a child.
+>
+> Nothing caught this for weeks because every quality check we had scored poses that *were*
+> produced — none asked whether a bone had been keyed at all.
+
+**The bone names the runtime already drives.** Verified by extracting every keyed track from the
+current player, so this is the live convention rather than a preference:
+
+```
+Spine  Spine1  Spine2  Neck  Head
+{Left,Right}Shoulder  {Left,Right}Arm  {Left,Right}ForeArm  {Left,Right}Hand
+{Left,Right}Hand{Thumb,Index,Middle,Ring,Pinky}{1,2,3}
+```
+
+Un-prefixed Mixamo names — no `mixamorig:` prefix. Match these exactly and the runtime needs no
+mapping table. **Note what is missing from that list: there is no `4` / `_end` node on any
+finger.** Yours must have one.
 
 **Topology and weighting requirements for the hands:**
 
