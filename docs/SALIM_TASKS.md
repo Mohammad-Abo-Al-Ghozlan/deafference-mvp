@@ -204,6 +204,26 @@ If the answer is "mostly animation": the schedule changes, not the plan. Move th
 and make it a working session rather than a script run — the whole point of P1-M1 is that it is a
 `.glb` and four scripted tests, which is the cheapest possible place to find a rigging gap.
 
+### ☐ 2D. Confirm §16 is actually agreed · ~2 min, or a conversation
+
+I have flagged this three times and it has never landed, so it is now a task rather than a note.
+
+**Brief §16 is a checklist of commercial terms with no figures in it** — I cannot invent them. If you
+settled these when you hired him, this takes ten seconds to tick off and you can ignore the rest.
+
+If you did **not**, these are the ones that cause arguments later, in order of how much:
+
+| | Why it bites |
+|---|---|
+| **Fee, and how it splits across the four P1 milestones** | Milestone-linked payment is what makes §15's "four cheap gates" work. A single end-payment turns every gate into a negotiation. |
+| **What happens if a gate fails and needs rework** | P1-M1 is a pass/fail script. Agree now whether a re-submit is included. |
+| **Revision rounds per milestone**, and what counts as a new request | The "blockout" ambiguity is exactly the kind of thing that becomes a scope fight. |
+| **IP: full commercial rights to rig + source, right to modify, right to have phase 2 done by someone else** | The last clause matters most and is the one people object to. Better a "no" now. |
+| **Third-party assets and their licences** | A base rig that cannot be redistributed commercially inside an app is unusable however good it looks. This is the same class of problem as the Sem-Lex licence wall — do not repeat it on the avatar. |
+
+The last row is the one I would not skip. Everything else is money; that one is whether the work is
+usable at all.
+
 ### ☐ 4. Fingerspelling `--report` on one real shard · ~15 min, mostly waiting
 
 Unblocks **the only licence-clean track that can carry a clinical vocabulary.** Fifteen minutes of
