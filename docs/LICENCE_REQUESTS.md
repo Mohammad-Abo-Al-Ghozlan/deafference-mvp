@@ -209,8 +209,56 @@ determines whether a free release is also foreclosed.
 
 ## 3. ASL Citizen — the unread alternative
 
-**Microsoft Research. 83,399 videos / 2,731 signs / 52 signers / ~42.8 GB.** Nobody on this
-project has read its licence.
+**Microsoft Research. 83,399 videos / 2,731 signs / 52 signers / ~42.8 GB.**
+
+### ✅ LICENCE READ 2026-09-03 — non-commercial, but NO share-alike
+
+Verbatim from the dataset licence page: rights "to use the Materials **solely for non-commercial,
+non-revenue generating**, research purposes"; "you may **not distribute the data or your
+modifications** to the data"; publishing results is allowed "provided that no material or
+substantial portion of the Materials is included".
+
+**The finding is the absence of a clause.** Sem-Lex's share-alike arguably infects the trained
+weights and forecloses even a *free* release; ASL Citizen has no SA term at all. So a free,
+non-revenue tool is licence-clean on ASL Citizen where it arguably is not on Sem-Lex. Note
+"non-revenue generating" is *stricter* than plain NC — it plausibly rules out ad-supported and
+freemium too, not just paid. Redistribution is forbidden either way, so any Kaggle copy stays
+**Private**.
+
+### ⚠️ `ASL_Citizen@microsoft.com` IS DEAD — bounced 2026-09-03
+
+"Address not found. Your message wasn't delivered to ASL_Citizen@microsoft.com because the address
+couldn't be found, or is unable to receive mail."
+
+**That alias is still cited as the commercial-enquiry route in web search results and in this
+repo's own `MEDICAL_MVP_PLAN.md` line 34 — and it does not work.** It is the second dead address
+this project has burned (after `lkezar@usc.edu`), and from the same cause: an address taken from a
+secondary source rather than the primary one.
+
+**The lesson, restated because it has now cost two bounces: take addresses from the PAPER's own
+author block, not from a project page, a search snippet, or our own notes.** The paper is the
+primary source and it prints them.
+
+### The verified route — from the paper's author block (arXiv 2304.05934)
+
+| who | role | address |
+|---|---|---|
+| **Danielle Bragg** | senior author, Microsoft Research — **the primary** | **`dabragg@microsoft.com`** |
+| **Naomi Caselli** | author — **and a senior author on Sem-Lex too** | **`nkc@bu.edu`** (cc) |
+| Alex X. Lu | Microsoft Research | `lualex@microsoft.com` (cc) |
+| Hal Daumé III | Microsoft Research | `hal3@microsoft.com` |
+| Aashaka Desai | first author, U. Washington | `aashakad@cs.washington.edu` |
+| Richard E. Ladner | U. Washington | `ladner@cs.washington.edu` |
+
+Code repo: `github.com/microsoft/ASL-citizen-code` (Apache-style code licence — **not** the data
+licence; do not confuse them, same trap as Sem-Lex's Apache-2.0 repo tag).
+
+> ### 🔑 Caselli is on BOTH datasets, at an address we know works
+>
+> `nkc@bu.edu` received the Sem-Lex commercial enquiry on 2026-08-29/30 (the Kezar To: bounced but
+> the Cc: delivered). She is **also an author on ASL Citizen.** So one message to Bragg with
+> Caselli on cc asks the new question *and* gently surfaces the unanswered Sem-Lex thread with the
+> one person common to both — without being a second nag.
 
 Worth reading carefully, for one reason beyond the licence: **52 signers against Sem-Lex's 41.**
 The per-signer analysis on the 250-word model found accuracy spread of 0.31–0.82 *between*
