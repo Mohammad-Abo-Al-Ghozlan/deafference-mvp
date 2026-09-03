@@ -367,12 +367,33 @@ means either a mapping table or a silent failure.
 > skeleton with the `mixamorig:` prefix stripped and the legs made optional.** Mixamo's standard rig
 > is 65 nodes; drop its 10 leg nodes and you have our 55, name for name, in the same hierarchy.
 >
-> **Verify it yourself in about five minutes**, and please do rather than take our word for it:
-> upload any character to `mixamo.com`, download the FBX, open it, and read the bone list. You will
-> find `mixamorig:Hips`, `Spine`, `Spine1`, `Spine2`, `Neck`, `Head`, `HeadTop_End`,
-> `LeftShoulder`, `LeftArm`, `LeftForeArm`, `LeftHand`, and then — **the part worth checking
-> closely** — `LeftHandIndex1`, `LeftHandIndex2`, `LeftHandIndex3`, **`LeftHandIndex4`**, and the
-> same 4-node pattern on every other finger and on the thumb.
+> **Verify it without trusting us.** Mixamo's documented standard skeleton is **65 bones**, and the
+> hierarchy is `mixamorig:Hips`, `Spine`, `Spine1`, `Spine2`, `Neck`, `Head`, `HeadTop_End`,
+> `LeftShoulder`, `LeftArm`, `LeftForeArm`, `LeftHand`, the five finger chains, and per leg
+> `UpLeg`, `Leg`, `Foot`, `ToeBase`, `Toe_End`. **The count alone proves the finger depth**, so you
+> do not have to take our word for anything:
+>
+> ```
+> spine + neck + head + head tip                             7
+> two arms: 2 x (shoulder + arm + forearm + hand + fingers)   ?
+> two legs: 2 x (upleg + leg + foot + toebase + toe_end)     10
+>
+> if fingers are 4 nodes:  7 + 2 x (4 + 5x4) + 10 = 7 + 48 + 10 = 65   <- matches
+> if fingers are 3 nodes:  7 + 2 x (4 + 5x3) + 10 = 7 + 38 + 10 = 55   <- does not
+> ```
+>
+> A 65-bone skeleton with that hierarchy **has to** be four nodes per finger. And the bone is named
+> exactly what §6.2 calls it: `mixamorig:LeftHandIndex4`, which third-party retarget maps translate
+> as "index **end**" — the tip, not a fourth knuckle.
+>
+> **Our 55 = Mixamo's 65 minus the 10 leg bones.** That is the whole difference.
+>
+> > **⚠️ Do not check this by auto-rigging a character and counting.** Mixamo's auto-rigger generates
+> > a *dynamic* number of finger bones from the mesh — if a model's fingers sit too close together it
+> > cannot resolve them and produces fewer, sometimes a single mitten bone. So an auto-rig of one
+> > character is not evidence about the standard skeleton, in either direction. It is also a second
+> > reason not to hand us a raw Mixamo auto-rig: **its hand output is not even consistent with
+> > itself.**
 >
 > **So the four-nodes-per-finger requirement in §6.3 is not an unusual ask. It is Mixamo's own
 > default**, and it is the rig we have *today* that deviates from it — someone built or exported it
@@ -381,8 +402,10 @@ means either a mapping table or a silent failure.
 > Two things this does **not** mean:
 >
 > - **It does not mean "use a Mixamo auto-rig".** Mixamo names are the standard; Mixamo's *hands* are
->   not good enough for us. Its auto-rigger places the thumb CMC badly (§6.4), and its finger weights
->   are approximate. Take the naming, build the hand properly.
+>   not good enough for us. Its auto-rigger places the thumb CMC badly (§6.4), its finger weights are
+>   approximate, and — per the warning above — **the number of finger bones it emits depends on the
+>   mesh**, which is precisely the thing this brief cannot leave to chance. Take the naming, build
+>   the hand properly.
 > - **It does not mean you must abandon your own pipeline.** See the name-map escape hatch at the end
 >   of this section — it is a genuine option, not a grudging one.
 
