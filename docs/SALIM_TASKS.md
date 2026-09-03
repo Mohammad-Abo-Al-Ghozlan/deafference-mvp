@@ -524,7 +524,38 @@ otherwise the contact on the project page or the paper. **Do not guess an addres
 task *and* on my clips-per-sign curve. This half is answered — both public options are non-commercial
 — so it now waits only on my curve, which prices the recording session.
 
-### ☐ 6. Subset four fingerspelling shards · ~20 min
+### ✅ 6. Subset four fingerspelling shards — **RUN 2026-09-03**
+
+> ## The result, and it settles the architecture
+>
+> ```
+> 4 shards -> 3,997 sequences, 635,755 frames, 547 MB     (68 shards total => ~9.3 GB, under the cap)
+> --selftest                                              ALL CHECKS PASSED
+>
+> sequence length        median 146    p90 269    max 751      <- 5x spread: ragged/CTC is right
+> dominant-hand present  mean 0.553  median 0.571  p10 0.149   <- confirms the 45% figure
+> max interior gap       median  16    p90  52    max 270      <- ~0.53 s hole in a TYPICAL sequence
+> sequences w/ gap >10f  64%
+> dominant hand          R 3,286   L 711                       <- 17.8% LEFT-dominant
+> ```
+>
+> **The median sequence has a half-second hole with no spelling hand.** In fingerspelling that is
+> several letters. Interpolation is dead; **absence must be a first-class input.** No longer an open
+> question.
+>
+> **17.8% left-dominant** is higher than expected and load-bearing: a model that assumes
+> right-dominance discards one sequence in six. `--selftest` verified dominance detection works
+> (`left-dominant sequence reads as L`), so the script already handles it.
+>
+> **`gap_stats.json` is richer than its name** — 3,997 records carrying `T`, `dominant`, `hand_rate`,
+> `n_gaps`, `max_gap`, `median_gap`, `lead`, `trail`, `sequence_id`, **`participant`** and
+> **`phrase_len`**. The last two are the prize: `participant` allows signer-disjoint splits, and
+> `phrase_len` allows the **CTC feasibility check** — whether a sequence has enough *hand-present*
+> frames to spell its own phrase. The first record already looks marginal: `T=127`,
+> `hand_rate=0.165`, `phrase_len=11` — about 21 usable frames for 11 characters, under 2 frames per
+> letter.
+
+Four shards is baseline-sized - enough to train something real, small enough to iterate.
 
 Four shards is baseline-sized - enough to train something real, small enough to iterate.
 
@@ -604,38 +635,44 @@ which is how the training run reads `fs75.npz` without re-subsetting.
 `gap_stats.json`, plus the stdout from step 2. That is the per-sequence gap structure, and it is what
 the CTC model's absence handling gets designed against.
 
-### ✅ 7. Re-upload `ensemble_eval.py` — **DONE 2026-09-03**
+### ☐ 7. Upload `ensemble_eval.py` — **REOPENED 2026-09-03, my error**
 
-Dataset created and Private. **That was the deliverable, and it is finished.**
+I closed this on 2026-09-03 on the strength of *"task 7 done i create the dataset"*. **The dataset
+that got created was `deafference-fs-code`, holding `subset_landmarks.py`** — that is **task 4
+step 2**, for the fingerspelling subset. Confirmed from the screenshot: one file, `subset_landmarks.py`,
+12.86 kB.
 
-> ### I over-specified this one — the "step 5" is not yours
->
-> I told you the next step was *"in whichever notebook runs the ensemble eval, swap the input"*, and
-> then could not tell you the notebook's name. That is because **there isn't one to name.** This repo
-> records Kaggle *datasets* everywhere (`asl250-weights`, `asl250-code-v19`, `asl250-anim-v1`,
-> `asl250-mask-ab-v1`) and **never a notebook title.**
->
-> More to the point: **nothing is currently running an ensemble eval.** The consumers are on *my*
-> side of the board - the decimate A/B and the clips-per-sign learning curve. So swapping the input
-> is my job, in my notebook, when I get there.
->
-> The whole reason this task existed was to make the fixed file *available on Kaggle* so the next run
-> picks it up. It is available. **Closed.**
+**`ensemble_eval.py` has not been uploaded.** Two datasets are needed and I put both sets of
+instructions in front of you at once, which is what caused the mix-up:
 
-**What I need from you: the exact dataset slug**, because the path is namespaced and I cannot guess
-it. Check it with:
+| task | file to drag | dataset title | status |
+|---|---|---|---|
+| 4 step 2 | `training/fingerspelling/subset_landmarks.py` | `deafference-fs-code` | ✅ **done** — `mohammedsalim1/deafference-fs-code` |
+| **7** | **`training/ensemble_eval.py`** | `deafference-eval-code-20260903` | ☐ **still to do** |
+
+**This is not urgent and nothing is blocked on it.** Nothing is running an ensemble eval today; the
+consumers are the decimate A/B and the clips-per-sign curve, both mine. Do it when convenient.
+
+#### The steps
+
+1. Kaggle -> **Datasets** -> **New Dataset**.
+2. Drag **one file**: `training/ensemble_eval.py`. *(Not `subset_landmarks.py` — that one is done.)*
+3. **Title:** `deafference-eval-code-20260903`. **Visibility: Private.** Create.
+4. Send me the resulting path. It will be
+   `/kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903`.
+
+#### Why it matters at all
+
+The Kaggle copy predates commit `1c9a2fa` — *"the confusion CSV was unreadable without the vocab -
+carry class_names in the report"*. Without it the next confusion CSV cannot be read without guessing
+label order, and guessing it wrong is the bug that nearly made me hand you confidently mislabelled
+output. The check, once it is up:
 
 ```python
-import glob
-print(glob.glob("/kaggle/input/datasets/*/*eval*"))
+!grep -c class_names /kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903/ensemble_eval.py
 ```
 
-Expect something like `/kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903`. Send me
-that string and I will hard-code it in the next eval run, with this check first:
-
-```python
-!grep -c class_names <that path>/ensemble_eval.py     # non-zero = the fixed version
-```
+**Non-zero = the fixed version.**
 
 ### ☐ 8. Decide the 2s gate — **I have a recommendation: `off`, and it is not close**
 
