@@ -146,10 +146,8 @@ Deaf reviewer.
   Violation` in ASL-LEX's handshape field — a category, not a shape; `hand` has no ASL-LEX row
   at all. **Both have a recorded passive hand** (24% and 46%), so per §1 the renderer can use
   the real one and the gap is not blocking.
-- **Every clip is exactly 64 frames.** The medical tensors were time-resized at extraction, so
-  native duration is lost and every sign plays for 2.13 s. The 250-word clips carry native
-  durations of 9–116 frames. `semlex_metadata.csv` has a `duration` column in milliseconds, so
-  this is recoverable — it just has not been done.
+- **Every clip is exactly 64 frames, and every sign plays ≈2.4–3.6× too slow.** See §7 — this
+  is worse than "uniform duration", and my first note on how to fix it was wrong.
 - **No Deaf review**, of the lexicon or of anything else.
 - The rig is not delivered, and the runtime owner is still unknown (task 2B).
 
@@ -161,3 +159,54 @@ already non-commercial for the same reason, so **this changes nothing about this
 shippability** — it becomes a live question only if these labels are reused for the 250-word
 commercial track. A Deaf reviewer must be the one who *sets* a shipped label; ASL-LEX only says
 where to look.
+
+---
+
+## 7. Native duration: the avatar plays every sign ~3× too slow
+
+**Correction.** §5 first said the durations were "recoverable — `semlex_metadata.csv` has a
+`duration` column in milliseconds". **That is wrong**, and building on it would have made the
+timing worse rather than better. Measured over the 54 ship words that have metadata:
+
+```
+per-word MEDIAN raw video duration   1543 – 2474 ms   spread 1.60x   CV 0.10
+in frames @30fps                     46 – 74          (every clip is 64 today)
+GISLR 250-word clips, for contrast   9 – 116 frames   spread 12.9x
+```
+
+Sem-Lex is a **prompted studio protocol**: a participant hits record, signs, hits stop. Every
+recording is ~1.8 s because that is the protocol, not because the signs are the same length.
+CV 0.10 is protocol noise. Retiming from it would have added ±28% of *invented* variation.
+
+### What the real number is
+
+The extractor trims to the tracked span, and its own measurements say what that costs:
+
+```
+LEADING untracked 30.9%  +  TRAILING 30.6%   ->  61.5% of raw frames are lead-in/lead-out
+trimmed span (= the sign)   18 – 27 frames
+raw recording               38 – 52 frames
+```
+
+So the actual sign is **≈18–27 frames, 0.6–0.9 s** — and it is resized up to 64. **Every
+clinical sign on the avatar is playing at roughly a third of natural speed.** That is a real
+defect, not a cosmetic one: at 2.13 s per sign a three-sign phrase takes 6.4 s.
+
+It is also genuine signal — 18 vs 27 frames is a 1.5× spread *across buckets*, and more per
+clip. The information exists; it was simply never written down.
+
+### The fix, ready for the next Kaggle run
+
+`semlex_poses_to_75.py` computes `st["span"]` three lines before it appends the tensor, and
+then dropped it. It now carries `span`, `raw_frames`, `lead` and `trail` into the `.npz`
+alongside `X`, and prints the median slow-down factor at the end of a run.
+`npz_to_train_format.py` tests `need <= set(d.files)`, so the extra arrays are
+backward-compatible and nothing downstream needed changing.
+
+**This does not retime the current handoff** — the existing `.npz` predates the patch and
+`X` cannot be un-resized. Recovering it needs one CPU re-extract on Kaggle (no GPU), after
+which `build_sign_clips.py --fixed-frames 0` and `gloss_to_motion` will carry true durations
+through `nativeFrames` with no further changes.
+
+Until then, treat the handoff as **correct in pose and uniform in timing** — the animator can
+build and rig against it, and only the playback rate changes afterwards.

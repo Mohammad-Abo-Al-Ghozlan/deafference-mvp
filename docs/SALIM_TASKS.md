@@ -53,6 +53,53 @@ but which is the source for a re-extract.
 
 ---
 
+## ❓ "three signs in a row don't get detected" — measured, 2026-09-04
+
+Not a bug in the model. **The segmenter never sees a boundary.** I replayed three real
+exemplars (`pain head help`) through live_demo's exact commit rules, no camera:
+
+```
+A. FLUID, no gap  (signing normally)   ->  2 commits for 3 signs   ❌ signs lost
+                                            both fired via `maxlen` at exactly 90 frames
+B. with a 0.5 s HELD PAUSE between     ->  3 commits for 3 signs   ✅
+C. with HANDS DOWN 0.5 s between       ->  3 commits for 3 signs   ✅
+
+longest run of stillness inside a fluid utterance :  10 frames
+frames required to end a sign (still_fr)          :  12
+```
+
+**It misses the boundary by two frames.** Median hand motion inside an utterance is 0.0158
+against a threshold of 0.00467 — 3.4× above it — so `still_count` never reaches 12, no
+boundary fires, the segment grows to the 3.0 s ceiling and force-commits a chunk spanning
+about one and a half signs. You do not get three wrong words; you get two arbitrary chunks.
+
+### Three causes, in the order they bite
+
+**1. You have to give it a pause.** ~0.5 s held still, or drop your hands. Then it is 3/3.
+Do **not** lower `STILL_SEC` to compensate: 10-frame quiet spells occur *inside* single
+signs, so a threshold below 12 would start cutting signs in half. The current value is 2
+frames above the noise floor — tight, but correct. The gap is the fix, not the threshold.
+
+**2. My safety gate holds 10 of the 55 words** — `no bad big more always pain blood breathe
+sick help`. They never auto-commit; they wait for a tap on 1-5. In `topic_medical_symptom`
+that is **9 of 18 words**. If your three signs included any of them they were *held*, not
+missed — the console prints `[safety] HELD '<word>'` and the video shows
+`confirm '<word>' - tap 1-5`. That is deliberate (see `MEDICAL_SAFETY_GATES.md` §2), but it
+is the most likely reason a clinical phrase feels unresponsive. Try a non-gated phrase such
+as `water drink medicine` to separate this cause from the other two.
+
+**3. It is an ISOLATED-sign classifier, and that is architectural.** Sem-Lex and GISLR are
+both prompted isolated signs with dead air trimmed — neither contains co-articulated
+signing. The transitions between signs in fluent ASL (movement epenthesis) were never in the
+training data, so even with perfect segmentation those frames are out of distribution.
+**Continuous ASL recognition is a different model** — CTC/seq2seq over a stream, which is
+exactly what the fingerspelling track is building. Nothing tunable here reaches it.
+
+So: sign-pause-sign-pause-sign works today; fluent signing does not, and will not until
+there is a sequence model. That limit belongs in any demo you give.
+
+---
+
 ## ✅ CLOSED 2026-09-03 — the medical sign→speech demo runs, with clinical safety gates
 
 ### ✅ Stage 5 — wired into `live_demo.py`. **Verified, not just written.**

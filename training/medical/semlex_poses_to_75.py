@@ -615,6 +615,7 @@ def main() -> None:
                   f"{unmapped[:10]}")
 
     X, y, signer, clip, split = [], [], [], [], []
+    span, raw_frames, lead, trail = [], [], [], []   # native timing, destroyed by time_resize
     per_signer, skipped = {}, []
     trim_stats = {"trimmed": 0, "cut_frames": 0, "kept_frames": 0, "rescued": 0, "mirrored": 0}
     checked_sentinel = False
@@ -649,6 +650,18 @@ def main() -> None:
         else:
             X.append(arr); y.append(widx[lab]); signer.append(sg)
             clip.append(vid); split.append(sp)
+            # NATIVE DURATION. time_resize() below stretches every clip to MAX_LEN frames, so
+            # the sign's real length is destroyed and cannot be recovered from X afterwards.
+            # It is not recoverable from semlex_metadata.csv either: that file's `duration` is
+            # the RAW recording (median 1822 ms, spread only 1.60x, CV 0.10) and is dominated
+            # by the prompted-studio protocol, not by sign length — 61.5% of those frames are
+            # lead-in/lead-out that this function trims away. The trimmed span IS the sign,
+            # and it is 18-27 frames against 38-52 raw, so a resized clip plays roughly 2.4x
+            # to 3.6x too slow on the avatar.
+            #
+            # The number already exists three lines up; it was simply never saved. Carry it.
+            span.append(st["span"]); raw_frames.append(st["raw_frames"])
+            lead.append(st["lead"]); trail.append(st["trail"])
             d = per_signer.setdefault(sg, {"n": 0, "l": 0.0, "r": 0.0, "frames": 0})
             d["n"] += 1; d["frames"] += st["frames"]
             d["l"] += st["l_frames"]; d["r"] += st["r_frames"]
@@ -693,12 +706,23 @@ def main() -> None:
                   f"those clips")
 
     Xn = np.stack(X).astype(np.float32)
+    # `span` is the one array here that is NOT reconstructable downstream: X is resized to a
+    # fixed length, so without this the avatar has to play every sign for the same duration.
+    # npz_to_train_format.py ignores unknown keys, so adding them is backward-compatible.
     np.savez_compressed(args.out, X=Xn, y=np.array(y, np.int32), words=np.array(words),
                         signer=np.array(signer, dtype=object).astype(str),
                         clip=np.array(clip, dtype=object).astype(str),
-                        split=np.array(split, dtype=object).astype(str))
+                        split=np.array(split, dtype=object).astype(str),
+                        span=np.array(span, np.int32),
+                        raw_frames=np.array(raw_frames, np.int32),
+                        lead=np.array(lead, np.int32), trail=np.array(trail, np.int32))
     print(f"\n[ok] wrote {args.out}: X={Xn.shape} classes={len(words)} "
           f"signers={len(set(signer)) } skipped={len(skipped)}")
+    sp_a = np.array(span, np.int32)
+    print(f"[native] span (the SIGN, post-trim): min={sp_a.min()} median={int(np.median(sp_a))} "
+          f"max={sp_a.max()} frames  |  X is {Xn.shape[1]}f, so the median sign is played "
+          f"{Xn.shape[1] / max(1, np.median(sp_a)):.1f}x too slow if you use X's length as the "
+          f"duration. Retime with `span` (gloss_to_motion reads nativeFrames).")
 
     cnt = np.bincount(np.array(y, np.int32), minlength=len(words))
     print(f"[stats] videos/class: min={cnt.min()} median={int(np.median(cnt))} max={cnt.max()} "
