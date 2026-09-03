@@ -2,7 +2,7 @@
 
 **For:** the contracted 3D character artist / rigger
 **From:** Deafference (Mohammed Salim, technical lead)
-**Version:** 6.0 · 2026-09-01 · **the complete brief — supersedes v4, v5 and Addendum 1**
+**Version:** 6.1 · 2026-09-03 · **the complete brief — supersedes v4, v5 and Addendum 1**
 
 > ## 📄 THIS IS THE WHOLE THING — ONE FILE, NO ATTACHMENTS NEEDED
 >
@@ -21,6 +21,7 @@
 >
 > | | What | Affects your estimate? |
 > |---|---|---|
+> | **§1 · §6.1 · §6.3** | **Answering two questions from your first read, and both were our documentation's fault.** (a) **"Four parts per finger — is that right, and why?"** Yes, but we never defined the word: we mean **four *nodes*, which is three bones plus one weightless tip transform** — not a fourth phalanx. `node`, `bone` and `tip node` are now in the glossary and §6.3 opens by saying what it is *not* asking for. (b) **"Can you use standard names like Rigify or Mixamo?"** They already are Mixamo — **§6.2 is the stock Mixamo skeleton minus the legs, prefix stripped, and Mixamo's own fingers are 4 nodes (`Index1`–`Index4`).** §6.1 now says so, with a five-minute way to verify it. | No |
 > | **NEW Appendix A** | **The seven handshapes as numbers** — provenance, wrist-to-fingertip signatures, spread, thumb geometry, joint angles. **This replaces the eight PNGs**, and it is checkable with a ruler rather than by eye. | No — this helps you |
 > | **NEW Appendix B** | **Every pose the rig has to hit, word by word.** All 35 two-handed base poses: handshape, the named surface the other hand lands on, palm and finger orientation. The concrete work list behind §9 and §10. | No — this replaces guesswork |
 > | **NEW Appendix C** | **`reference_pose.json` inline**, all 75 points, labelled. | No |
@@ -171,8 +172,11 @@ meet, translated:
 | **passive hand** | The other hand. In two-handed signs it either mirrors the dominant hand or holds still as a "base" the dominant hand acts on. **Usually missing from our recordings** and synthesized — hence §10. |
 | **one- / two-handed** | 163 of our 250 words are one-handed, 87 two-handed. The two-handed ones are where all the difficulty lives. |
 | **non-manual marker** | Grammar carried on the **face and head** rather than the hands — a raised brow makes a sentence a question, a headshake negates it. Not decoration: a sentence without them is closer to ungrammatical. §6.9. |
-| **shoulder width** | Our unit. All measurements are divided by the signer's shoulder width, so they are person-independent. "0.19 shoulder-widths" = 19% of the distance between the shoulder joints. |
+| **shoulder width** | Our unit. All measurements are divided by the signer's shoulder width, so they are person-independent. "0.45 shoulder-widths" = 45% of the distance between the shoulder joints — which happens to be about the length of a hand. On an adult, one shoulder width is roughly 40 cm. |
 | **MCP · PIP · DIP · TIP** | The four joints of a finger, base to tip: knuckle, middle joint, last joint, fingertip. Thumb: CMC, MCP, IP, TIP. **Four positions per finger** — that number is the whole of §6.3. |
+| **bone** | A segment that deforms mesh. A finger has **three** of them — proximal, middle, distal phalanx. That is anatomy and we are not asking you to change it. |
+| **node** | glTF's word for a named transform in the skeleton hierarchy: a point with a position and a rotation. Blender calls these bones, Maya calls them joints, glTF calls them nodes. **A chain of 3 bones spans 4 nodes** — one at each bone's start, plus one at the end of the last bone. |
+| **tip node** | The 4th node of a finger: a short transform at the fingertip with **no vertex weights**, deforming nothing. It exists so the exported file has something at the fingertip. §6.3 asks for **4 nodes per finger = 3 bones + 1 tip node.** It does *not* ask for a fourth phalanx. |
 | **abduction** | Fingers spreading apart sideways, as opposed to curling. Required, and often missing from quick rigs — §6.5. |
 | **pronation / supination** | Forearm twist — turning the palm down / up. A *linguistic* distinction in sign language, so it is a hard requirement — §6.7. |
 | **bind rotation** | A bone's rest orientation before animation touches it. A bone nobody animates sits at its bind rotation and **looks anatomically perfect** — which is how our worst bug hid for weeks. |
@@ -357,6 +361,31 @@ Use **Mixamo naming**, exactly as spelled in §6.2. This is not a preference: we
 animated bone name from the existing runtime, and these are the names it already drives. A mismatch
 means either a mapping table or a silent failure.
 
+> ### These names are not ours — they are the stock Mixamo skeleton
+>
+> If §6.2's list looks unfamiliar or hand-invented, it is neither. **It is Adobe Mixamo's default
+> skeleton with the `mixamorig:` prefix stripped and the legs made optional.** Mixamo's standard rig
+> is 65 nodes; drop its 10 leg nodes and you have our 55, name for name, in the same hierarchy.
+>
+> **Verify it yourself in about five minutes**, and please do rather than take our word for it:
+> upload any character to `mixamo.com`, download the FBX, open it, and read the bone list. You will
+> find `mixamorig:Hips`, `Spine`, `Spine1`, `Spine2`, `Neck`, `Head`, `HeadTop_End`,
+> `LeftShoulder`, `LeftArm`, `LeftForeArm`, `LeftHand`, and then — **the part worth checking
+> closely** — `LeftHandIndex1`, `LeftHandIndex2`, `LeftHandIndex3`, **`LeftHandIndex4`**, and the
+> same 4-node pattern on every other finger and on the thumb.
+>
+> **So the four-nodes-per-finger requirement in §6.3 is not an unusual ask. It is Mixamo's own
+> default**, and it is the rig we have *today* that deviates from it — someone built or exported it
+> with the tip nodes missing, which is exactly the failure §6.11's warning is about.
+>
+> Two things this does **not** mean:
+>
+> - **It does not mean "use a Mixamo auto-rig".** Mixamo names are the standard; Mixamo's *hands* are
+>   not good enough for us. Its auto-rigger places the thumb CMC badly (§6.4), and its finger weights
+>   are approximate. Take the naming, build the hand properly.
+> - **It does not mean you must abandon your own pipeline.** See the name-map escape hatch at the end
+>   of this section — it is a genuine option, not a grudging one.
+
 **The rules:**
 
 - **Exact case.** `LeftHandIndex1`. Not `leftHandIndex1`, not `LEFTHANDINDEX1`.
@@ -377,8 +406,15 @@ means either a mapping table or a silent failure.
    and its own finger naming (`f_index.01.L`). If you rig with Rigify, you must produce a clean
    export skeleton with our names. Budget for it, and say so in your estimate.
 
-**If you would rather keep your own convention**, that is acceptable — deliver a JSON map
-(`{"your_name": "OurName", …}`) covering all 55 bones. Say so at §18 question 2 so we plan for it.
+**If you would rather keep your own convention**, that is acceptable and it is not a concession —
+deliver a JSON map (`{"your_name": "OurName", …}`) covering all 55 bones. Say so at §18 question 2 so
+we plan for it. **This is the right answer if you work in Rigify**, whose naming
+(`DEF-f_index.01.L`, `ORG-`, `MCH-`) cannot be reconciled with §6.2 by renaming alone.
+
+**But the map does not excuse the node count.** A name map translates names; it cannot invent a
+transform that is not in the file. Whatever you call them, **the exported `.glb` must contain four
+transforms per finger** — and note that Rigify's finger chains are 3 deform bones, so on Rigify you
+must add the tip explicitly. §13-B is the check, and it runs on the exported file, not the viewport.
 
 ### 6.2 The complete bone list — all 55 bones
 
@@ -463,6 +499,10 @@ lexical content of every one-handed sign — but build both to the same standard
 
 #### The counts we test against
 
+**All 55 are Mixamo names in Mixamo's own hierarchy** — see the box in §6.1. The word "bones" below
+means **nodes**: transforms in the exported file. Ten of them (the finger tips) carry no weights and
+deform nothing, which is by design (§6.3), and is why §6.11 forbids "Export Deformation Bones only".
+
 ```
 TOTAL BONES                                55   (+ legs if you include them)
 Hand nodes (2 wrists + 40 finger nodes)    42   <- acceptance test 1
@@ -485,6 +525,23 @@ forever and nobody knows why the mesh looks slightly wrong.
 ### 6.3 The hand rig — four nodes per finger
 
 This requirement has already cost us a shipped defect, so it gets the full explanation.
+
+> ### First, what this is NOT asking for
+>
+> **We are not asking for four finger segments.** A finger has three phalanges. That is anatomy, we
+> know it, and we are not asking you to change it.
+>
+> We are asking for **three bones and a fourth *node* at the fingertip** — a short transform,
+> **weighted to nothing**, deforming no mesh. In Blender it is a fourth bone in the chain; in glTF it
+> is a fourth node. It is not a knuckle, it does not bend, and it will never be visible.
+>
+> ```
+> BONES     (deform mesh)      3 per finger    <- anatomy. unchanged.
+> NODES     (transforms)       4 per finger    <- what we need. 3 bone heads + 1 tip.
+> ```
+>
+> **And this is Mixamo's own default** — `LeftHandIndex1` through `LeftHandIndex4`. See the box in
+> §6.1 for how to confirm that in five minutes.
 
 Our data gives **four positions per finger** (that is why the landmark column in §6.2 has four
 entries per finger). Three bones span those four positions. **A retargeter poses a bone by aiming it
@@ -518,6 +575,12 @@ LeftHandIndex3   52 clips     RightHandIndex3    0 clips   <- needs a TIP node
 The right hand is the dominant hand — **its fingertips were never posed on a single word.** The left
 escaped only on the 52 symmetric signs, where a different code path copies rotations wholesale and
 never asks for a child.
+
+There is a second, larger way to state the same loss. Each hand in our data is 21 points. A rig with
+three nodes per finger has nowhere to put the five **fingertip** points — landmarks `4`, `8`, `12`,
+`16`, `20` of each hand block — so they are dropped before anything is solved. Measured on the
+current rig, **the posed hand expresses only 14 of the 21 points we measured.** A third of the hand
+data we collected is discarded at the rig boundary, not at the tracker.
 
 Nothing caught this for weeks, because every quality check we had scored the poses that *were*
 produced. None of them asked whether a bone had been keyed at all.
@@ -1388,8 +1451,10 @@ An hour here is well spent.
 ## 18. Before you start — please answer these
 
 1. Which package do you work in, and can you deliver clean glTF 2.0 from it?
-2. Are you comfortable with the **exact bone names in §6.2**, or would you rather deliver a name map?
-   If you rig with Rigify or an auto-rigger, how will you produce the clean export skeleton?
+2. Are you comfortable with the **exact bone names in §6.2** — which are stock Mixamo, see §6.1 —
+   or would you rather deliver a name map? Either is fine. If you rig with Rigify or an auto-rigger,
+   how will you produce the clean export skeleton, **and how will you add the finger tip nodes**,
+   which Rigify does not generate?
 3. Have you rigged hands for **IK-driven, position-target** animation before? If not, say so — it is
    learnable, and we would much rather plan for it than discover it at P1-M3.
 4. **How will you solve the forearm twist** (§6.7) — weights, or a twist bone? If a twist bone, we
