@@ -336,21 +336,72 @@ New Notebook → right panel → **Add Input**:
 
 Accelerator: **None**. Persistence: off.
 
-#### Step 4 — find the real paths *(do this before anything else)*
+#### Step 4 - find the real paths *(do this before anything else)*
 
-The folder slug may not be what I guessed. Run this first:
+> ## MEASURED 2026-09-03: Kaggle mounts inputs NAMESPACED, not flat
+>
+> Every `/kaggle/input/<slug>/` path in this repo's older docs is wrong for a current session. The
+> real layout, read off a live session:
+>
+> ```
+> /kaggle/input/competitions/asl-fingerspelling/          <- competitions/<slug>/
+>       character_to_prediction_index.json
+>       supplemental_landmarks           53 shards
+>       supplemental_metadata.csv
+>       train.csv
+>       train_landmarks                  68 shards        <- what --base must point ABOVE
+>
+> /kaggle/input/datasets/mohammedsalim1/deafference-fs-code/   <- datasets/<user>/<slug>/
+>       subset_landmarks.py
+> ```
+>
+> **Consequences:**
+>
+> - `subset_landmarks.py`'s `--base` default of `/kaggle/input/asl-fingerspelling` **will not
+>   resolve.** Always pass `--base` explicitly. The script fails loudly rather than silently, which
+>   is correct behaviour - `[err] not found: None - attach the competition or pass --base`.
+> - A one-level glob finds nothing. **Search recursively**, as the cell below now does.
+> - `FINISH_250.md` line 147 already had the datasets form
+>   (`/kaggle/input/datasets/mohammedsalim1/asl250-weights`), so this is consistent, not new -
+>   just never written down as a rule.
+>
+> **The rule: never hand-write a `/kaggle/input/...` path again. Detect it.**
+
+Run this first:
 
 ```python
-import os, glob
-for r in sorted(glob.glob("/kaggle/input/*")):
-    print(r)
-    for sub in sorted(glob.glob(r + "/*"))[:8]:
-        n = len(glob.glob(sub + "/*")) if os.path.isdir(sub) else ""
-        print(f"    {os.path.basename(sub)}   {n}")
+import glob, os, shutil
+
+for a in sorted(glob.glob("/kaggle/input/*")):
+    print(a)
+    for b in sorted(glob.glob(a + "/*"))[:12]:
+        print("   ", os.path.basename(b))
+        for c in sorted(glob.glob(b + "/*"))[:12]:
+            k = len(glob.glob(c + "/*")) if os.path.isdir(c) else ""
+            print("        ", os.path.basename(c), ("(%s entries)" % k) if k != "" else "")
+
+# recursive, so it works on either mount layout
+hits   = glob.glob("/kaggle/input/**/train_landmarks", recursive=True)
+script = glob.glob("/kaggle/input/**/subset_landmarks.py", recursive=True)
+BASE   = os.path.dirname(hits[0]) if hits else None
+
+print("\nBASE   =", BASE)
+print("script =", script or "*** NOT FOUND - create + ATTACH the dataset, step 2 ***")
+if script:
+    shutil.copy(script[0], "/kaggle/working/subset_landmarks.py")
+if BASE:
+    print("shards =", len(glob.glob(BASE + "/train_landmarks/*.parquet")), "(expect 68)")
+else:
+    print("*** competition not attached: accept the rules first, THEN Add Input ***")
 ```
 
-You are looking for a directory holding **`train.csv`** and **`train_landmarks/`** with a few hundred
-`.parquet` files. Whatever its full path is, that is your `--base`.
+`BASE` is now a Python variable, so every later cell can use **`$BASE`** and there is no path to
+hand-edit. Expect **68** parquet shards. Two failure modes and what they mean:
+
+| symptom | cause |
+|---|---|
+| `script = NOT FOUND` | the dataset is not **attached**. Creating it is not attaching it - Add Input -> Datasets -> Your Datasets. |
+| `BASE = None` | the competition is not attached. **If it does not appear in Add Input at all, you have not accepted the rules** (step 1) - it is invisible until you do. |
 
 #### Step 5 — prove the script works *before* touching real data
 
@@ -553,45 +604,38 @@ which is how the training run reads `fs75.npz` without re-subsetting.
 `gap_stats.json`, plus the stdout from step 2. That is the per-sequence gap structure, and it is what
 the CTC model's absence handling gets designed against.
 
-### ☐ 7. Re-upload `ensemble_eval.py` to the Kaggle code dataset · ~5 min
+### ✅ 7. Re-upload `ensemble_eval.py` — **DONE 2026-09-03**
 
-**This one is not a notebook at all** - it is a Datasets upload, so there is no Interactive vs
-Save & Run All question. No code runs.
+Dataset created and Private. **That was the deliverable, and it is finished.**
 
-The Kaggle copy predates commit `1c9a2fa` - *"the confusion CSV was unreadable without the vocab -
-carry class_names in the report"*. Without it the next confusion CSV cannot be read without guessing
-label order, and guessing it wrong is exactly the bug that nearly made me hand you confidently
-mislabelled output.
+> ### I over-specified this one — the "step 5" is not yours
+>
+> I told you the next step was *"in whichever notebook runs the ensemble eval, swap the input"*, and
+> then could not tell you the notebook's name. That is because **there isn't one to name.** This repo
+> records Kaggle *datasets* everywhere (`asl250-weights`, `asl250-code-v19`, `asl250-anim-v1`,
+> `asl250-mask-ab-v1`) and **never a notebook title.**
+>
+> More to the point: **nothing is currently running an ensemble eval.** The consumers are on *my*
+> side of the board - the decimate A/B and the clips-per-sign learning curve. So swapping the input
+> is my job, in my notebook, when I get there.
+>
+> The whole reason this task existed was to make the fixed file *available on Kaggle* so the next run
+> picks it up. It is available. **Closed.**
 
-#### The steps
-
-1. Kaggle -> **Datasets** -> **New Dataset**.
-2. Drag **one file**: `training/ensemble_eval.py`.
-3. **Title:** date- or commit-stamped so it is unambiguous later - e.g.
-   `deafference-eval-code-20260903` or `deafference-eval-code-1c9a2fa`.
-4. **Visibility: Private.** Create.
-5. In whichever notebook consumes it: **remove the old input, add the new one.** This is the step
-   people forget - a stale input silently keeps running the old code.
-
-#### The three rules, and why each one exists
-
-> - **Drag the single file. Never the folder, never the repo root.** The repo contains `.env`, and a
->   public Kaggle dataset would publish it.
-> - **A brand-new dataset name every time. Never overwrite, and never create a dataset from notebook
->   output onto an existing dataset.** An overwritten dataset silently changes what every earlier
->   notebook run was using, which makes an old result impossible to reproduce or trust.
-> - **Private.** Habit, and here it costs nothing.
-
-#### The check that this actually worked
-
-Old and new are impossible to tell apart by eye. In the notebook, after switching the input:
+**What I need from you: the exact dataset slug**, because the path is namespaced and I cannot guess
+it. Check it with:
 
 ```python
-!grep -c class_names /kaggle/input/YOUR-NEW-DATASET-SLUG/ensemble_eval.py
+import glob
+print(glob.glob("/kaggle/input/datasets/*/*eval*"))
 ```
 
-**Non-zero means you have the new one.** Zero means the old file is still attached - go back to
-step 5.
+Expect something like `/kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903`. Send me
+that string and I will hard-code it in the next eval run, with this check first:
+
+```python
+!grep -c class_names <that path>/ensemble_eval.py     # non-zero = the fixed version
+```
 
 ### ☐ 8. Decide the 2s gate — **I have a recommendation: `off`, and it is not close**
 
