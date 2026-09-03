@@ -1,0 +1,771 @@
+{
+ "schema": "asl-handedness/v1",
+ "date": "2026-09-04",
+ "author": "derived from ASL-LEX annotations carried in semlex_metadata.csv",
+ "vocabulary": "the 55 shippable clinical concepts (clinical_ship_vocab.json)",
+ "why": [
+  "Unlike the 250-word lexicon, handedness here is NOT hand-written from published",
+  "descriptions. Sem-Lex carries the ASL-LEX phonological annotation set per video,",
+  "so Sign Type / Nondominant Handshape / Minor Location come with a take count and a",
+  "citable source. Every one of the annotated medical words is UNANIMOUS across its",
+  "takes, which is what a per-SIGN (not per-video) annotation should look like.",
+  "",
+  "Each row is then checked against the landmarks independently: a class-1 label with",
+  "both hands tracked, or a two-handed label with no second hand, is demoted to",
+  "conf='low' and listed in label_vs_tracking_flags."
+ ],
+ "classes": {
+  "1": "One-handed. Only the dominant hand is phonemically required.",
+  "2s": "Two-handed SYMMETRIC (Battison's Symmetry Condition): both hands share the same handshape and both move.",
+  "2a": "Two-handed ASYMMETRIC (Battison's Dominance Condition): the dominant hand acts on a static passive base, whose handshape is restricted to the unmarked set (B, A, S, 1, 5, C, O). Includes ASL-LEX's 'Asymmetrical Same Handshape' and 'Dominance Violation', which our taxonomy does not separate."
+ },
+ "renderer_contract": [
+  "\ud83d\udd11 THIS DIFFERS FROM asl_handedness_250.json, AND THAT IS THE POINT.",
+  "The 250-word contract says: 'For every word not marked 1, the passive hand's",
+  "landmarks DO NOT EXIST in our corpus for any take.' True of GISLR, which records",
+  "one hand per participant -- both hands in 1.7% of clips, 0.1% of frames.",
+  "",
+  "FALSE for Sem-Lex. Measured on these 55 words in data_medical/by_word/:",
+  "    class 1   24 words, 1,765 clips ->  4.1% of frames carry both hand blocks",
+  "    class 2s  18 words, 2,181 clips -> 44.7%",
+  "    class 2a  11 words,   699 clips -> 37.1%",
+  "Two-handed words average 41.8% against GISLR's 0.1%. The 10x separation between",
+  "class 1 and the two-handed classes means the tracking INDEPENDENTLY corroborates",
+  "these ASL-LEX labels -- neither number was derived from the other.",
+  "",
+  "So for the medical avatar the passive hand is RECORDED, not synthesized. Prefer the",
+  "real passive hand; fall back to mirroring (2s) or an unmarked base (2a) only on the",
+  "frames where it is absent. passive_hand_recorded_frac is per word, so decide per",
+  "word rather than per corpus -- `walk` is 15.5% and still needs synthesis."
+ ],
+ "conf": {
+  "high": "unanimous ASL-LEX Sign Type over >=20 takes, and the tracking agrees",
+  "med": "unanimous over 5-19 takes",
+  "low": "few takes, ASL-LEX disagreement, tracking contradicts the label, or hand-labelled. REVIEW THESE FIRST."
+ },
+ "counts": {
+  "one_handed": 25,
+  "two_handed_symmetric": 18,
+  "two_handed_asymmetric": 12,
+  "total": 55
+ },
+ "review_status": "NOT reviewed by a Deaf signer. ASL-LEX is linguist-annotated, which makes this a better starting point than the 250-word lexicon's hand-written rows -- not a substitute for review. Review conf='low' rows, label_vs_tracking_flags, cross_check_vs_250, and every outside_unmarked_set row first.",
+ "licence_note": "These class labels are ASL-LEX annotations redistributed through Sem-Lex (CC BY-NC-SA). The medical model is already non-commercial for the same reason, so this file changes nothing about THIS track's shippability. It becomes a live question only if the labels are reused for the 250-word commercial track. A Deaf reviewer must be the one who SETS a shipped label; ASL-LEX only says where to look.",
+ "sources": {
+  "again": "ASL-LEX 'Asymmetrical Same Handshape' unanimous over 76 takes",
+  "always": "ASL-LEX 'One Handed' unanimous over 22 takes",
+  "baby": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 192 takes",
+  "bad": "ASL-LEX 'One Handed' unanimous over 116 takes",
+  "bathroom": "ASL-LEX 'One Handed' unanimous over 38 takes",
+  "big": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 212 takes",
+  "blood": "ASL-LEX 'One Handed' unanimous over 44 takes",
+  "breathe": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 74 takes",
+  "cold": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 221 takes",
+  "cough": "ASL-LEX 'One Handed' unanimous over 27 takes",
+  "day": "ASL-LEX 'One Handed' unanimous over 91 takes",
+  "dentist": "ASL-LEX 'One Handed' unanimous over 29 takes",
+  "drink": "ASL-LEX 'One Handed' unanimous over 182 takes",
+  "eye": "asl_handedness_250.json (no ASL-LEX row for this label)",
+  "family": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 198 takes",
+  "father": "ASL-LEX 'One Handed' unanimous over 35 takes",
+  "feel": "ASL-LEX 'One Handed' unanimous over 122 takes",
+  "finish": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 226 takes",
+  "glasses": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 16 takes",
+  "hand": "HAND-LABELLED \u2014 no ASL-LEX row and not in the 250-word lexicon",
+  "head": "ASL-LEX 'One Handed' unanimous over 43 takes",
+  "help": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 132 takes",
+  "hospital": "ASL-LEX 'One Handed' unanimous over 60 takes",
+  "hour": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 15 takes",
+  "medicine": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 95 takes",
+  "month": "ASL-LEX 'Asymmetrical Same Handshape' unanimous over 42 takes",
+  "more": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 36 takes",
+  "morning": "ASL-LEX 'One Handed' unanimous over 80 takes",
+  "move": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 93 takes",
+  "night": "ASL-LEX 'Asymmetrical Same Handshape' unanimous over 104 takes",
+  "no": "ASL-LEX 'One Handed' unanimous over 64 takes",
+  "open": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 87 takes",
+  "pain": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 51 takes",
+  "show": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 79 takes",
+  "sick": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 183 takes",
+  "sit": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 63 takes",
+  "skin": "ASL-LEX 'One Handed' unanimous over 33 takes",
+  "sleep": "ASL-LEX 'One Handed' unanimous over 204 takes",
+  "sorry": "ASL-LEX 'One Handed' unanimous over 38 takes",
+  "start": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 41 takes",
+  "stop": "ASL-LEX 'Asymmetrical Same Handshape' unanimous over 65 takes",
+  "teeth": "ASL-LEX 'One Handed' unanimous over 66 takes",
+  "tell": "ASL-LEX 'One Handed' unanimous over 32 takes",
+  "test": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 81 takes",
+  "tired": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 143 takes",
+  "tomorrow": "ASL-LEX 'One Handed' unanimous over 43 takes",
+  "understand": "ASL-LEX 'One Handed' unanimous over 129 takes",
+  "wait": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 121 takes",
+  "walk": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 52 takes",
+  "want": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 81 takes",
+  "water": "ASL-LEX 'One Handed' unanimous over 408 takes",
+  "week": "ASL-LEX 'Asymmetrical Different Handshape' unanimous over 67 takes",
+  "who": "ASL-LEX 'One Handed' unanimous over 83 takes",
+  "woman": "ASL-LEX 'One Handed' unanimous over 83 takes",
+  "year": "ASL-LEX 'Symmetrical Or Alternating' unanimous over 33 takes"
+ },
+ "label_vs_tracking_flags": [
+  {
+   "word": "blood",
+   "asllex_class": "1",
+   "both_hand_frac": 0.452,
+   "note": "ASL-LEX says ONE-handed but both hand blocks are tracked in 45.2% of frames (class-1 words average 4.1%). Either the sign has a two-handed variant in this corpus, or the label is wrong. Review before the renderer trusts '1'."
+  }
+ ],
+ "cross_check_vs_250": [
+  {
+   "word": "morning",
+   "asl_handedness_250": [
+    "2a",
+    "high"
+   ],
+   "asllex": "1",
+   "asllex_takes": 80,
+   "both_hand_frac": 0.174,
+   "note": "the 250-word lexicon was hand-written from published descriptions; ASL-LEX is linguist-annotated over many takes."
+  },
+  {
+   "word": "sick",
+   "asl_handedness_250": [
+    "1",
+    "med"
+   ],
+   "asllex": "2s",
+   "asllex_takes": 183,
+   "both_hand_frac": 0.354,
+   "note": "the 250-word lexicon was hand-written from published descriptions; ASL-LEX is linguist-annotated over many takes."
+  }
+ ],
+ "words": {
+  "again": [
+   "2a",
+   "high"
+  ],
+  "always": [
+   "1",
+   "high"
+  ],
+  "baby": [
+   "2s",
+   "high"
+  ],
+  "bad": [
+   "1",
+   "high"
+  ],
+  "bathroom": [
+   "1",
+   "high"
+  ],
+  "big": [
+   "2s",
+   "high"
+  ],
+  "blood": [
+   "1",
+   "low"
+  ],
+  "breathe": [
+   "2s",
+   "high"
+  ],
+  "cold": [
+   "2s",
+   "high"
+  ],
+  "cough": [
+   "1",
+   "high"
+  ],
+  "day": [
+   "1",
+   "high"
+  ],
+  "dentist": [
+   "1",
+   "high"
+  ],
+  "drink": [
+   "1",
+   "high"
+  ],
+  "eye": [
+   "1",
+   "high"
+  ],
+  "family": [
+   "2s",
+   "high"
+  ],
+  "father": [
+   "1",
+   "high"
+  ],
+  "feel": [
+   "1",
+   "high"
+  ],
+  "finish": [
+   "2s",
+   "high"
+  ],
+  "glasses": [
+   "2s",
+   "med"
+  ],
+  "hand": [
+   "2a",
+   "low"
+  ],
+  "head": [
+   "1",
+   "high"
+  ],
+  "help": [
+   "2a",
+   "high"
+  ],
+  "hospital": [
+   "1",
+   "high"
+  ],
+  "hour": [
+   "2a",
+   "med"
+  ],
+  "medicine": [
+   "2a",
+   "high"
+  ],
+  "month": [
+   "2a",
+   "high"
+  ],
+  "more": [
+   "2s",
+   "high"
+  ],
+  "morning": [
+   "1",
+   "high"
+  ],
+  "move": [
+   "2s",
+   "high"
+  ],
+  "night": [
+   "2a",
+   "high"
+  ],
+  "no": [
+   "1",
+   "high"
+  ],
+  "open": [
+   "2s",
+   "high"
+  ],
+  "pain": [
+   "2s",
+   "high"
+  ],
+  "show": [
+   "2a",
+   "high"
+  ],
+  "sick": [
+   "2s",
+   "high"
+  ],
+  "sit": [
+   "2a",
+   "high"
+  ],
+  "skin": [
+   "1",
+   "high"
+  ],
+  "sleep": [
+   "1",
+   "high"
+  ],
+  "sorry": [
+   "1",
+   "high"
+  ],
+  "start": [
+   "2a",
+   "high"
+  ],
+  "stop": [
+   "2a",
+   "high"
+  ],
+  "teeth": [
+   "1",
+   "high"
+  ],
+  "tell": [
+   "1",
+   "high"
+  ],
+  "test": [
+   "2s",
+   "high"
+  ],
+  "tired": [
+   "2s",
+   "high"
+  ],
+  "tomorrow": [
+   "1",
+   "high"
+  ],
+  "understand": [
+   "1",
+   "high"
+  ],
+  "wait": [
+   "2s",
+   "high"
+  ],
+  "walk": [
+   "2s",
+   "high"
+  ],
+  "want": [
+   "2s",
+   "high"
+  ],
+  "water": [
+   "1",
+   "high"
+  ],
+  "week": [
+   "2a",
+   "high"
+  ],
+  "who": [
+   "1",
+   "high"
+  ],
+  "woman": [
+   "1",
+   "high"
+  ],
+  "year": [
+   "2s",
+   "high"
+  ]
+ },
+ "passive_handshape": {
+  "_why": "The passive hand's handshape per two-handed word, and where the dominant hand meets it. Sourced from ASL-LEX Nondominant Handshape / Minor Location rather than guessed. contact_surface is non-null only where Minor Location names a part of the hand or arm; otherwise the sign is located on the body (body_location) or in neutral space.",
+  "_contact_values": [
+   "palm",
+   "back_of_hand",
+   "side_of_hand",
+   "forearm",
+   "wrist",
+   "thumb",
+   "fingers",
+   "fingertips",
+   "opening",
+   "under_palm",
+   "outline"
+  ],
+  "_fallback": "Shapes requested by this vocabulary are B, 1 and 5. All three are measured and usable in handshape_templates.json (agreement_xy 0.131 / 0.150 / 0.153), so there are ZERO live approximations here -- the same as the 250-word set. Only 'O' is unusable and it is never requested.",
+  "_undrawable_by_synthesis": {
+   "hand": {
+    "shape": null,
+    "contact": null,
+    "conf": "low",
+    "asllex_nondominant_handshape": null,
+    "outside_unmarked_set": true,
+    "body_location": null,
+    "asllex_minor_location": null,
+    "asllex_contact": null,
+    "takes": 0,
+    "passive_hand_recorded_frac": 0.242
+   },
+   "sit": {
+    "shape": null,
+    "contact": "fingers",
+    "conf": "low",
+    "asllex_nondominant_handshape": null,
+    "outside_unmarked_set": true,
+    "body_location": null,
+    "asllex_minor_location": "Finger Back",
+    "asllex_contact": "1.0",
+    "takes": 63,
+    "passive_hand_recorded_frac": 0.464,
+    "note": "ASL-LEX records 'Dominance Condition Violation' in the Nondominant Handshape field for 63 takes. That is a category, not a handshape: the non-dominant hand acts as dominant. Passive shape UNKNOWN here."
+   }
+  },
+  "words": {
+   "again": {
+    "shape": "B",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "flat_b",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Hand Away",
+    "asllex_contact": "1.0",
+    "takes": 76,
+    "passive_hand_recorded_frac": 0.268,
+    "note": "contact is null on purpose: ASL-LEX Minor Location is 'Hand Away', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "baby": {
+    "shape": "B",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "open_b",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "1.0",
+    "takes": 192,
+    "passive_hand_recorded_frac": 0.413,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "big": {
+    "shape": "bent_l",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "bent_l",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 212,
+    "passive_hand_recorded_frac": 0.423,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "breathe": {
+    "shape": "5",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "5",
+    "outside_unmarked_set": false,
+    "body_location": "Torso Top",
+    "asllex_minor_location": "Torso Top",
+    "asllex_contact": "1.0",
+    "takes": 74,
+    "passive_hand_recorded_frac": 0.388,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Torso Top', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "cold": {
+    "shape": "S",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "s",
+    "outside_unmarked_set": false,
+    "body_location": "Body Away",
+    "asllex_minor_location": "Body Away",
+    "asllex_contact": "0.0",
+    "takes": 221,
+    "passive_hand_recorded_frac": 0.469,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Body Away', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "family": {
+    "shape": "f",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "f",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "1.0",
+    "takes": 198,
+    "passive_hand_recorded_frac": 0.509,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "finish": {
+    "shape": "5",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "5",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 226,
+    "passive_hand_recorded_frac": 0.554,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "glasses": {
+    "shape": "g",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "g",
+    "outside_unmarked_set": false,
+    "body_location": "Head Away",
+    "asllex_minor_location": "Head Away",
+    "asllex_contact": "0.0",
+    "takes": 16,
+    "passive_hand_recorded_frac": 0.664,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Head Away', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "help": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "asllex_nondominant_handshape": "B",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm",
+    "asllex_contact": "1.0",
+    "takes": 132,
+    "passive_hand_recorded_frac": 0.27
+   },
+   "hour": {
+    "shape": "B",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "B",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Hand Away",
+    "asllex_contact": "1.0",
+    "takes": 15,
+    "passive_hand_recorded_frac": 0.353,
+    "note": "contact is null on purpose: ASL-LEX Minor Location is 'Hand Away', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "medicine": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "asllex_nondominant_handshape": "B",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm",
+    "asllex_contact": "1.0",
+    "takes": 95,
+    "passive_hand_recorded_frac": 0.408
+   },
+   "month": {
+    "shape": "1",
+    "contact": "fingers",
+    "conf": "med",
+    "asllex_nondominant_handshape": "1",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Finger Back",
+    "asllex_contact": "1.0",
+    "takes": 42,
+    "passive_hand_recorded_frac": 0.503
+   },
+   "more": {
+    "shape": "O",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "o",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "1.0",
+    "takes": 36,
+    "passive_hand_recorded_frac": 0.619,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "move": {
+    "shape": "O",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "o",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 93,
+    "passive_hand_recorded_frac": 0.45,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "night": {
+    "shape": "B",
+    "contact": "back_of_hand",
+    "conf": "med",
+    "asllex_nondominant_handshape": "flat_b",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm Back",
+    "asllex_contact": "1.0",
+    "takes": 104,
+    "passive_hand_recorded_frac": 0.327
+   },
+   "open": {
+    "shape": "B",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "closed_b",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "1.0",
+    "takes": 87,
+    "passive_hand_recorded_frac": 0.364,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "pain": {
+    "shape": "1",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "flat_1",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 51,
+    "passive_hand_recorded_frac": 0.421,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "show": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "asllex_nondominant_handshape": "B",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm",
+    "asllex_contact": "1.0",
+    "takes": 79,
+    "passive_hand_recorded_frac": 0.527
+   },
+   "sick": {
+    "shape": "open_8",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "open_8",
+    "outside_unmarked_set": false,
+    "body_location": "Forehead",
+    "asllex_minor_location": "Forehead",
+    "asllex_contact": "1.0",
+    "takes": 183,
+    "passive_hand_recorded_frac": 0.354,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Forehead', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "start": {
+    "shape": "5",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "5",
+    "outside_unmarked_set": false,
+    "body_location": "Other",
+    "asllex_minor_location": "Other",
+    "asllex_contact": "1.0",
+    "takes": 41,
+    "passive_hand_recorded_frac": 0.408,
+    "note": "contact is null on purpose: ASL-LEX Minor Location is 'Other', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "stop": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "asllex_nondominant_handshape": "open_b",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm",
+    "asllex_contact": "1.0",
+    "takes": 65,
+    "passive_hand_recorded_frac": 0.227
+   },
+   "test": {
+    "shape": "1",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "1",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 81,
+    "passive_hand_recorded_frac": 0.587,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "tired": {
+    "shape": "C",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "c",
+    "outside_unmarked_set": false,
+    "body_location": "Clavicle",
+    "asllex_minor_location": "Clavicle",
+    "asllex_contact": "1.0",
+    "takes": 143,
+    "passive_hand_recorded_frac": 0.36,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Clavicle', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   },
+   "wait": {
+    "shape": "5",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "5",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 121,
+    "passive_hand_recorded_frac": 0.505,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "walk": {
+    "shape": "B",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "open_b",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 52,
+    "passive_hand_recorded_frac": 0.155,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "want": {
+    "shape": "5",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "5",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "0.0",
+    "takes": 81,
+    "passive_hand_recorded_frac": 0.535,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=0.0, so the hands do not meet)"
+   },
+   "week": {
+    "shape": "B",
+    "contact": "palm",
+    "conf": "med",
+    "asllex_nondominant_handshape": "B",
+    "outside_unmarked_set": false,
+    "body_location": null,
+    "asllex_minor_location": "Palm",
+    "asllex_contact": "1.0",
+    "takes": 67,
+    "passive_hand_recorded_frac": 0.331
+   },
+   "year": {
+    "shape": "S",
+    "contact": null,
+    "conf": "med",
+    "asllex_nondominant_handshape": "s",
+    "outside_unmarked_set": false,
+    "body_location": "Neutral",
+    "asllex_minor_location": "Neutral",
+    "asllex_contact": "1.0",
+    "takes": 33,
+    "passive_hand_recorded_frac": 0.268,
+    "note": "2s: the passive hand mirrors the dominant, so `shape` is the shared handshape and the unmarked-set constraint does not apply.  contact is null on purpose: ASL-LEX Minor Location is 'Neutral', which is not a surface on the passive hand (ASL-LEX Contact=1.0, so the hands DO meet \u2014 the surface is simply not recorded and must be reviewed)"
+   }
+  }
+ },
+ "hand_labelled_notes": {
+  "hand": "Labelled 2a from the sign's structure. Measured both-hand rate 24.2% sits in the two-handed range (class 1 averages 4.1%, two-handed 41.8%), so two-handed is supported by the data; whether it is 2a or 2s is NOT. NEEDS DEAF REVIEW."
+ }
+}

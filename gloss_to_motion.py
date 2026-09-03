@@ -81,9 +81,15 @@ MISSING_NOTE = ("y is DOWN (image space) — the renderer flips y (contract §3)
 
 SYNTH_NOTE = (
     "segments[].synthesis tells you what to do about the hand that is NOT in the data. "
-    "The corpus records ONE hand per participant, so on every two-handed sign the passive "
-    "HAND is absent in every take — its WRIST is still tracked as a pose landmark "
-    "(passiveWristIndex), so you have the position and need only the handshape. "
+    "🔑 READ passiveHandRecorded FIRST — it is measured on the exemplar in THIS file and it "
+    "decides whether you synthesize at all. On the GISLR 250-word corpus it is ~0.0 for "
+    "every two-handed sign, because that corpus records ONE hand per participant (both "
+    "hands in 1.7% of clips, 0.1% of frames) — there, the passive HAND is genuinely absent "
+    "and you must synthesize it. On the Sem-Lex clinical corpus it is typically 0.3-0.9: "
+    "the passive hand is REAL and already in frames[], so USE IT and fall back to the "
+    "synthesis rule only on the frames where it is null. Synthesizing over a recorded hand "
+    "would discard the best data in the file. Either way its WRIST is tracked as a pose "
+    "landmark (passiveWristIndex), so position is never the missing part. "
     "dominantHand is 'R' in every file BY CONSTRUCTION (left-dominant signers were mirrored "
     "at extraction); do NOT re-derive it from wrist travel — symmetric signs tie. "
     "class/labelConfidence come from a hand-written lexicon because handedness is NOT "
@@ -220,6 +226,91 @@ def load_lexicon(path: Path | None = None) -> dict:
     return out
 
 
+# Anatomical pose flip PLUS a swap of the two hand blocks (33-53 <-> 54-74). Same array as
+# live_demo.FLIP_MAP; duplicated rather than imported because importing live_demo pulls in
+# TensorFlow and MediaPipe for a 75-element lookup table.
+#
+# ⚠️ Use THIS, not training/extract_canonical.canonicalize, to canonicalize a render clip.
+# That function does `a[:, RESERVED_BLOCK, :] = np.nan` — it deliberately DESTROYS the
+# non-dominant block, which is correct for the recognition corpus and catastrophic here: on
+# Sem-Lex the passive hand is real in ~81% of frames on two-handed signs and is the single
+# most valuable thing in the clip. Swapping preserves both hands.
+FLIP_MAP_SWAP_HANDS = np.array([
+    0, 4, 5, 6, 1, 2, 3, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17, 20, 19,
+    22, 21, 24, 23, 26, 25, 28, 27, 30, 29, 32, 31,
+    54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
+    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
+], dtype=np.int32)
+
+
+def mirror_clip(clip: np.ndarray) -> np.ndarray:
+    """Horizontal mirror of a (T,75,3) shoulder-centered clip, hands SWAPPED.
+
+    Coordinates are shoulder-centered, so the mirror is x -> -x; the index map swaps the
+    anatomical pose L/R pairs and exchanges the two hand blocks. Hand topology is identical
+    for both hands, so a negated left hand IS a right-shaped hand.
+    """
+    out = clip[:, FLIP_MAP_SWAP_HANDS, :].copy()
+    out[..., 0] *= -1.0
+    return out
+
+
+def canonicalize_clips(clips: dict, meta_path: Path | None = None) -> tuple[dict, dict]:
+    """Make every exemplar right-dominant, so `dominantHand: "R"` is true again.
+
+    THE CONTRACT SAYS: "dominantHand is 'R' in every file BY CONSTRUCTION (left-dominant
+    signers were mirrored at extraction)." That holds for the GISLR 250-word clips, whose
+    meta records all_exemplars_right_dominant: true. It does NOT hold for the Sem-Lex
+    clinical clips: that corpus was extracted WITHOUT --canonical-hand (the medical training
+    config records canonical_hand: false in all four folds), so its meta says
+    all_exemplars_right_dominant: false and 20 of 55 exemplars are left-dominant.
+
+    Exported unmirrored, those 20 words tell the animator the dominant hand is at 54-74 when
+    it is at 33-53, and dominantCoverage reads 0.000 on the five words whose R block is
+    entirely empty. Nothing raises. This is the same failure the DOMINANT_HAND comment above
+    describes costing us `finish`, arriving from the other direction.
+
+    Dominance is taken from build_sign_clips' recorded per-word `dominant`, not re-derived:
+    that decision was made across all candidate takes using wrist TRAVEL, and it disagrees
+    with "whichever block has more tracked frames" on exactly the words where the tracker
+    kept the RESTING hand (3 of 55 here). Re-deriving it per clip is the known-bad rule.
+    """
+    p = Path(meta_path) if meta_path else HERE / META_NAME
+    info = {"applied": False, "mirrored": [], "reason": None}
+    if not p.exists():
+        info["reason"] = f"{p.name} not found — cannot know which words are left-dominant"
+        print(f"[warn] {info['reason']}. Clips exported AS-IS; if any exemplar is "
+              f"left-dominant, its dominantHand field is WRONG.")
+        return clips, info
+    blob = json.loads(p.read_text(encoding="utf-8"))
+    if blob.get("all_exemplars_right_dominant"):
+        info["reason"] = "meta says all exemplars are already right-dominant"
+        print(f"[ok] {p.name}: exemplars are already canonical (all right-dominant) — "
+              f"no mirroring needed")
+        return clips, info
+    dom = {m.get("word"): m.get("dominant") for m in (blob.get("words") or [])}
+    out, missing = {}, []
+    for w, c in clips.items():
+        d = dom.get(w)
+        if d is None:
+            missing.append(w)
+            out[w] = c
+        elif d == "L":
+            out[w] = mirror_clip(c)
+            info["mirrored"].append(w)
+        else:
+            out[w] = c
+    info["applied"] = True
+    print(f"[ok] canonicalized {len(info['mirrored'])}/{len(clips)} left-dominant exemplars "
+          f"-> dominant hand at 54-74, passive hand PRESERVED at 33-53")
+    if info["mirrored"]:
+        print(f"     mirrored: {', '.join(sorted(info['mirrored']))}")
+    if missing:
+        print(f"[warn] {len(missing)} words have no `dominant` in {p.name} and were left "
+              f"as-is: {sorted(missing)[:8]}")
+    return out, info
+
+
 def attach_source_quality(lex: dict, path: Path | None = None,
                           fps: int = DEFAULT_FPS) -> dict:
     """Fold per-word exemplar-quality facts into the lexicon entries, in place.
@@ -272,6 +363,25 @@ def dominant_coverage(clip: np.ndarray) -> float:
     if clip is None or len(clip) == 0:
         return 0.0
     have = np.isfinite(clip[:, R_HAND, :2]).all(-1).any(-1)
+    return round(float(have.mean()), 4)
+
+
+def passive_hand_recorded(clip: np.ndarray, passive: str | None = PASSIVE_HAND) -> float:
+    """Fraction of frames in which the PASSIVE hand block is actually measured.
+
+    The v1 contract asserted this is 0.0 on every two-handed sign, because GISLR records
+    one hand per participant. That is a fact about GISLR, not about the format — Sem-Lex
+    records both. Measured on the 55 clinical words: class 2s 75.0% of frames, class 2a
+    59.8%, and 29 of 30 two-handed exemplars carry a real passive hand.
+
+    A renderer that synthesizes whenever `twoHanded` is true would overwrite recorded
+    landmarks with a guess, and nothing would raise. So the number ships in the file and
+    SYNTH_NOTE tells the animator to branch on it.
+    """
+    if clip is None or len(clip) == 0:
+        return 0.0
+    blk = L_HAND if (passive or PASSIVE_HAND) == "L" else R_HAND
+    have = np.isfinite(clip[:, blk, :2]).all(-1).any(-1)
     return round(float(have.mean()), 4)
 
 
@@ -384,6 +494,14 @@ def make_segment(word: str, start: int, end: int, lex: dict,
             cov = dominant_coverage(clip)
             s["dominantCoverage"] = cov
             s["quality"] = {"tier": quality_tier(cov), **dominant_gaps(clip)}
+            # MEASURED on the exemplar that ships, not assumed from the corpus. The v1
+            # contract asserted the passive hand is absent in every take, which is true of
+            # GISLR and FALSE of Sem-Lex (medical: 29 of 30 two-handed exemplars carry a
+            # real passive hand, mean 68.9% of frames). Telling the animator to synthesize
+            # over recorded data is the kind of error that never announces itself, so the
+            # number goes in the file and the note tells him to read it first.
+            if s.get("twoHanded"):
+                s["passiveHandRecorded"] = passive_hand_recorded(clip, s.get("passiveHand"))
         seg["synthesis"] = s
     return seg
 
@@ -501,7 +619,21 @@ def main():
                          f"(default: {LEXICON_NAME} beside this script)")
     ap.add_argument("--meta", default=None,
                     help=f"clip metadata from build_sign_clips.py, for synthesis.sourceQuality "
-                         f"(default: {META_NAME} beside this script)")
+                         f"and the canonicalization decision. DEFAULT is derived from --clips "
+                         f"(sign_clips_X.npz -> sign_clips_X.meta.json), falling back to "
+                         f"{META_NAME}. Deriving it matters: a fixed default silently pairs "
+                         f"one vocabulary's clips with another's metadata, and only the words "
+                         f"present in BOTH get a sourceQuality block — 15 of 55 on the "
+                         f"clinical set, each carrying the wrong take count.")
+    ap.add_argument("--canonicalize", choices=["auto", "off"], default="auto",
+                    help="'auto' (default): if the clip metadata says the exemplars are NOT "
+                         "all right-dominant, mirror the left-dominant ones so the contract's "
+                         "dominantHand:'R' guarantee holds. Required for the Sem-Lex clinical "
+                         "clips (20 of 55 are left-dominant); a no-op on the GISLR 250-word "
+                         "clips, which were canonicalized at extraction. 'off' exports as-is "
+                         "and is only for reproducing a pre-2026-09-04 run — it emits "
+                         "dominantHand:'R' for words whose hand is in the 33-53 block, which "
+                         "is silently wrong.")
     args = ap.parse_args()
 
     clips_path = Path(args.clips)
@@ -510,6 +642,23 @@ def main():
                          f"      Build it first on Kaggle: cd training && python build_sign_clips.py --data-dir <data>")
     clips = load_clips(clips_path)
     print(f"[ok] loaded {len(clips)} canonical clips from {clips_path.name}")
+    # Pair the metadata with the clips it describes. Without this, --clips
+    # sign_clips_medical.npz silently reads sign_clips_250.meta.json and attaches the
+    # 250-word corpus's take counts to whichever 15 words the two vocabularies share.
+    if args.meta is None:
+        cand = clips_path.parent / (clips_path.stem + ".meta.json")
+        if cand.exists():
+            args.meta = str(cand)
+            print(f"[ok] metadata: {cand.name} (derived from --clips)")
+        else:
+            print(f"[warn] no {cand.name} beside the clips — falling back to {META_NAME}. "
+                  f"If that describes a DIFFERENT vocabulary, sourceQuality and the "
+                  f"canonicalization decision will be wrong.")
+    if args.canonicalize == "auto":
+        clips, _canon = canonicalize_clips(clips, args.meta)
+    else:
+        print("[warn] --canonicalize off: any left-dominant exemplar will ship with "
+              "dominantHand:'R' and a 0.000 dominantCoverage. Diagnostic use only.")
     lex = load_lexicon(args.lexicon)
     if lex:
         attach_source_quality(lex, args.meta, args.fps)

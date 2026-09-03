@@ -33,7 +33,7 @@ nothing for you to do in that section.
 
 ---
 
-## 🔴 URGENT, and it is not on the plan: the disk is full
+## ✅ RESOLVED 2026-09-04 — the disk was full; you freed ~2 GB and the rest unpacked
 
 ```
 C:  0.23 GB free of 237.16 GB          <- the only drive
@@ -41,13 +41,15 @@ Downloads   22.22 GB                   <- the reclaim target
 OneDrive    18.33 GB
 ```
 
-Windows at 230 MB free is not a "later" problem. **I could only extract 19.5 MB of the
-704 MB `results.zip`** — the four SavedModels and the small reports, which is exactly what
-stage 5 needed, so nothing is blocked *yet*. What is blocked is stage 6: it needs
-`semlex_medical_landmarks_v2.npz` (**384 MB**), and there is nowhere to put it.
+At 0.23 GB free I could extract only 19.5 MB of the 704 MB `results.zip` — the four
+SavedModels and the small reports, which happened to be exactly what stage 5 needed.
+Stage 6 was blocked outright: it needs `by_word/` (380 MB) and there was nowhere to put it.
 
-`results.zip` stays in the repo root and is gitignored, so it is safe where it is. Clear
-some of Downloads and the rest unpacks in a minute.
+**You freed ~2 GB on 2026-09-04**, I extracted the remaining 415 MB, and stage 6 is now
+built (below). `results.zip` is gitignored and can be deleted once you are happy — it
+still holds `semlex_medical_landmarks_v2.npz` (384 MB), which nothing currently needs
+but which is the source for a re-extract.
+
 
 ---
 
@@ -106,28 +108,84 @@ lists five specific questions for the reviewer. The sharpest one: **`fever`, `na
 `vomit`, `chest` and `stomach` were pruned before training** for too few clips — a clinical
 tool without `fever` may not be a clinical tool.
 
-### ◐ Stage 6 — avatar. Blocked on three things, but I found a shortcut worth having.
+### ✅ Stage 6 — the medical avatar handoff is BUILT. 55 signs, 7.5 MB.
 
-**Blocked by:** the 384 MB npz (no disk) · the rig (not delivered) · the player runtime
-(task 2B — not in this repo).
+Once you freed the disk I extracted the rest and ran the whole pipeline.
+**`animation_handoff_medical/`** — 55 per-word motion files + `reference_pose.json`, same
+`sign-animation/v1` contract as the 250-word handoff. Full write-up:
+**[docs/MEDICAL_AVATAR_HANDOFF.md](MEDICAL_AVATAR_HANDOFF.md)**.
 
-**The shortcut.** The avatar lexicon covers only **15 of the 55** ship words, so 40 needed
-authoring. But `semlex_metadata.csv` — already sitting in your repo root, 91,148 rows —
-carries the **full ASL-LEX phonological annotation set**: `Sign Type`, `Nondominant
-Handshape`, `Major`/`Minor Location`, `Contact`, `Thumb Position`. These are the exact
-fields §6/§9/§10 and Appendix B of the brief need.
+#### 🔑 The finding that changes the rig: the passive hand is REAL
+
+The 250-word contract tells the animator, verbatim, that *"for every word not marked '1', the
+passive hand's landmarks DO NOT EXIST in our corpus for any take"* — so he must synthesize it.
+That is true of GISLR. **It is false of Sem-Lex.**
 
 ```
-ship55 already in asl_handedness_250.json :  15
-ship55 missing                            :  40
-  ...with an ASL-LEX Sign Type            :  39
-  ...needing hand authoring               :   1   ('hand')
-within-word disagreement across 111 words :   0   <- annotations are per-sign and consistent
+GISLR   (250-word)  2s+2a  87 words  passive hand present:  0.000  in every single word
+Sem-Lex (clinical)  2s     18 words                        81.7%  of frames
+Sem-Lex (clinical)  2a     12 words                        81.1%
 ```
 
-**39 of the 40 are fillable from data.** Stage 6's lexicon gap is a scripting job, not an
-authoring job — and it needs no disk, no rig and no GPU, so it is the one part of stage 6
-that can be done now.
+The same code measures 0.000 on one corpus and 0.81 on the other, so it is the data, not the
+measurement. **30 of 30 two-handed clinical exemplars carry a real passive hand.** Every file
+now ships `synthesis.passiveHandRecorded` and tells him to branch on it — synthesizing over
+recorded landmarks would throw away the best data in the file, and nothing would raise.
+
+And it corroborates itself: the handedness labels come from ASL-LEX, the hand rates from
+MediaPipe tracking. Class 1 sits at 4.1% both-hand frames, two-handed classes at 41.8% — a
+**10× separation neither number was derived from.**
+
+#### The handoff is also just *better* than the 250-word one
+
+| | 250-word | clinical 55 |
+|---|---|---|
+| tier A (coverage ≥0.80) | 146/250 = 58% | **52/55 = 95%** |
+| tier C | 45 | **0** |
+| words with ≤2 valid takes | 20 | **0** |
+| words under 0.53 s | 6 | **0** |
+
+Studio-recorded prompted signing vs crowd-sourced phone video. It shows.
+
+#### Two bugs found and fixed on the way
+
+- **20 of 55 exemplars were LEFT-dominant** while the contract promises every file is
+  right-dominant. Sem-Lex was extracted without `--canonical-hand` (matching
+  `canonical_hand: false` in the training config), so 5 words shipped
+  `dominantCoverage: 0.000` and 20 named the wrong hand — silently. `--canonicalize auto` is
+  now the default and mirrors them **preserving the passive hand**. Coverage went to mean
+  0.940, **exactly matching `build_sign_clips`' own independent number** — which is what says
+  the fix is right rather than merely different.
+- **The medical clips were being paired with the 250-word metadata**, so 15 words got another
+  corpus's take counts and 40 got none. `--meta` now derives from `--clips`. 15/55 → 55/55.
+
+#### The lexicon: ASL-LEX, not hand-written
+
+`asl_handedness_medical.json` — 25 one-handed / 18 2s / 12 2a, of which **53 come from
+ASL-LEX**, 1 from the 250-word lexicon (`eye`), 1 hand-labelled (`hand`). All 12 2a passive
+handshapes resolve to **measured** templates, zero approximations.
+
+**Free cross-check: 86% agreement (12 of 14) with your hand-written 250-word lexicon.** The
+two disagreements are both real and both worth a reviewer:
+
+| word | 250 said | ASL-LEX | tracking | reading |
+|---|---|---|---|---|
+| `sick` | `1` (med) | `2s`, 183 takes | 35% | ASL-LEX + tracking agree; the 250 row was already flagged uncertain |
+| `morning` | `2a` (high) | `1`, 80 takes | **62% in the exemplar** | **unresolved — don't assume ASL-LEX wins** |
+
+`morning` matters beyond itself: ASL-LEX appears to treat the **passive forearm as a body
+location, not a second articulator** — the same phenomenon your 250-word audit found from the
+other side. `day` (62%) and `blood` (48%) look identical. The avatar must still pose that
+forearm whatever the sign is *called*, so these three are the first rows for a Deaf reviewer.
+
+#### Still open on stage 6
+
+- **Every clip is exactly 64 frames** — the medical tensors were time-resized at extraction, so
+  every sign plays for 2.13 s. `semlex_metadata.csv` has a `duration` column in ms, so this is
+  recoverable; it just isn't done.
+- `hand` and `sit` can't be drawn by *synthesis* — but both have a recorded passive hand, so
+  per the finding above it isn't blocking.
+- The rig is still not delivered, and the runtime owner is still unknown (**task 2B**).
 
 ---
 
@@ -734,6 +792,34 @@ which is how the training run reads `fs75.npz` without re-subsetting.
 the CTC model's absence handling gets designed against.
 
 ### ☐ 7. Upload `ensemble_eval.py` — **REOPENED 2026-09-03, my error**
+
+> ## ✅ 2026-09-04 — task 7 now has a MEASURED payoff, not just tidiness
+>
+> I compared the copies of the scripts that actually ran on Kaggle (they came back inside
+> `results.zip`) against this repo, stripping comments and docstrings so only real code
+> counted:
+>
+> ```
+> train.py                 IDENTICAL
+> extract_landmarks.py     IDENTICAL
+> npz_to_train_format.py   IDENTICAL
+> select_ship_vocab.py     IDENTICAL
+> test_semlex_adapter.py   IDENTICAL
+> semlex_poses_to_75.py    IDENTICAL CODE  (only the docstring differs — the repo's is NEWER
+>                                           and records the +0.0007 canonicalization A/B)
+> ensemble_eval.py         CODE DIFFERS    <- the repo adds "class_names": list(words)
+> ```
+>
+> **That one missing line is why `clinical_ship_vocab.json` came back naming
+> `<unnamed-class-51>` and `<unnamed-class-81>`.** Without `class_names` in the report,
+> `select_ship_vocab.py` cannot recover the label for a class that has no test clips, so
+> `how` and `sharp` came back as placeholders — and I had to reconstruct the whole 123-class
+> order by hand from `split_manifest.parquet` to be sure the model's labels were right.
+>
+> So the upload is not housekeeping. **It makes the next run self-describing** and removes a
+> manual reconstruction step that is easy to get silently wrong. Everything else on Kaggle is
+> already current, which is the good news.
+
 
 I closed this on 2026-09-03 on the strength of *"task 7 done i create the dataset"*. **The dataset
 that got created was `deafference-fs-code`, holding `subset_landmarks.py`** — that is **task 4
