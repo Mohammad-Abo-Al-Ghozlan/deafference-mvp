@@ -278,24 +278,54 @@ not a nice-to-have.
 
 ---
 
-#### Step 1 — accept the competition rules *(one time only)*
+#### Step 1 - accept the competition rules *(one time only)*
 
-1. Open Kaggle → search **"Google — American Sign Language Fingerspelling Recognition"**.
-2. **Rules** tab → **I Understand and Accept**.
+| | |
+|---|---|
+| **Exact title** | **Google - American Sign Language Fingerspelling Recognition** |
+| **Direct link** | `https://www.kaggle.com/competitions/asl-fingerspelling` |
+| **Slug** | `asl-fingerspelling` - which is why the script's `--base` defaults to `/kaggle/input/asl-fingerspelling` |
+
+1. Open the link above (faster than searching - there are several similarly named ASL competitions
+   on Kaggle, including the *other* Google one, **isolated-sign-language-recognition**, which is
+   GISLR and is where the 250-word model came from. **You want the fingerspelling one.**)
+2. **Rules** tab -> **I Understand and Accept**.
 
 Competition data stays available after a competition closes; accepting the rules is what unlocks it.
-**No email, no negotiation, no licence problem** — this is the clean track.
+**No email, no negotiation, no licence problem** - this is the clean track. The data is landmarks
+only, never video: >3 million fingerspelled characters from 100+ Deaf signers, captured on phone
+selfie cameras, already run through MediaPipe.
 
-#### Step 2 — put `subset_landmarks.py` where Kaggle can see it
+#### Step 2 - put `subset_landmarks.py` where Kaggle can see it
 
-Create a **new private dataset** with that one file:
+> **This dataset does not exist yet. You are creating it here.** Wherever the rest of this file
+> writes `deafference-fs-code`, that is **a name you choose in this step**, not something to go and
+> find. Nothing on Kaggle has it until you make it.
+>
+> A Kaggle notebook cannot read a file off your laptop. Attaching a dataset is the only way to get
+> your own code into a session, which is why this step exists at all.
 
-1. Kaggle → **Datasets** → **New Dataset**.
+1. Kaggle -> **Datasets** -> **New Dataset**.
 2. Drag **only** `training/fingerspelling/subset_landmarks.py`.
-3. Name it something like `deafference-fs-code`. **Visibility: Private.**
+3. Title it `deafference-fs-code`. **Visibility: Private.** Create.
 
-> ⚠️ **Drag the single file, not the folder and never the repo root.** The repo contains `.env`, and
-> a public Kaggle dataset would publish it.
+> ### The path is built from the SLUG, not the title
+>
+> Kaggle lower-cases your title and replaces spaces with hyphens to make a **slug**, and the input
+> path is `/kaggle/input/<slug>/`. So:
+>
+> ```
+> title "deafference-fs-code"   ->  /kaggle/input/deafference-fs-code/subset_landmarks.py
+> title "Deafference FS Code"   ->  /kaggle/input/deafference-fs-code/subset_landmarks.py
+> title "FS code v2"            ->  /kaggle/input/fs-code-v2/subset_landmarks.py       <- different!
+> ```
+>
+> **Type the title exactly as `deafference-fs-code`** and every command in tasks 4 and 6 works
+> unchanged. If you name it anything else, step 4's path-explorer will print the real path - use
+> that instead.
+
+> WARNING: **Drag the single file, not the folder and never the repo root.** The repo contains
+> `.env`, and a public Kaggle dataset would publish it.
 
 #### Step 3 — new notebook, attach both inputs
 
@@ -460,8 +490,11 @@ Four shards is baseline-sized - enough to train something real, small enough to 
 
 #### Setup - same two inputs as task 4
 
-The same notebook is fine. Right panel -> **Add Input**: the **competition**, and your
-`deafference-fs-code` dataset. Then:
+The same notebook is fine. Right panel -> **Add Input**: the **competition**
+(`asl-fingerspelling`), and your `deafference-fs-code` dataset - **the one you created in task 4
+step 2.** It does not exist before that; if you have not done task 4 yet, start there.
+
+Then:
 
 | Setting | Value | Why |
 |---|---|---|
