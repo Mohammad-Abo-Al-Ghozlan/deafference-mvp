@@ -365,8 +365,30 @@ interpolation recovers only **12%**. What we do not know is the *shape* of the l
 Also in the output and worth having: per-sequence length distribution, dominant-hand presence rate,
 and how many sequences are left-dominant.
 
-**Then, and only then, task 6** subsets four shards for real. Do not skip step 6 to save time — a
-`--report` that reveals long gaps changes what task 6 is even for.
+> ### WARNING - correction 2026-09-03: the headline question is already answered
+>
+> I called the >10-frame gap count "the single number that decides the model design". It is already
+> on record. `subset_landmarks.py`'s own docstring states it, and `SESSION_HANDOFF.md` around line
+> 1209 carries the same family of figures:
+>
+> ```
+> 55% of gaps are <=3 frames  ...  but hold only 12.4% of lost frames
+> ~64% of lost frames sit in gaps >10 frames
+> ```
+>
+> **Long gaps dominate. So the architecture decision is made: absence is a first-class input** - the
+> model learns "no hand here" rather than being fed an invented one. Interpolation is not defensible
+> on this corpus, and filling those gaps would fabricate handshapes, i.e. invent letters.
+>
+> **What task 4 is still worth** is smaller and honest: it verifies *our own code path* on real data
+> (step 5's `--selftest` covers most of that), and it gives the per-sequence distribution rather than
+> pooled percentages. Useful, not blocking.
+>
+> **The practical consequence is good news: run 4 and 6 back-to-back in one session.** There is no
+> longer a decision to make in between, so the old warning here no longer applies.
+
+**Then task 6** subsets four shards for real - and see its own section for which Kaggle run mode to
+use, because it differs from task 4.
 
 ---
 
@@ -423,23 +445,120 @@ task *and* on my clips-per-sign curve. This half is answered — both public opt
 
 ### ☐ 6. Subset four fingerspelling shards · ~20 min
 
-After task 4, same notebook:
+Four shards is baseline-sized - enough to train something real, small enough to iterate.
+
+> ## The one thing that differs from task 4: **run mode**
+>
+> | | task 4 (`--report`) | **task 6 (`--out`)** |
+> |---|---|---|
+> | writes files? | **no** - measures only | **yes** - that is the entire point |
+> | run as | **Interactive**, read the output | **Save & Run All (Commit)** |
+> | why | you only need stdout | `/kaggle/working` is captured as the notebook's **Output** only on a saved version. An interactive session's files **die with the session.** |
+>
+> **This is the mistake to avoid:** running it interactively, seeing "wrote fs75.npz", closing the
+> tab, and finding nothing. Interactive `/kaggle/working` is scratch space.
+
+#### Setup - same two inputs as task 4
+
+The same notebook is fine. Right panel -> **Add Input**: the **competition**, and your
+`deafference-fs-code` dataset. Then:
+
+| Setting | Value | Why |
+|---|---|---|
+| **Accelerator** | **None (CPU)** | Pure parquet I/O. A GPU does nothing here and burns your 30-hour budget. |
+| **Internet** | **Off** | Not needed, and off starts faster. |
+| **Persistence** | irrelevant on a commit run | The Output is captured either way. |
+
+#### Step 1 - smoke-test the *write* path in seconds
+
+`--report` never exercised writing at all, so prove it separately before spending twenty minutes:
 
 ```python
-!python subset_landmarks.py --base /kaggle/input/asl-fingerspelling \
-    --out /kaggle/working/fs75 --limit-files 4
+!cp /kaggle/input/deafference-fs-code/subset_landmarks.py .
+!python subset_landmarks.py --selftest
+!python subset_landmarks.py --base YOUR_BASE_FROM_TASK_4 \
+    --out /kaggle/working/smoke --limit-files 1 --limit-seq 20
+!ls -la /kaggle/working/smoke
 ```
 
-Four shards is baseline-sized — enough to train something real, small enough to iterate.
+You want `fs75.npz` **and** `gap_stats.json` present and non-zero. `--limit-seq 20` makes this take
+seconds instead of minutes.
+
+#### Step 2 - the real run
+
+```python
+!rm -rf /kaggle/working/smoke
+!python subset_landmarks.py --base YOUR_BASE_FROM_TASK_4 \
+    --out /kaggle/working/fs75 --limit-files 4
+!du -sh /kaggle/working/fs75 && ls -la /kaggle/working/fs75
+```
+
+**Check the printed size.** Kaggle's output cap is **20 GB**. Four shards subsetted to 75 points
+should land around **1-2 GB** - the whole point of the subset is that 225 of 1,631 columns is 13.8%
+of the I/O. If it comes out anywhere near 20 GB, stop and send me the number; something is wrong.
+
+#### Step 3 - persist it
+
+**Save Version** -> and there are two valid choices:
+
+- **Save & Run All (Commit)** - re-runs the notebook top to bottom, headless, and captures
+  `/kaggle/working` as the Output. **This is the one I would use**: it is reproducible, and it puts
+  the `--selftest` result in the permanent record right next to the data it produced. CPU commits get
+  12 hours; this needs minutes. You can close the tab - it finishes without you.
+- **Quick Save** - snapshots the notebook *and the files already sitting in* `/kaggle/working` from
+  your interactive run, without re-running. Faster, and it does keep the output. Fine if you have
+  already run step 2 and only want the file kept.
+
+Either way, when it finishes: notebook -> **Output** tab. The files are downloadable there, and - the
+part that actually matters - **that notebook can now be added as an Input to the next notebook**,
+which is how the training run reads `fs75.npz` without re-subsetting.
+
+**Do not** create a dataset from the notebook output onto an existing dataset. New name every time.
+
+#### What to send me
+
+`gap_stats.json`, plus the stdout from step 2. That is the per-sequence gap structure, and it is what
+the CTC model's absence handling gets designed against.
 
 ### ☐ 7. Re-upload `ensemble_eval.py` to the Kaggle code dataset · ~5 min
 
-The version on Kaggle predates commit `1c9a2fa`, which added `class_names` to the report. Without
-it, the next confusion CSV is unreadable without guessing the label order — and guessing it wrong is
-exactly the bug that nearly made me hand you confidently mislabelled output.
+**This one is not a notebook at all** - it is a Datasets upload, so there is no Interactive vs
+Save & Run All question. No code runs.
 
-Same rule as always: **a brand-new dataset name, never overwriting an existing one.** Keep it
-Private.
+The Kaggle copy predates commit `1c9a2fa` - *"the confusion CSV was unreadable without the vocab -
+carry class_names in the report"*. Without it the next confusion CSV cannot be read without guessing
+label order, and guessing it wrong is exactly the bug that nearly made me hand you confidently
+mislabelled output.
+
+#### The steps
+
+1. Kaggle -> **Datasets** -> **New Dataset**.
+2. Drag **one file**: `training/ensemble_eval.py`.
+3. **Title:** date- or commit-stamped so it is unambiguous later - e.g.
+   `deafference-eval-code-20260903` or `deafference-eval-code-1c9a2fa`.
+4. **Visibility: Private.** Create.
+5. In whichever notebook consumes it: **remove the old input, add the new one.** This is the step
+   people forget - a stale input silently keeps running the old code.
+
+#### The three rules, and why each one exists
+
+> - **Drag the single file. Never the folder, never the repo root.** The repo contains `.env`, and a
+>   public Kaggle dataset would publish it.
+> - **A brand-new dataset name every time. Never overwrite, and never create a dataset from notebook
+>   output onto an existing dataset.** An overwritten dataset silently changes what every earlier
+>   notebook run was using, which makes an old result impossible to reproduce or trust.
+> - **Private.** Habit, and here it costs nothing.
+
+#### The check that this actually worked
+
+Old and new are impossible to tell apart by eye. In the notebook, after switching the input:
+
+```python
+!grep -c class_names /kaggle/input/YOUR-NEW-DATASET-SLUG/ensemble_eval.py
+```
+
+**Non-zero means you have the new one.** Zero means the old file is still attached - go back to
+step 5.
 
 ### ☐ 8. Decide the 2s gate — **I have a recommendation: `off`, and it is not close**
 
