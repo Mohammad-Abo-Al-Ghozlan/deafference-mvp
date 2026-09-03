@@ -2,10 +2,12 @@
 
 **Written 2026-09-01 · updated 2026-09-03.** Derived from the cross-track plan of 2026-08-31.
 
-> **Closed since the last revision:** the 16 unpushed commits are **pushed** (`97dbc64..1d0a59d` →
-> `origin/Mhmd-Salim`, `main` untouched). The avatar brief is now one self-contained file at v6.1.
-> And the hire's discipline is corrected throughout: **he is a 3D avatar animator, not a character
-> artist** — which opens task 2C.
+> **Closed since the last revision:** the 16 unpushed commits are **pushed**
+> (`97dbc64..1d0a59d` → `origin/Mhmd-Salim`, `main` untouched) · the avatar brief is one
+> self-contained file at v6.1, **sent** · the hire's discipline is corrected throughout — **he is a
+> 3D avatar animator, not a character artist**, which opened task 2C · **task 5 is done, I read the
+> ASL Citizen licence** (§5 below — the wall stands, but it is a *different* wall) · **task 8 has a
+> recommendation** with the numbers behind it.
 
 Only **your** tasks are here. What is on me is listed at the end so you can track it, but there is
 nothing for you to do in that section.
@@ -102,7 +104,9 @@ Then tell him **what changed and why**, not just "here's a new zip":
 >
 > Class 1 and 2s are byte-identical — verified exactly, not on a median.
 
-### ☐ 2A. Send `AVATAR_BRIEF_COMPLETE.md` to the designer · ~2 min
+### ✅ 2A. Send `AVATAR_BRIEF_COMPLETE.md` — **DONE 2026-09-03**
+
+v6.1 sent, with the reply to his two questions. What follows is kept for the record.
 
 **Send `docs/AVATAR_BRIEF_COMPLETE.md` — one file, nothing attached.** It is v6: everything from v5
 plus six appendices that fold in the content of every file we used to attach. The PNGs, the reference
@@ -148,9 +152,45 @@ Still true from v5, and still the one item that may cost money:
   them to reprice rather than argue at P1-M3. **Expect that conversation — the ambiguity was our
   wording's fault.**
 
-### ☐ 2B. Decide who owns the runtime · a decision, not a task
+### ☐ 2B. Who owns the runtime — **and there is a prerequisite you can do in one minute**
 
-**This is the gap the role change opens, and it needs an answer before P1-M2 — not before P1-M1.**
+> ## ⚠️ Measured 2026-09-03: the player source is not in this repository
+>
+> I went looking for it so I could tell you what owning it would cost. It is not here:
+>
+> ```
+> tracked .js / .ts / .jsx / .tsx / .html / .vue files      0
+> demo/                                                     6 rendered .mp4 files, no code
+> _send/                                                    a staging copy of the handoff data
+> package.json                                              ABSENT
+> package-lock.json                                         present (413 KB)
+> node_modules/                                             present, 510 packages, 1.1 GB
+> ```
+>
+> A lock file and a `node_modules` with **no manifest** is an orphaned install, not a project. Every
+> bone name in `§6.2` was read out of *Ghozlan's* player, which lives on his machine or his own
+> branch — **we have its outputs and none of its source.**
+>
+> **So the real question is not "who should own the runtime". It is "do we have the code at all".**
+> And that changes the price of every option below by a lot, so answer it first:
+>
+> > Hi — one small thing. Can you push the avatar player / retargeter source to a branch, or zip it
+> > over? Whatever state it is in is fine, including broken. We are not asking you to work on it —
+> > we just need the code to exist somewhere other than your machine.
+>
+> One message. Do it before deciding anything else on this page.
+
+**Once you know whether the code exists, the options are:**
+
+| Option | Cost | When it is right |
+|---|---|---|
+| **Ghozlan returns for the runtime only** | Lowest — he wrote it | If the source comes back and he is willing. He is off the *avatar*, which is not the same as off the *runtime*. |
+| **You own it** | Your time, and your board is already full | You are the sole frontend dev, and it is Three.js + JS. Realistic only if something else comes off the board. |
+| **I write it** | GPU/context time, no money | Strongest if the source does **not** come back. I already hold the whole contract — landmark layout, bone names, the depth equation, and failure modes #7–#10 in §6.12 are explicitly mine. A rewrite from spec is tractable; maintaining code I have never seen is not. |
+| **Hire a web/3D dev** | Money + lead time | Only if you want it owned by a person rather than a session, long-term. |
+| ~~The animator owns it~~ | — | **No.** Wrong craft, and brief §11 and §15 both promise him the runtime is on our side. Do not move this onto him. |
+
+**It needs an answer before P1-M2 — not before P1-M1.**
 
 The designer delivers a *rig*. Something has to **drive** it: read our landmark files, solve the IK,
 blend between signs, smooth the motion. A 3D artist does not normally write that, and it was
@@ -332,25 +372,54 @@ and how many sequences are left-dominant.
 
 ## THIS WEEK
 
-### ☐ 5. Read the ASL Citizen licence · ~30 min
+### ✅ 5. Read the ASL Citizen licence — **DONE 2026-09-03, I read it**
 
-**The single highest-leverage thing on this list**, and nobody has ever done it.
+**The verdict: the wall stands. But it is a different wall, and the difference is worth having.**
 
-83,399 videos · 2,731 signs · **52 signers** (Sem-Lex has 41, and signer count is one of the few
-dataset properties we have *measured* to matter). Commercial use routes through
-`ASL_Citizen@microsoft.com` — already a better shape than Sem-Lex's flat no.
+Quoted from Microsoft Research's dataset licence page:
 
-Read for four things, in order:
+| Question | Answer | The words |
+|---|---|---|
+| Commercial use? | **No** | rights "to use the Materials solely for **non-commercial, non-revenue generating**, research purposes" |
+| Share-alike / copyleft? | **NO — and this is the finding** | No such clause anywhere in the licence. |
+| Redistribute the data? | **No** | "you may not distribute the data or your modifications to the data"; "you will not … share, publish, distribute or lend the Materials" |
+| Publish results? | **Yes, conditionally** | "You may publish (or present papers or articles) on your results from using the Materials provided that no material or substantial portion of the Materials is included" |
+| Named commercial contact? | **Not on the licence page** | `MEDICAL_MVP_PLAN.md` cites `ASL_Citizen@microsoft.com`; that came from the download page or the paper, not the licence, so treat it as a plausible route rather than a stated one. |
 
-1. Does it permit **commercial** use or deployment?
-2. Is there a **share-alike-equivalent** clause? That is the one that bit us on Sem-Lex and it is
-   easy to skim past while reading for "non-commercial".
-3. Any constraint on **distributing model weights** trained on it?
-4. Clinical coverage — specifically the 16 words Sem-Lex could not supply: fever, chest, stomach,
-   nausea, rash, cramp, infection, sneeze, neck, shot, wheelchair, patient, stand, very, never.
+### What this changes, and what it does not
 
-**If it is permissive, the medical track stops being a feasibility study and becomes the product
-again.** That is why this is worth 30 minutes before anything else on this section.
+**It does not dissolve the licence wall.** "Non-revenue generating" is *stricter* than plain
+non-commercial — it plausibly rules out ad-supported and freemium too, not just paid. A commercial
+Deafference cannot be built on ASL Citizen any more than on Sem-Lex.
+
+**But the two walls are shaped differently, and that matters:**
+
+```
+Sem-Lex  (CC BY-NC-SA)   NC blocks commercial  +  SA arguably infects the trained weights,
+                                                  which forecloses even a FREE release
+ASL Citizen  (MSR)       NC blocks commercial  +  NO share-alike at all
+```
+
+So **if the product were ever a free, non-revenue accessibility tool, ASL Citizen is the cleaner
+base** — the share-alike problem that made me say a free Sem-Lex release was also foreclosed simply
+does not exist here. That is a genuinely new option on the board, and it was not visible before
+reading the text.
+
+Two things carry over unchanged: **redistribution is forbidden**, so the private-Kaggle-dataset rule
+applies to ASL Citizen exactly as it does to Sem-Lex; and **52 signers against Sem-Lex's 41** is
+still the reason to want it, since signer count is one of the very few dataset properties this
+project has *proved* matters.
+
+### The one thing left, and it is not reading
+
+**Email Microsoft and ask for commercial terms.** The licence does not offer them, which is not the
+same as refusing them — an accessibility application for Deaf patients is exactly the ask a research
+group is most likely to entertain. Route: `ASL_Citizen@microsoft.com`, unverified but plausible;
+otherwise the contact on the project page or the paper. **Do not guess an address.**
+
+**And the corpus decision is now unblocked.** "Record our own clinical corpus?" was gated on this
+task *and* on my clips-per-sign curve. This half is answered — both public options are non-commercial
+— so it now waits only on my curve, which prices the recording session.
 
 ### ☐ 6. Subset four fingerspelling shards · ~20 min
 
@@ -372,18 +441,62 @@ exactly the bug that nearly made me hand you confidently mislabelled output.
 Same rule as always: **a brand-new dataset name, never overwriting an existing one.** Keep it
 Private.
 
-### ☐ 8. Decide the 2s gate · ~30 min of reading, then a call
+### ☐ 8. Decide the 2s gate — **I have a recommendation: `off`, and it is not close**
 
-From **`docs/RESELECT_DIFF.csv`**. The trade is priced per word, so this is a product judgement, not
-a measurement — which makes it yours and not mine.
+You asked me to make this one. I measured all 250 rows of `docs/RESELECT_DIFF.csv` rather than the
+summary, and the picture is clearer than the task originally described.
 
-| Option | You get | You pay |
+**First, the thing that was not obvious: classes 1 and 2a are IDENTICAL on both sides.**
+
+```
+class    n   median cov (off)   median cov (2s-only)   regressed   improved
+1      163       0.901               0.901                0           0
+2a      35       0.829               0.829                0           0
+2s      52       0.877               0.468               51           0
+```
+
+Median valid candidates for 2a: **162 → 162, unchanged.** So the 2a win is already baked into *both*
+options — **`off` does not cost you the 2a gains.** I had assumed it might; it does not. The decision
+is purely about the 52 class-2s words and nothing else.
+
+**And on those 52, one option loses on every measured axis:**
+
+| | `off` | `2s-only` |
 |---|---|---|
-| `require_passive_up = 2s-only` | A passive wrist that is actually raised, so the mirrored handshape lands somewhere real | 51 words regress, **28 fall into tier C**, median valid candidates collapse 74 → 6 |
-| `require_passive_up = off` | Coverage holds on all 250 | Some 2s signs render a correct-looking hand at a wrong wrist |
+| words in tier C | **0** | **28** |
+| 2s median coverage | **0.877** | 0.468 |
+| 2s median valid candidates | **74** | **6** |
+| words regressed / improved | — | **51 / 0** |
 
-Both are defensible. The 28 words that would fall to tier C are named in the CSV — read them and
-decide whether any are load-bearing for the demo.
+**51 of 52 words get worse and not one gets better.** That is not a fix with a price; it is a trade
+where only one side has anything on it.
+
+### Three reasons I would not pay it
+
+**1. The candidate collapse is a hidden loss the tiers do not show.** 74 → 6 median means even the
+six words that *stay* in tier A are now selected from a handful of takes instead of seventy. `drop`
+is down to **1 valid candidate** — that is not selection, it is whatever survived. Quality loss on
+the survivors is real and invisible in the tier column.
+
+**2. `owie` falls A → C.** In a child-language corpus `owie` means *hurt*. For a clinical demo that
+is arguably the single most load-bearing word in the entire 250, and `cry` goes with it. Also on the
+casualty list: `hate`, `quiet`, `loud`, `finish`, `can`, `open`, `close`, `many`, `same`, `person`,
+`room`, `bath`, `book`.
+
+**3. The problem it fixes is smaller on 2s than on 2a.** 2s words are *symmetric* — the passive hand
+is a **mirror copy of the dominant hand**, not a shape invented from the seven-template library. The
+wrist-placement error that made the 2a fix worth having (a median 1.56 shoulder-widths off) is a much
+weaker effect when the hand you are placing is derived from a hand whose position you measured.
+
+### The honest caveat
+
+**What `2s-only` buys is not in the CSV.** It buys a passive wrist that is genuinely raised, and
+"some 2s signs render a correct-looking hand at a wrong wrist" is a *visual* defect I cannot measure
+from here. If you look at four of the 52 in the player and the wrong-wrist artefact is glaring, that
+outweighs my table.
+
+**So: 15 minutes, not 30.** Open the player, watch `store`, `book`, `cry` and `owie` with the gate
+`off`. If they read fine, set `off` and close this. That is what I would do.
 
 ### ☐ 9. Kezar / Gallaudet — put a date on it · 2026-09-07
 
@@ -454,11 +567,12 @@ No deadline on these, but each gates something.
 | Decision | Gates | Status |
 |---|---|---|
 | ~~**Push the unpushed commits?**~~ | — | ✅ **CLOSED 2026-09-03.** 16 commits pushed to `origin/Mhmd-Salim`. |
-| **Who owns the runtime** (task 2B) | 3 acceptance tests, the animator's test harness, and whether the rig can be driven at all | Needed before P1-M2, not P1-M1. **Still open.** |
+| **Who owns the runtime** (task 2B) | 3 acceptance tests, the animator's test harness, and whether the rig can be driven at all | **Prerequisite found 2026-09-03: the player source is not in this repo.** Ask Ghozlan for it first — one message — then decide. |
 | **Is he a rigger?** (task 2C) | Whether phase 1's deliverable matches his craft at all | **New 2026-09-03.** He does avatar *animation*; phase 1 is 100% rigging and skinning, with animation explicitly forbidden. Not a problem yet — but the answer changes how we schedule and review. |
-| The 2s gate (task 8) | The avatar's final quality on 28 words | Priced, waiting on you |
-| **Record our own clinical corpus?** | Whether the medical track ever ships | Gated on task 5 **and** on my clips-per-sign curve. Do not decide before both. |
-| **The blockout price conversation** (task 2A) | Possibly the designer's estimate | The brief's word "blockout" was ambiguous; v5 §5 resolves it and invites them to reprice. Our wording, our problem. |
+| The 2s gate (task 8) | The avatar's final quality on 28 words | **Recommendation ready: `off`.** 51 of 52 words regress, zero improve, and classes 1 and 2a are unaffected either way. 15 min of looking, then a call. |
+| **Record our own clinical corpus?** | Whether the medical track ever ships | **Half-unblocked 2026-09-03.** Task 5 is answered: ASL Citizen is non-commercial too, so no public corpus permits a paid product. Now waits only on my clips-per-sign curve, which prices the session. |
+| **The blockout price conversation** (task 2A) | Possibly his estimate | The brief's word "blockout" was ambiguous; §5 resolves it and invites him to reprice. Our wording, our problem. |
+| **A free, non-revenue release?** | Whether ASL Citizen is usable at all | **New 2026-09-03.** ASL Citizen has **no share-alike**, unlike Sem-Lex — so a free non-revenue tool is licence-clean on it where it was arguably not on Sem-Lex. Only worth deciding if the commercial route is genuinely closed. |
 
 ---
 
