@@ -424,6 +424,17 @@ is optional except the legs.**
 The **landmark** column is the index in our 75-point data (see §7). A dash means the bone is not
 driven directly by a landmark — it is either structural or solved by the IK chain.
 
+> **Where each name comes from, exactly** — because you were right to ask whether these are standard.
+>
+> - **52 of the 55 are measured, not asserted.** We read them straight out of the running player,
+>   with a per-name count of how many of the 250 clips actually animate each one. That evidence is in
+>   §6.3. These are not names we chose; they are names our code already drives.
+> - **`Hips` and `HeadTop_End`** are Mixamo convention. Neither is driven by our data, so if your
+>   pipeline names the root or the head leaf differently, say so and it costs nothing.
+> - **The ten tip nodes (`…Thumb4`, `…Index4`, …) are new by definition** — they are the ones today's
+>   rig is missing, so they cannot appear in a measurement of today's rig. Their names are Mixamo's
+>   (§6.1), and they are the reason this phase exists (§6.3).
+
 #### Torso, neck and head — 7 bones
 
 | # | bone | parent | landmark | note |
