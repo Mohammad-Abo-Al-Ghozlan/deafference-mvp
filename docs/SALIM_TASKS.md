@@ -1,7 +1,11 @@
 # What's on Salim — the ordered task list
 
-**Written 2026-09-01.** Derived from the cross-track plan of 2026-08-31, updated for the avatar
-designer hire decided on 2026-09-01.
+**Written 2026-09-01 · updated 2026-09-03.** Derived from the cross-track plan of 2026-08-31.
+
+> **Closed since the last revision:** the 16 unpushed commits are **pushed** (`97dbc64..1d0a59d` →
+> `origin/Mhmd-Salim`, `main` untouched). The avatar brief is now one self-contained file at v6.1.
+> And the hire's discipline is corrected throughout: **he is a 3D avatar animator, not a character
+> artist** — which opens task 2C.
 
 Only **your** tasks are here. What is on me is listed at the end so you can track it, but there is
 nothing for you to do in that section.
@@ -171,6 +175,34 @@ the runtime question bites at integration.
 
 Tell me which way this lands and I will write whatever fills the gap — including a standalone
 file-level verifier that covers tests 1, 2, 6, 12, 13 and 14 with no runtime at all.
+
+### ☐ 2C. Ask one question: is he a rigger, or an animator? · ~1 min to ask
+
+**New 2026-09-03, and it is the highest-value question on this page** because it is cheap to ask and
+expensive to discover late.
+
+He does **3D avatar animation.** Phase 1 contains **no animation at all** — it is a skeleton, a hand
+rig, weights, a blockout body, and seven static hand poses. §12 explicitly forbids shipping animation
+clips. So the deliverable and his stated craft are adjacent, not the same.
+
+**This is very possibly fine.** Avatar work is rigging-heavy — VRM, VTuber and metaverse avatars live
+or die on the rig — so plenty of people who describe themselves as avatar animators rig to a high
+standard. His two questions were also *good* questions: the four-nodes one was the correct thing to
+push back on given our wording, and it means he is reading properly rather than nodding along.
+
+**But do not infer it.** Ask directly, and make both honest answers safe:
+
+> Quick one so we schedule this right: how much of your work is **rigging and skinning** versus
+> animating? Phase 1 is entirely the former — you never key a frame. If rigging is not the part you
+> are strongest at, that is completely fine and much better said now: we can stretch the P1-M1 and
+> P1-M2 reviews, or you can bring in a rigger for phase 1 and stay on the parts you are best at.
+> No wrong answer, and it does not change whether we work together.
+
+§18 Q3 now asks this in the brief, so sending v6.1 (task 2A) asks it for you. **Do both.**
+
+If the answer is "mostly animation": the schedule changes, not the plan. Move the P1-M1 gate earlier
+and make it a working session rather than a script run — the whole point of P1-M1 is that it is a
+`.glb` and four scripted tests, which is the cheapest possible place to find a rigging gap.
 
 ### ☐ 4. Fingerspelling `--report` on one real shard · ~15 min, mostly waiting
 
@@ -375,7 +407,7 @@ What is waiting: 16 gloss rows (`docs/CLINICAL_GLOSS_REVIEW.csv`) · 22 handshap
 (`docs/HANDEDNESS_CROSSCHECK.csv`) · `asl_2a_base_placement.json`, which is **blocking Ghozlan** ·
 the 250 exemplars.
 
-### ☐ 11. Get the designer's answers to §18 — even though they are hired
+### ☐ 11. Get his answers to §18 — even though he is hired
 
 The hire is done, but **§18's eight questions are still worth collecting**, because three of them
 change what happens next rather than whether to hire:
@@ -401,8 +433,9 @@ No deadline on these, but each gates something.
 
 | Decision | Gates | Status |
 |---|---|---|
-| **Push the 8 unpushed commits?** | Nothing technical, but the work is only on your machine | Standing rule: I never push without asking. Asked 5 times, still open. |
-| **Who owns the runtime** (task 2B) | 3 acceptance tests, the designer's test harness, and whether the rig can be driven at all | **New today.** Needed before P1-M2, not P1-M1. |
+| ~~**Push the unpushed commits?**~~ | — | ✅ **CLOSED 2026-09-03.** 16 commits pushed to `origin/Mhmd-Salim`. |
+| **Who owns the runtime** (task 2B) | 3 acceptance tests, the animator's test harness, and whether the rig can be driven at all | Needed before P1-M2, not P1-M1. **Still open.** |
+| **Is he a rigger?** (task 2C) | Whether phase 1's deliverable matches his craft at all | **New 2026-09-03.** He does avatar *animation*; phase 1 is 100% rigging and skinning, with animation explicitly forbidden. Not a problem yet — but the answer changes how we schedule and review. |
 | The 2s gate (task 8) | The avatar's final quality on 28 words | Priced, waiting on you |
 | **Record our own clinical corpus?** | Whether the medical track ever ships | Gated on task 5 **and** on my clips-per-sign curve. Do not decide before both. |
 | **The blockout price conversation** (task 2A) | Possibly the designer's estimate | The brief's word "blockout" was ambiguous; v5 §5 resolves it and invites them to reprice. Our wording, our problem. |
