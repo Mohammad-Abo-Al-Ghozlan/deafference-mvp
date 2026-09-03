@@ -122,6 +122,25 @@ ARTIFACTS    = HERE / "artifacts"
 VOCAB_PATH   = HERE / "vocab_30.json"
 WORD_ACC_PATH = None        # optional {word: test_acc} JSON (set for --vocab250); shown in word panel
 
+# ── clinical safety gates (stage 7; set by --medical) ────────────────────────
+# SAFETY_NEVER_AUTO holds words that may be RECOGNISED but must never be spoken on
+# the model's own authority, whatever the confidence. They are the words where a
+# wrong guess changes clinical meaning rather than just sounding odd: negation,
+# severity, certainty, and red-flag symptoms. A held word falls through to the
+# top-K chips, so committing it takes one deliberate human tap.
+#
+# This is not a preference. On the 123-class medical ensemble, measured on 1,373
+# held-out clips from 9 unseen signers (safety_gates_medical.json):
+#   hot  -> bad     5 clips, 16% of the class   a fever reported as "bad"
+#   ear  -> skin    3 clips, 60% of the class   wrong body site, most of the time
+#   heart-> big / feel / tired / water          every one a MISSED red flag
+# and the model ships `no` (0.909) while `yes` (0.714) is below the ship gate, so
+# it can render a refusal but not a consent. See docs/MEDICAL_SAFETY_GATES.md.
+TOPIC_GLOB = "topic_*.json"       # which topic masks the T key offers; narrowed by --medical
+SAFETY_NEVER_AUTO = frozenset()   # word -> requires an explicit tap to commit
+SAFETY_CANNOT_SAY = {}            # word -> {reason, test_acc} for words we cannot express
+SAFETY_GATES_PATH = None          # set by --medical
+
 # The FINAL 5-fold exported models. Ensemble = all five; --single = fold-0 only.
 ENSEMBLE_MODELS = [ARTIFACTS / f"savedmodel_fold{k}" for k in range(5)]
 SINGLE_MODELS   = [ARTIFACTS / "savedmodel_fold0"]
@@ -380,6 +399,11 @@ def build_masks(words, demo_path=None, demo_idx=None) -> list:
     def _of(path: Path):
         raw = json.loads(path.read_text(encoding="utf-8"))
         allow = raw["words"] if isinstance(raw, dict) else raw
+        # `if w in words` drops anything the loaded vocabulary lacks. That is deliberate and
+        # stays silent HERE: these are auto-discovered topic files, and under a different
+        # vocabulary most of their words are legitimately absent, so a warning per file would
+        # bury the one case that matters. A mask the user NAMED is different — main() warns
+        # about its unknown words before this runs (see the DEMO_WORDS_PATH block).
         idx = sorted({words.index(w) for w in allow if w in words})
         return np.array(idx, dtype=np.int64) if idx else None
 
@@ -388,7 +412,10 @@ def build_masks(words, demo_path=None, demo_idx=None) -> list:
         # Same label whether the mask arrived via --words or was discovered on disk; the name
         # is shown on the debug overlay, so "topic_everyday" vs "everyday" would read as two.
         out.append((demo_path.stem.replace("topic_", ""), demo_idx))
-    for p in sorted(HERE.glob("topic_*.json")):
+    # TOPIC_GLOB is narrowed by --medical: the shipped topic_*.json are the 250-word demo's
+    # topics (animals, colors, food), so under the clinical vocabulary they would offer the
+    # T key a set of accidental part-masks that mean nothing clinically.
+    for p in sorted(HERE.glob(TOPIC_GLOB)):
         if demo_path is None or p.name != demo_path.name:
             m = _of(p)
             if m is not None:
@@ -921,6 +948,20 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
             now_line = "not sure - tap 1-5 below, or sign again"
             state["cand_committed"] = False          # nothing appended; chips are choices
             return
+        # CLINICAL SAFETY GATE (#stage 7). Confidence is not authority. A word that
+        # carries negation, severity, certainty or a red-flag symptom is held here
+        # even at conf 1.00, and reaches the sentence only through a deliberate tap.
+        # Deliberately placed AFTER decide_commit so the debug overlay still shows
+        # what the model wanted to do, and BEFORE gloss_buf/speaker so a held word
+        # is neither displayed as committed nor spoken.
+        if word in SAFETY_NEVER_AUTO:
+            now_line = f"confirm '{word}' - tap 1-5 (safety-critical)"
+            state["cand_committed"] = False          # a tap APPENDS rather than replaces
+            dbg.update(decision="SAFETY_HOLD",
+                       reason=f"{word} needs explicit confirmation (c{conf:.2f})")
+            print(f"[safety] HELD '{word}' c{conf:.2f} — needs an explicit tap "
+                  f"(never-auto-commit list)")
+            return
         w, t = last_commit                               # same word twice within DUP_SECONDS =
         if word == w and time.time() - t < DUP_SECONDS:  # one held sign, not two -> do NOT
             return                                       #   paint it committed (was a bug)
@@ -1426,6 +1467,15 @@ if __name__ == "__main__":
     ap.add_argument("--vocab250", action="store_true",
                     help="use the 250-word model (artifacts_250/ + vocab_250.json) "
                          "instead of the default 30-word demo")
+    ap.add_argument("--medical", action="store_true",
+                    help="use the 123-class CLINICAL model (artifacts_medical/ + "
+                         "vocab_medical_123.json). Test 0.8383 on 1,373 clips from 9 "
+                         "held-out signers — better than the 250-word 0.7755, on more "
+                         "unseen signers. Enables the clinical safety gates "
+                         "(safety_gates_medical.json): 10 safety-carrying words never "
+                         "auto-commit. Trained WITHOUT --canonical-hand, so --canonical "
+                         "is refused. ⚠️ Sem-Lex is CC BY-NC-SA: NON-COMMERCIAL, and "
+                         "share-alike arguably reaches these weights. Demo/research only.")
     ap.add_argument("--conf", type=float, default=None,
                     help="override the commit confidence gate (sets BOTH L1_CONF and L2_CONF, "
                          "the thresholds decide_commit actually reads). Measured on the 250 "
@@ -1560,6 +1610,110 @@ if __name__ == "__main__":
                   "(hello/food/hat) at 250 words. Strongly recommend running WITHOUT --fast.")
         print(f"[cfg] 250-word model from {ARTIFACTS} "
               f"(complexity-1 MediaPipe, hand-quality gate, robust commit, AI on DONE)")
+    if args.medical:                       # the 123-class clinical ensemble (folds 0-3)
+        if args.vocab250:
+            sys.exit("[err] --medical and --vocab250 are different models with different "
+                     "class counts. Pick one.")
+        # canonical_hand is recorded as FALSE in all four of artifacts_medical/
+        # eval_all250_fold{0..3}.json, so the pairing is not a guess. Refuse rather than
+        # warn: mixing them degrades left-dominant signers with no error at all.
+        if args.canonical:
+            sys.exit("[err] the medical weights were trained with canonical_hand=false "
+                     "(see artifacts_medical/eval_all250_fold*.json). --canonical would "
+                     "put the dominant hand in a block these weights have never seen, and "
+                     "it fails SILENTLY on left-dominant signers. Drop --canonical.")
+        ARTIFACTS = HERE / "artifacts_medical"
+        if args.artifacts:
+            p = Path(args.artifacts)
+            ARTIFACTS = p if p.is_absolute() else HERE / p
+            if not ARTIFACTS.is_dir():
+                sys.exit(f"[err] --artifacts {ARTIFACTS} is not a directory")
+        missing = [k for k in range(4)
+                   if not (ARTIFACTS / f"savedmodel_fold{k}" / "saved_model.pb").exists()]
+        if missing:
+            sys.exit(f"[err] {ARTIFACTS} is missing savedmodel_fold{missing} (need folds "
+                     f"0-3, each with saved_model.pb). They are in the Kaggle notebook "
+                     f"semlex-medical-v2 -> Output -> art_medical/.")
+        VOCAB_PATH = HERE / "vocab_medical_123.json"
+        WORD_ACC_PATH = HERE / "word_acc_medical.json"
+        ENSEMBLE_MODELS = [ARTIFACTS / f"savedmodel_fold{k}" for k in range(4)]
+        SINGLE_MODELS = [ARTIFACTS / "savedmodel_fold0"]
+        # The shipped topic_*.json are the 250-word demo's child-language topics (animals,
+        # colors, food). Under the clinical vocabulary they resolve to accidental part-masks
+        # — topic_everyday would become 18 unrelated words — so offer the clinical ones only.
+        TOPIC_GLOB = "topic_medical_*.json"
+        DEFAULT_TOPIC = "medical_ship55"
+        # THE check that stops the whole class of label-shift bugs. vocab_medical.json
+        # (128 words, a pre-training wish list) still sits in this repo next to
+        # vocab_medical_123.json, and pointing the demo at it would not raise: words[i]
+        # for i < 123 resolves fine and every label is simply WRONG. Compare the loaded
+        # vocabulary against the exported model's own output dimension instead.
+        _v = json.loads(VOCAB_PATH.read_text(encoding="utf-8"))["words"]
+        try:
+            import tensorflow as _tf
+            _sig = _tf.saved_model.load(str(ENSEMBLE_MODELS[0])).signatures
+            _out = _sig["serving_default" if "serving_default" in _sig
+                        else list(_sig)[0]].structured_outputs
+            _n_out = int(list(_out.values())[0].shape[-1])
+        except Exception as _e:                      # never let the check itself be fatal
+            print(f"[warn] could not read the model's output dim ({type(_e).__name__}); "
+                  f"--selftest still checks this.")
+            _n_out = len(_v)
+        if _n_out != len(_v):
+            sys.exit(f"[err] {VOCAB_PATH.name} has {len(_v)} words but "
+                     f"{ENSEMBLE_MODELS[0].name} outputs {_n_out} classes. Every label "
+                     f"would be shifted and NOTHING would raise. Use the vocab file whose "
+                     f"order came from split_manifest.parquet.")
+        # Clinical safety gates. Loaded here, enforced in the commit path.
+        SAFETY_GATES_PATH = HERE / "safety_gates_medical.json"
+        if SAFETY_GATES_PATH.exists():
+            _g = json.loads(SAFETY_GATES_PATH.read_text(encoding="utf-8"))
+            SAFETY_NEVER_AUTO = frozenset(_g["never_auto_commit"])
+            SAFETY_CANNOT_SAY = _g["cannot_express"]
+            print(f"[safety] {len(SAFETY_NEVER_AUTO)} words never auto-commit "
+                  f"(explicit tap required): {', '.join(sorted(SAFETY_NEVER_AUTO))}")
+            print(f"[safety] {len(SAFETY_CANNOT_SAY)} clinically critical concepts this "
+                  f"model CANNOT express: {', '.join(sorted(SAFETY_CANNOT_SAY))}")
+            print("[safety] ASYMMETRIC NEGATION: 'no' ships at 0.909, 'yes' does not "
+                  "(0.714).\n         This build can render a refusal and cannot render a "
+                  "consent.\n         Do NOT use it to obtain or record consent.")
+        else:
+            print(f"[warn] {SAFETY_GATES_PATH.name} missing — NO clinical safety gate is "
+                  f"active. Regenerate it before showing this to anyone.")
+        # 123 classes sits between the 30- and 250-word models, and the gate values below
+        # are the 250-word ones. They are NOT measured for this model — measure_conf_gate.py
+        # has never been run against artifacts_medical. Carried over deliberately rather
+        # than invented, and said out loud, because guessing a threshold silently is how
+        # this project lost three months (see the --words handler below).
+        CONF_GATE = 0.42
+        EARLY_CONF = 0.42
+        EARLY_SURE = 0.72
+        PREVIEW_SEC = 0.20
+        EARLY_MIN_SEC = 0.80
+        STILL_SEC = 0.40
+        END_SEC = 0.60
+        MAX_SEG_SEC = 3.0
+        PRE_ROLL = 12
+        SHOW_TOPK = 5          # top-5 is 0.9512 here vs top-1 0.8383 — the tap is primary
+        L1_CONF, L1_MARGIN, Q_STRONG = 0.58, 0.18, 0.45
+        L2_CONF, L2_MARGIN, L2_STABLE = 0.40, 0.10, 2
+        USE_TTA = False
+        # NOT auto-enabling --ai, unlike --vocab250. On the 250-word demo an LLM tidying
+        # "me hungry" into a sentence is harmless. Here it would paraphrase clinical
+        # content — and the gloss buffer is exactly the negation/severity material the
+        # safety gates above exist to protect. Opt in with --ai if you want it.
+        if not args.ai:
+            print("[cfg] AI sentence-building is OFF (unlike --vocab250). An LLM "
+                  "rephrasing clinical\n      glosses can change meaning; pass --ai "
+                  "explicitly if you accept that.")
+        print(f"[cfg] 123-class MEDICAL model from {ARTIFACTS} — test 0.8383 "
+              f"(top-5 0.9512), 9 held-out signers")
+        print("[cfg] ⚠️  gate values are inherited from the 250-word model and are "
+              "UNMEASURED here.\n      Run measure_conf_gate.py against artifacts_medical "
+              "before quoting a commit rate.")
+        print("[licence] Sem-Lex is CC BY-NC-SA: NON-COMMERCIAL, and share-alike "
+              "arguably reaches\n          these weights. Demo and research only — not a "
+              "shippable product.")
     if args.canonical:
         CANONICAL_HAND = True
         print("[cfg] CANONICAL weights: segments mirrored so the signing arm reads as right "
@@ -1574,7 +1728,7 @@ if __name__ == "__main__":
         L1_CONF = L2_CONF = CONF_GATE = args.conf
         print(f"[cfg] commit gate: L1_CONF = L2_CONF = {args.conf} "
               f"(margins unchanged: L1 {L1_MARGIN}, L2 {L2_MARGIN})")
-    elif args.words or args.vocab250:
+    elif args.words or args.vocab250 or args.medical:
         # Also fires for a bare --vocab250 now, because that auto-starts on a topic mask rather
         # than on all 250 — so the renormalization footgun below applies even with no --words.
         # A footgun worth shouting about. _mask_probs RENORMALIZES over the allowed classes, so

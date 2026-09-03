@@ -27,6 +27,22 @@ artifacts_250_canonical/
 # ^ the 2026-08-27 canonical+decimate ensemble. savedmodel_fold*/ below already ignores the
 # weights, but not the vocab_250.json / PROVENANCE.json beside them, so the directory kept
 # showing up as untracked. Ignore the whole thing, same as the two above it.
+artifacts_medical/
+data_medical/
+# ^ the 123-class Sem-Lex clinical ensemble + its split manifest, off Kaggle 2026-09-03.
+# Ignored for TWO reasons, not one:
+#   1. size — 4 SavedModels + 4 EMA + 4 .weights.h5, and by_word/ is 380 MB.
+#   2. LICENCE — Sem-Lex is CC BY-NC-SA. split_manifest.parquet is per-clip derived
+#      metadata from a non-commercial corpus and this repo's visibility is unverified,
+#      so redistributing it is Salim's judgement call, not a default.
+# The files the demo needs that are SAFE to track live at the repo root instead:
+# vocab_medical_123.json, word_acc_medical.json, clinical_ship_vocab.json,
+# safety_gates_medical.json, topic_medical_*.json. Rebuild the rest from the Kaggle
+# notebook semlex-medical-v2 -> Output -> art_medical/ + data_medical/.
+semlex_metadata.csv
+# ^ 91,148 rows of Sem-Lex ASL-LEX annotation. Same CC BY-NC-SA redistribution question.
+gap_stats.txt
+# ^ per-sequence fingerspelling metadata from the Google competition corpus. Same reason.
 *_backup/
 __pycache__/
 *.pyc

@@ -1,0 +1,717 @@
+{
+ "policy_version": 1,
+ "generated_from": {
+  "model": "artifacts_medical/savedmodel_fold{0..3}",
+  "n_classes": 123,
+  "ensemble_test_acc": 0.8383,
+  "test_split": "1373 clips, 9 held-out signers",
+  "confusion_matrix": "artifacts_medical/ensemble_test.confusion.csv (123x123, row=true, col=predicted, indexed by vocab_medical_123.json)"
+ },
+ "how_to_read_this": [
+  "never_auto_commit: these words may be RECOGNISED but must never be spoken without an explicit human confirmation, whatever the confidence. They carry negation, severity, certainty or a red-flag symptom \u2014 the four places where a wrong word changes clinical meaning rather than just sounding odd.",
+  "cannot_express: clinically critical concepts this model CANNOT produce. The UI must surface this list to the user, because a system that silently lacks 'yes' while confidently saying 'no' is worse than one that says neither.",
+  "dangerous_confusions: every measured test-split confusion that crosses a safety line. Not predictions \u2014 observed errors on held-out signers."
+ ],
+ "never_auto_commit": {
+  "always": {
+   "test_acc": 0.8,
+   "categories": [
+    "certainty"
+   ]
+  },
+  "bad": {
+   "test_acc": 0.952,
+   "categories": [
+    "severity_change"
+   ]
+  },
+  "big": {
+   "test_acc": 0.967,
+   "categories": [
+    "severity_change"
+   ]
+  },
+  "blood": {
+   "test_acc": 0.889,
+   "categories": [
+    "red_flag"
+   ]
+  },
+  "breathe": {
+   "test_acc": 1.0,
+   "categories": [
+    "red_flag"
+   ]
+  },
+  "help": {
+   "test_acc": 0.966,
+   "categories": [
+    "red_flag"
+   ]
+  },
+  "more": {
+   "test_acc": 0.857,
+   "categories": [
+    "severity_change"
+   ]
+  },
+  "no": {
+   "test_acc": 0.909,
+   "categories": [
+    "negation_affirmation"
+   ]
+  },
+  "pain": {
+   "test_acc": 0.971,
+   "categories": [
+    "red_flag"
+   ]
+  },
+  "sick": {
+   "test_acc": 1.0,
+   "categories": [
+    "red_flag"
+   ]
+  }
+ },
+ "cannot_express": {
+  "all": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.444
+  },
+  "better": {
+   "reason": "trained but UNMEASURED (<5 held-out test clips)",
+   "test_acc": 1.0
+  },
+  "bleed": {
+   "reason": "trained but UNMEASURED (<5 held-out test clips)",
+   "test_acc": 0.75
+  },
+  "choke": {
+   "reason": "trained but UNMEASURED (<5 held-out test clips)",
+   "test_acc": 1.0
+  },
+  "faint": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.4
+  },
+  "heart": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.333
+  },
+  "hot": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.781
+  },
+  "maybe": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.533
+  },
+  "much": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.6
+  },
+  "not": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.647
+  },
+  "some": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.429
+  },
+  "sometimes": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.2
+  },
+  "strong": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.4
+  },
+  "weak": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.429
+  },
+  "worse": {
+   "reason": "trained but UNMEASURED (<5 held-out test clips)",
+   "test_acc": 1.0
+  },
+  "yes": {
+   "reason": "trained but too inaccurate to ship",
+   "test_acc": 0.714
+  }
+ },
+ "asymmetric_negation": {
+  "finding": "The model ships 'no' but not 'yes'. A patient answering a yes/no question can be rendered as a refusal and cannot be rendered as consent. Consent is exactly what a clinical setting needs.",
+  "no": {
+   "test_acc": 0.909,
+   "ships": true
+  },
+  "yes": {
+   "test_acc": 0.714,
+   "ships": false,
+   "excluded_reason": "below the 0.80 ship gate"
+  },
+  "required_mitigation": "Until 'yes' clears the gate, the demo must not be used to obtain or record consent, and the UI must say so."
+ },
+ "dangerous_confusions_n": 45,
+ "dangerous_confusions_from_ship_vocab_n": 15,
+ "dangerous_confusions": [
+  {
+   "true": "hot",
+   "predicted": "bad",
+   "clips": 5,
+   "share_of_true_class": 0.156,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "ear",
+   "predicted": "skin",
+   "clips": 3,
+   "share_of_true_class": 0.6,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "faint",
+   "predicted": "close",
+   "clips": 2,
+   "share_of_true_class": 0.4,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "why",
+   "predicted": "sick",
+   "clips": 2,
+   "share_of_true_class": 0.4,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "arm",
+   "predicted": "muscle",
+   "clips": 1,
+   "share_of_true_class": 0.5,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "baby",
+   "predicted": "blood",
+   "clips": 1,
+   "share_of_true_class": 0.029,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "back",
+   "predicted": "eye",
+   "clips": 1,
+   "share_of_true_class": 0.125,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "back",
+   "predicted": "skin",
+   "clips": 1,
+   "share_of_true_class": 0.125,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "big",
+   "predicted": "heart",
+   "clips": 1,
+   "share_of_true_class": 0.033,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "blood",
+   "predicted": "hospital",
+   "clips": 1,
+   "share_of_true_class": 0.111,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "close",
+   "predicted": "hot",
+   "clips": 1,
+   "share_of_true_class": 1.0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "cold",
+   "predicted": "pain",
+   "clips": 1,
+   "share_of_true_class": 0.026,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "doctor",
+   "predicted": "hot",
+   "clips": 1,
+   "share_of_true_class": 0.034,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "eat",
+   "predicted": "hot",
+   "clips": 1,
+   "share_of_true_class": 0.25,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "faint",
+   "predicted": "skin",
+   "clips": 1,
+   "share_of_true_class": 0.2,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "finish",
+   "predicted": "hot",
+   "clips": 1,
+   "share_of_true_class": 0.033,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "hand",
+   "predicted": "bleed",
+   "clips": 1,
+   "share_of_true_class": 0.143,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "headache",
+   "predicted": "pain",
+   "clips": 1,
+   "share_of_true_class": 0.5,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "big",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "feel",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "tired",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "water",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "help",
+   "predicted": "now",
+   "clips": 1,
+   "share_of_true_class": 0.034,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "hot",
+   "predicted": "no",
+   "clips": 1,
+   "share_of_true_class": 0.031,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "hot",
+   "predicted": "thankyou",
+   "clips": 1,
+   "share_of_true_class": 0.031,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "look",
+   "predicted": "sick",
+   "clips": 1,
+   "share_of_true_class": 0.333,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "mouth",
+   "predicted": "eye",
+   "clips": 1,
+   "share_of_true_class": 0.5,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "much",
+   "predicted": "more",
+   "clips": 1,
+   "share_of_true_class": 0.2,
+   "kinds": [
+    "severity_change:INVERTS_MEANING"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "pill",
+   "predicted": "choke",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "pill",
+   "predicted": "pain",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "sleep",
+   "predicted": "faint",
+   "clips": 1,
+   "share_of_true_class": 0.026,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "sleep",
+   "predicted": "hot",
+   "clips": 1,
+   "share_of_true_class": 0.026,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "some",
+   "predicted": "blood",
+   "clips": 1,
+   "share_of_true_class": 0.143,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "some",
+   "predicted": "help",
+   "clips": 1,
+   "share_of_true_class": 0.143,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "start",
+   "predicted": "bleed",
+   "clips": 1,
+   "share_of_true_class": 0.1,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "start",
+   "predicted": "blood",
+   "clips": 1,
+   "share_of_true_class": 0.1,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "take",
+   "predicted": "sick",
+   "clips": 1,
+   "share_of_true_class": 0.167,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "teeth",
+   "predicted": "eye",
+   "clips": 1,
+   "share_of_true_class": 0.067,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "teeth",
+   "predicted": "mouth",
+   "clips": 1,
+   "share_of_true_class": 0.067,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "teeth",
+   "predicted": "nose",
+   "clips": 1,
+   "share_of_true_class": 0.067,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "tongue",
+   "predicted": "nose",
+   "clips": 1,
+   "share_of_true_class": 0.5,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "tongue",
+   "predicted": "teeth",
+   "clips": 1,
+   "share_of_true_class": 0.5,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "want",
+   "predicted": "pain",
+   "clips": 1,
+   "share_of_true_class": 0.059,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": true,
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "weak",
+   "predicted": "bleed",
+   "clips": 1,
+   "share_of_true_class": 0.143,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "when",
+   "predicted": "pain",
+   "clips": 1,
+   "share_of_true_class": 0.333,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "true_in_ship_vocab": false,
+   "predicted_in_ship_vocab": true
+  }
+ ],
+ "categories": {
+  "negation_affirmation": [
+   "no",
+   "not",
+   "yes"
+  ],
+  "severity_change": [
+   "bad",
+   "better",
+   "big",
+   "more",
+   "much",
+   "strong",
+   "weak",
+   "worse"
+  ],
+  "certainty": [
+   "all",
+   "always",
+   "maybe",
+   "some",
+   "sometimes"
+  ],
+  "red_flag": [
+   "bleed",
+   "blood",
+   "breathe",
+   "choke",
+   "faint",
+   "heart",
+   "help",
+   "hot",
+   "pain",
+   "sick"
+  ],
+  "body_site": [
+   "arm",
+   "back",
+   "bone",
+   "ear",
+   "eye",
+   "face",
+   "feet",
+   "hand",
+   "head",
+   "heart",
+   "lungs",
+   "mouth",
+   "muscle",
+   "nose",
+   "skin",
+   "teeth",
+   "throat",
+   "tongue"
+  ]
+ },
+ "category_words_not_in_model": {},
+ "limits": [
+  "The confusion matrix is 1,373 clips over 9 signers. A pair seen 1-2 times is an existence proof, not a rate.",
+  "34 of 123 classes have <5 test clips and are UNMEASURED. Absence from dangerous_confusions is therefore not evidence of safety for those words.",
+  "No Deaf or interpreter review has been applied to these categories yet. They are an engineer's reading of clinical risk and need a fluent reviewer."
+ ]
+}

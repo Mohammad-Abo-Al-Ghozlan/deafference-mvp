@@ -33,6 +33,104 @@ nothing for you to do in that section.
 
 ---
 
+## 🔴 URGENT, and it is not on the plan: the disk is full
+
+```
+C:  0.23 GB free of 237.16 GB          <- the only drive
+Downloads   22.22 GB                   <- the reclaim target
+OneDrive    18.33 GB
+```
+
+Windows at 230 MB free is not a "later" problem. **I could only extract 19.5 MB of the
+704 MB `results.zip`** — the four SavedModels and the small reports, which is exactly what
+stage 5 needed, so nothing is blocked *yet*. What is blocked is stage 6: it needs
+`semlex_medical_landmarks_v2.npz` (**384 MB**), and there is nowhere to put it.
+
+`results.zip` stays in the repo root and is gitignored, so it is safe where it is. Clear
+some of Downloads and the rest unpacks in a minute.
+
+---
+
+## ✅ CLOSED 2026-09-03 — the medical sign→speech demo runs, with clinical safety gates
+
+### ✅ Stage 5 — wired into `live_demo.py`. **Verified, not just written.**
+
+```
+python live_demo.py --medical --selftest      # passes: 123 outputs, 41 ms warm, 4-fold
+python live_demo.py --medical                 # boots on the 55-word ship mask
+```
+
+`--medical` loads `artifacts_medical/savedmodel_fold{0..3}` — **test 0.8383, top-5 0.9512,
+on 1,373 clips from 9 held-out signers.** That beats the 250-word model's 0.7755 on three
+times as many unseen signers, so **this is now the better recogniser we have**, licence
+aside.
+
+Four label-shift traps found and closed on the way, each of which would have failed silently:
+
+| what I found | why it mattered |
+|---|---|
+| `vocab_medical.json` has **128** words; the model has **123** classes | `words[i]` resolves fine for i<123 and *every label is wrong*. `--medical` now compares the vocabulary against the SavedModel's own output dim and refuses. Verified by pointing `--medical` at `artifacts_250` — it exits. |
+| the committed `clinical_ship_vocab.json` was **v1 (124 classes)** and named `hurt` | v2 merged `hurt`→`pain`. The v1 list against v2 weights would have quietly become a 54-word mask. Replaced with v2; the diff is recorded inside the file. |
+| the class order was nowhere on disk | It is `sorted(split_manifest.parquet['word'].unique())` — exactly `train.py:582`. Cross-checked: the two `<unnamed-class-NN>` entries resolve to indices 51 and 81, which are `how` and `sharp`, the two concepts `PROVENANCE.json` records as having no test clips. Frozen into `vocab_medical_123.json`. |
+| `canonical_hand` was unknown | **`false` in all four folds** (`eval_all250_fold*.json`). `--medical --canonical` is now *refused*, not warned about — that pairing fails silently on left-dominant signers. |
+
+**One thing I did NOT do:** invent gate thresholds. `L1_CONF`/`L2_CONF` are carried over
+from the 250-word model and are **unmeasured at 123 classes**; `--medical` says so at
+startup and names `measure_conf_gate.py`. Guessing one silently is how this project lost
+three months.
+
+**AI sentence-building is OFF for `--medical`**, unlike `--vocab250`. An LLM tidying
+"me hungry" is harmless; an LLM rephrasing clinical glosses can change meaning. Opt in
+with `--ai`.
+
+### ✅ Stage 7 — safety gates, built from measurement. **Needs a human reviewer, not code.**
+
+`safety_gates_medical.json` + **`docs/MEDICAL_SAFETY_GATES.md`** ← this is the document to
+put in front of a Deaf signer or medical interpreter.
+
+**The finding that matters:** the model ships `no` (0.909) and **cannot** ship `yes`
+(0.714). It can render a refusal and cannot render a consent. **This build must not be used
+to obtain or record consent** — it prints that at startup.
+
+- **10 words never auto-commit** (`no bad big more always pain blood breathe sick help`) —
+  held before the sentence and the speaker whatever the confidence, released by one tap.
+  Note they are among the *most* accurate words: the gate is about consequence, not
+  weakness.
+- **16 clinically critical concepts cannot be expressed** — incl. `not` 0.647, `heart`
+  0.333, `hot` 0.781 (*fever*), and `choke` which scored 1.000 **on a single clip**.
+- **45 measured safety-crossing confusions**, 15 reachable from the 55. Worst two are real
+  rates, not single-clip noise: **`hot`→`bad` 16% of the class** and **`ear`→`skin` 60%**.
+
+⚠️ **The five risk categories in §5 of that doc are my judgement, not measurement.** It
+lists five specific questions for the reviewer. The sharpest one: **`fever`, `nausea`,
+`vomit`, `chest` and `stomach` were pruned before training** for too few clips — a clinical
+tool without `fever` may not be a clinical tool.
+
+### ◐ Stage 6 — avatar. Blocked on three things, but I found a shortcut worth having.
+
+**Blocked by:** the 384 MB npz (no disk) · the rig (not delivered) · the player runtime
+(task 2B — not in this repo).
+
+**The shortcut.** The avatar lexicon covers only **15 of the 55** ship words, so 40 needed
+authoring. But `semlex_metadata.csv` — already sitting in your repo root, 91,148 rows —
+carries the **full ASL-LEX phonological annotation set**: `Sign Type`, `Nondominant
+Handshape`, `Major`/`Minor Location`, `Contact`, `Thumb Position`. These are the exact
+fields §6/§9/§10 and Appendix B of the brief need.
+
+```
+ship55 already in asl_handedness_250.json :  15
+ship55 missing                            :  40
+  ...with an ASL-LEX Sign Type            :  39
+  ...needing hand authoring               :   1   ('hand')
+within-word disagreement across 111 words :   0   <- annotations are per-sign and consistent
+```
+
+**39 of the 40 are fillable from data.** Stage 6's lexicon gap is a scripting job, not an
+authoring job — and it needs no disk, no rig and no GPU, so it is the one part of stage 6
+that can be done now.
+
+---
+
 ## ✅ CLOSED on 2026-09-01
 
 ### ✅ 1. Rotate the three burned credentials — **DONE**
