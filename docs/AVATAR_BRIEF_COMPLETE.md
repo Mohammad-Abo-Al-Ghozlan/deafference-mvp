@@ -1,6 +1,6 @@
 # Avatar Brief — PHASE 1: the skeleton and rig
 
-**For:** the contracted 3D character artist / rigger
+**For:** the contracted 3D avatar artist — **phase 1 is rigging and a blockout body, not animation**
 **From:** Deafference (Mohammed Salim, technical lead)
 **Version:** 6.1 · 2026-09-03 · **the complete brief — supersedes v4, v5 and Addendum 1**
 
@@ -110,7 +110,7 @@ earlier version of this brief, skip to the change table at the top — and note 
 which correct numbers you may already have written down.)*
 
 > Hi — we're building a signing avatar for a Deaf-accessibility product (speech in, sign language
-> out). We need a 3D character artist / rigger.
+> out). We need someone who works on 3D avatars, and **the rig is the part we care about most.**
 >
 > We're splitting the job in two. **Right now we only want the skeleton and rig** — a working
 > rigged blockout body, no styling, no clothing, no face detail. Once that's proven we'll decide
@@ -133,7 +133,7 @@ which correct numbers you may already have written down.)*
 
 | | |
 |---|---|
-| **The artist (you)** | **Phase 1:** the skeleton, the hand rig, the blockout body, the weights, the pose library. **Phase 2 (later, separate):** the character design. |
+| **The avatar artist (you)** | **Phase 1:** the skeleton, the hand rig, the blockout body, the weights, the pose library. **No animation** — see the note below. **Phase 2 (later, separate):** the character design. |
 | **Salim** (us) | The motion data, the sign linguistics, and **your single point of contact.** We ship per-word landmark clips. We never touch your rig. |
 | The runtime | Loads your rig in Three.js, aims the bones, blends between signs, smooths the motion. Owned on our side. |
 
@@ -146,8 +146,22 @@ which correct numbers you may already have written down.)*
 > moved to integration and are **not a gate on your payment.** Your P1-M1 gate is tests 1, 2 and 4,
 > where test 4 for you means "no scale channels on bones and no stretchy IK in the exported file".
 
-You are **not animating.** You are building a **puppet driven by measured human motion** — 30 frames
-a second of real Deaf signers' hands, recorded as points in space.
+### If your background is avatar *animation*, read this paragraph
+
+**Phase 1 contains no animation at all.** You are building a **puppet driven by measured human
+motion** — 30 frames a second of real Deaf signers' hands, recorded as points in space — and the
+motion is already recorded. You deliver a rig and a handful of static poses. You never key a frame,
+and §12 explicitly forbids shipping animation clips.
+
+**That is not a demotion of the job, it is where the difficulty moved to.** Everything an animator
+would normally fix on the timeline has to be right *in the rig instead*, because there is no timeline
+to fix it on — the data plays straight through your skeleton, 250 words, unattended. So the animator's
+eye is exactly the eye we want; it just has to be aimed at joint placement, roll and weights rather
+than at curves and keys. §6.12 is the list of what goes wrong when it isn't.
+
+**One practical consequence: rigging and skinning are the whole deliverable.** If those are not your
+strongest area, that is completely fine and worth saying now rather than at P1-M2 — see §18 question
+3. It changes how we schedule and review, not whether we work together.
 
 > **The one sentence that matters most.** A rig that looks perfect in your viewport can be
 > **silently wrong** under this data. It will load, it will move, and nothing will report an error.
@@ -1489,8 +1503,12 @@ An hour here is well spent.
    or would you rather deliver a name map? Either is fine. If you rig with Rigify or an auto-rigger,
    how will you produce the clean export skeleton, **and how will you add the finger tip nodes**,
    which Rigify does not generate?
-3. Have you rigged hands for **IK-driven, position-target** animation before? If not, say so — it is
-   learnable, and we would much rather plan for it than discover it at P1-M3.
+3. **How much of your work is rigging and skinning, as opposed to animating?** Phase 1 is entirely
+   the former. And specifically: have you rigged hands for **IK-driven, position-target** animation
+   before — where the software is given point positions and solves the rotations, rather than an
+   animator setting them? If not, say so plainly. It is learnable, there is no wrong answer here, and
+   we would much rather plan for it than discover it at P1-M3. If you would rather partner with a
+   rigger for phase 1 and stay on the parts you are strongest at, tell us — that is a normal answer.
 4. **How will you solve the forearm twist** (§6.7) — weights, or a twist bone? If a twist bone, we
    need to know at P1-M1 so the runtime can drive it.
 5. Starting from scratch, or from a base mesh or base rig (Avaturn, Ready Player Me, MetaHuman,
