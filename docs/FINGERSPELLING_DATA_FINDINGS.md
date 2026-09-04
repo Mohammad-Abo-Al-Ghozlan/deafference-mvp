@@ -15,10 +15,47 @@ counts as one-seventeenth of the whole. Every number below is measured, not esti
 
 ## The seven findings, in order of how much they change what we build
 
-### 1. 🔴 130 sequences will make the CTC loss NaN. Drop them before the first training run.
+### 1. 🔴 130 sequences must be dropped before the first training run.
 
-**`T < phrase_len` in 130 sequences (3.25%).** A CTC model cannot emit more labels than it has
-timesteps — the loss is `-inf`, and in practice the run dies or silently produces `nan` gradients.
+> ## ⚠️ CORRECTED 2026-09-04 — it does NOT crash, and that is worse
+>
+> This section originally said the loss is `-inf` and "the run dies or silently produces
+> `nan` gradients". **Measured against `tf.nn.ctc_loss` on TF 2.17, that is wrong:**
+>
+> ```
+> feasible row            ->    7.6    9.3   10.9      (healthy)
+> logit_length 1 < L=3    ->  707.9    9.3   10.9      FINITE
+> logit_length 0          ->  706.9    9.3   10.9      FINITE
+> ```
+>
+> TF floors the log-probability and returns a **large finite value, ~70–90× a healthy row.**
+> So nothing crashes, no `nan` appears, and **an `is_finite()` guard never fires** — those
+> sequences instead dominate the gradient and quietly steer the model at nothing learnable.
+> A crash you notice; this you do not. `train_ctc.py` therefore guards by **length**, not by
+> `is_finite`, and its `--selftest` asserts the 707-vs-10 behaviour so the correction cannot
+> silently rot.
+>
+> **Second correction: the requirement is `T_out >= phrase_len + adjacent_repeats`,** not
+> `T_out >= phrase_len`. CTC collapses runs of the same symbol, so a repeat needs a blank
+> wedged between the pair — `ll` costs three timesteps, not two. Measured:
+> `[3,3,1]` at T=3 → 710 (infeasible), at T=4 → 6.99 (fine).
+>
+> **Third: it applies at the MODEL's time resolution.** A stride-2 encoder makes the real
+> test `ceil(T/2) >= …`, which fails for 170 sequences rather than 130 — so filtering on raw
+> `T` and then downsampling reintroduces 40 poisoned rows. Priced at every stride:
+>
+> ```
+> stride   infeasible   frames lost   median T_out/L   p05 T_out/L
+>    1      130 (3.3%)      0.14%          8.86           2.54
+>    2      170 (4.3%)      0.31%          4.45           1.28
+>    4      281 (7.0%)      1.16%          2.25           0.67  <- bottom 5% unlearnable
+>    8     1342 (33.6%)    19.74%            --             --
+> ```
+>
+> `train_ctc.py` uses **stride 2** for that reason and derives the filter from the constant.
+
+**`T < phrase_len` in 130 sequences (3.25%)** on raw `T`; **170 (4.25%) at the stride-2
+output resolution the model actually uses.**
 
 ```
 T:           median 6    max 17        <- frames
