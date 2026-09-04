@@ -89,7 +89,10 @@ come back to Part 1 step 3.
 
 ## Part 3 — the training notebook · ~3–5 h GPU
 
-**New notebook. Accelerator: GPU** (T4 ×2 or P100, either is fine).
+**New notebook. Accelerator: `GPU P100`** — not T4 ×2. `train_ctc.py` has no
+`MirroredStrategy` and no `mixed_precision`, so it uses **one** card and stays in FP32: the
+second T4 would sit idle for the whole run, and on FP32 a single P100 (~9.3 TFLOPS) beats a
+single T4 (~8.1). Same quota cost either way, so P100 is a free ~15%.
 **Add data:** `deafference-fs75` **and** `deafference-fs-code`.
 
 > **Do not copy the ``` fence lines** into a cell. A stray `python` on line 1 is
@@ -157,6 +160,21 @@ Then **Save & Run All (Commit)** so the weights survive the session.
 
 `/kaggle/working/fs_out/report.json` — it carries the history, the per-signer CER, the filter
 breakdown and the val signer list. That one file is enough; don't bother with the weights yet.
+
+The run writes five things, and two of them are safety nets:
+
+| file | when | why it matters |
+|---|---|---|
+| `report.json` | at the end | **this is the one to send me** |
+| `history.json` | **rewritten every epoch** | survives a crash or a timeout — if the run dies at epoch 23 this still holds 22 rows |
+| `charset.json` | before epoch 1 | the FROZEN char→index map. Inference must load it, never recompute it |
+| `fs_ctc.weights.h5` | on each new best val CER | best-CER checkpoint, not last-epoch |
+| `savedmodel_fs_ctc/` | same | wrapped in try/except, so a failed export warns and does not kill the run |
+
+**A non-finite training loss now kills the run on purpose** (`sys.exit`) rather than limping
+on — so if the process stops early with `[err] non-finite training loss at epoch N batch M`,
+that is the feasibility filter having let something through, and it is the single most
+valuable thing you could send me.
 
 ---
 
