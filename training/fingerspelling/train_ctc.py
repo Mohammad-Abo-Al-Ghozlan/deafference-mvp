@@ -58,6 +58,8 @@ import os
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 import argparse
+import gc
+import glob
 import json
 import math
 import sys
@@ -94,15 +96,64 @@ MIN_HAND_FRAMES_PER_CHAR = 1.0
 # ══════════════════════════════════════════════════════════════════════════════════════════
 # character set
 # ══════════════════════════════════════════════════════════════════════════════════════════
-def build_charset(phrases) -> dict:
-    """Frozen character -> index map, index 0 reserved for the CTC blank.
+CHARSET_FILENAME = "character_to_prediction_index.json"     # the competition ships this
 
-    FROZEN and written to disk on purpose. This project has already lost time to a label
-    order that was recomputed instead of loaded (the 123-class medical vocab), and a charset
-    derived per-run would silently remap every label the moment the shard mix changes.
+
+def build_charset(phrases) -> dict:
+    """Character -> index map from the OBSERVED phrases. Index 0 is the CTC blank.
+
+    ⚠️ Shard-dependent, and that is exactly the hazard. Prefer load_charset().
     """
     chars = sorted({c for p in phrases for c in p})
     return {c: i + 1 for i, c in enumerate(chars)}          # 0 = blank
+
+
+def find_charset_file(path=None, search=True):
+    """The competition's canonical 59-character map, if it is mounted."""
+    if path:
+        if not Path(path).exists():
+            sys.exit(f"[err] --charset {path} does not exist. Omit it to auto-detect under "
+                     f"/kaggle/input, or point it at the competition's {CHARSET_FILENAME}.")
+        return path
+    if not search:                                   # selftest forces the fallback branch
+        return None
+    hits = sorted(glob.glob(f"/kaggle/input/**/{CHARSET_FILENAME}", recursive=True))
+    return hits[0] if hits else None
+
+
+def load_charset(phrases, path=None, search=True) -> tuple:
+    """Character -> index map, corpus-wide when possible. Index 0 is the CTC blank.
+
+    MEASURED BUG, 2026-09-04. The first run of this file derived the charset from the
+    attached shards and reported `n_classes 52` — i.e. **51 characters, not the corpus's
+    59.** Because the map is `sorted(observed)`, adding shards does not append the missing
+    characters, it INSERTS them and shifts the index of nearly every character after the
+    insertion point. Consequences, both silent:
+
+      * a 4-shard model and a 68-shard model are not comparable at all; and
+      * loading one run's charset.json against the other run's weights remaps every label.
+
+    That is the 123-class medical vocab trap in a new corpus, and build_charset's own
+    docstring warned about it while creating it. So the charset now comes from the
+    competition's own `character_to_prediction_index.json` (59 characters) whenever the
+    competition is mounted, which makes it shard-independent. Keys are re-sorted rather than
+    trusting the file's own indices, so the mapping is a pure function of the key SET.
+    """
+    src_path = find_charset_file(path, search)
+    if src_path:
+        keys = json.loads(Path(src_path).read_text(encoding="utf-8")).keys()
+        return {c: i + 1 for i, c in enumerate(sorted(keys))}, str(src_path)
+
+    c2i = build_charset(phrases)
+    print(f"[charset] ⚠ {CHARSET_FILENAME} not found, so the charset is the {len(c2i)} "
+          f"characters\n"
+          f"          these shards happen to contain — the corpus has 59. A run on more "
+          f"shards will\n"
+          f"          see more and `sorted()` will REINDEX them, so that model and this one "
+          f"are NOT\n"
+          f"          comparable and this charset.json must not be loaded against it.\n"
+          f"          Fix: attach the competition to the notebook, or pass --charset.")
+    return c2i, f"OBSERVED from these shards only ({len(c2i)} chars) — NOT corpus-wide"
 
 
 def encode(phrase: str, c2i: dict) -> list:
@@ -541,6 +592,26 @@ def selftest() -> int:
     check(BLANK not in c2i.values(), "index 0 is reserved for the CTC blank")
     check(decode(encode("cab", c2i), i2c) == "cab", "charset round-trips")
 
+    # 4b. the measured 2026-09-04 bug: an OBSERVED charset reindexes when shards are added.
+    # The 4-shard run produced n_classes 52 (51 chars); the corpus has 59.
+    few, many = build_charset(["ac"]), build_charset(["abc"])
+    check(few["c"] != many["c"],
+          f"an observed charset REINDEXES on a bigger shard mix (c: {few['c']} -> {many['c']}) "
+          f"— this is why --charset exists")
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / CHARSET_FILENAME
+        p.write_text(json.dumps({c: i for i, c in enumerate("cba")}), encoding="utf-8")
+        frozen, src = load_charset(["a"], str(p))            # data has 1 char, file has 3
+        check(len(frozen) == 3 and frozen == {"a": 1, "b": 2, "c": 3},
+              "a frozen charset beats the observed one AND is re-sorted, not file-ordered")
+        check(src.endswith(CHARSET_FILENAME), "charset_source records the file it came from")
+    obs, src = load_charset(["zz"], None, search=False)      # deterministic on Kaggle too
+    check(len(obs) == 1 and "NOT corpus-wide" in src,
+          "a missing charset file falls back to observed and SAYS SO in charset_source")
+    check(encode("ab", {"a": 1}) == [1],
+          "encode() drops unknown characters — which is why train() aborts on any")
+
     # 5. signer-disjoint split
     parts = np.array([1] * 20 + [2] * 20 + [3] * 20 + [4] * 20 + [5] * 20)
     hr = np.concatenate([np.full(20, 0.2 * i) for i in range(1, 6)])
@@ -622,10 +693,23 @@ def train(args) -> int:
     # ── features + the feasibility filter, in one pass ────────────────────────────────────
     t0 = time.time()
     feats_list, labels_list, keep, hand_rates = [], [], [], []
-    c2i = build_charset(phrases)
+    c2i, charset_source = load_charset(phrases, args.charset)
     i2c = {v: k for k, v in c2i.items()}
     print(f"[charset] {len(c2i)} characters -> {len(c2i)+1} classes with blank: "
           f"{''.join(sorted(c2i))!r}")
+    print(f"[charset] source: {charset_source}")
+
+    # A character present in the data but absent from the charset is dropped by encode(),
+    # which silently TRUNCATES the label and trains the model against a phrase nobody wrote.
+    # Refuse rather than report a number built on corrupted labels.
+    unknown = Counter(c for p in phrases for c in p if c not in c2i)
+    if unknown:
+        sys.exit(f"[err] {sum(unknown.values())} character occurrences in the data are not in "
+                 f"the charset: {dict(unknown.most_common(20))}\n"
+                 f"      encode() would drop them and every phrase containing one would train "
+                 f"against a truncated\n      label. Pass the matching --charset "
+                 f"({CHARSET_FILENAME}) instead.")
+
     dropped = Counter()
     for i in range(len(lengths)):
         s, n = int(starts[i]), int(lengths[i])
@@ -650,6 +734,19 @@ def train(args) -> int:
         labels_list.append(y)
     hand_rates = np.array(hand_rates)
     keep = np.array(keep, np.int64)
+
+    # `frames` is the single largest object in the process and NOTHING reads it after this
+    # pass — features_list holds everything the model sees. Measured on the 4-shard subset:
+    # frames 0.57 GB vs features 0.26 GB, i.e. raw landmarks are 2.2x the derived features.
+    # Scaled to all 68 shards that is 9.7 GB held for no reason against a Kaggle GPU
+    # notebook's ~13 GB of host RAM, so the training loop would OOM on memory it does not
+    # use. Freeing it drops steady-state from ~14 GB to ~4.4 GB at 68 shards.
+    held = frames.nbytes / 1e9
+    del frames, z
+    gc.collect()
+    print(f"[mem] released {held:.2f} GB of raw landmarks — features_list "
+          f"({sum(f.nbytes for f in feats_list)/1e9:.2f} GB) is all the model reads")
+
     print(f"[filter] kept {len(keep):,}/{len(lengths):,} ({100*len(keep)/len(lengths):.1f}%) "
           f"in {time.time()-t0:.0f}s")
     for k, v in dropped.most_common():
@@ -682,6 +779,7 @@ def train(args) -> int:
                 "inference; recomputing it from a different shard mix silently remaps "
                 "every label.",
         "time_stride": TIME_STRIDE, "n_classes": len(c2i) + 1, "char_to_index": c2i,
+        "charset_source": charset_source,
     }, indent=1), encoding="utf-8")
 
     va_batches = make_batches(va_i, lengths, args.batch_frames, shuffle=False)
@@ -729,6 +827,7 @@ def train(args) -> int:
         "val_signers": sorted(int(p) for p in val_signers),
         "n_train": int(len(tr_i)), "n_val": int(len(va_i)),
         "time_stride": TIME_STRIDE, "n_classes": len(c2i) + 1, "features": N_FEAT,
+        "charset_source": charset_source,
         "params": n_par, "history": hist,
         "filter": {k: v for k, v in dropped.items()},
     }, indent=1), encoding="utf-8")
@@ -740,6 +839,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--npz", default="/kaggle/input/deafference-fs75/fs75.npz")
+    ap.add_argument("--charset", default=None,
+                    help=f"the competition's {CHARSET_FILENAME} (59 characters). Auto-detected "
+                         f"under /kaggle/input if the competition is attached. WITHOUT it the "
+                         f"charset is derived from the attached shards only — the first run "
+                         f"got 51 characters, not 59, and indices shift when shards are added.")
     ap.add_argument("--out", default="/kaggle/working/fs_out")
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--dim", type=int, default=192)
