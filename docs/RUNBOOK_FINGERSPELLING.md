@@ -35,6 +35,11 @@ the file died with the session. Re-run it — Part 1b below — it is ~20 minute
 <details>
 <summary><b>Part 1b — only if you need to regenerate <code>fs75.npz</code></b></summary>
 
+> 🛑 **STOP — is `deafference-fs75` already in your notebook's Input panel?** Then Part 1 is
+> done and this whole section is ~20 minutes of CPU to rebuild a file you already have. Skip
+> to **Part 3**. This section exists only for the case where the Output tab has no `fs75.npz`
+> because the run was never committed with Save & Run All.
+
 New notebook, **accelerator OFF** (this is CPU work; the GPU would burn quota for nothing).
 Attach the competition **and** `deafference-fs-code`. Then:
 
@@ -87,15 +92,31 @@ come back to Part 1 step 3.
 **New notebook. Accelerator: GPU** (T4 ×2 or P100, either is fine).
 **Add data:** `deafference-fs75` **and** `deafference-fs-code`.
 
+> **Do not copy the ``` fence lines** into a cell. A stray `python` on line 1 is
+> `NameError: name 'python' is not defined`, and every later cell then dies on
+> `NameError: name 'CODE' is not defined` — three broken cells from one paste.
+
 ```python
-# cell 1 — paths, again by discovery not by typing
+# cell 1 — go/no-go. Names the missing prerequisite instead of throwing IndexError.
 import glob, os
-NPZ  = glob.glob('/kaggle/input/**/fs75.npz', recursive=True)[0]
-CODE = os.path.dirname(glob.glob('/kaggle/input/**/train_ctc.py', recursive=True)[0])
-print('NPZ  =', NPZ, os.path.getsize(NPZ)/1e6, 'MB')
-print('CODE =', CODE)
-import tensorflow as tf; print('GPU:', tf.config.list_physical_devices('GPU'))
+import tensorflow as tf
+
+npz  = glob.glob('/kaggle/input/**/fs75.npz',     recursive=True)
+code = glob.glob('/kaggle/input/**/train_ctc.py', recursive=True)
+gpus = tf.config.list_physical_devices('GPU')
+
+print('fs75.npz    :', f'{npz[0]}  {os.path.getsize(npz[0])/1e6:.0f} MB' if npz
+      else 'MISSING  <- Part 1 not done, or the dataset is empty')
+print('train_ctc.py:', code[0] if code else 'MISSING  <- Part 2 not done')
+print('GPU         :', gpus if gpus else 'NONE  <- Settings > Accelerator > GPU')
+
+assert npz and code and gpus, 'fix the MISSING line above before anything else'
+NPZ, CODE = npz[0], os.path.dirname(code[0])
+print('\nNPZ  =', NPZ, '\nCODE =', CODE)
 ```
+
+Expect `fs75.npz  547 MB`. A much smaller number means the dataset captured a smoke
+run (`--limit-seq`) rather than the 4-shard run.
 
 ```python
 # cell 2 — SELFTEST FIRST. 26 checks, no data, ~30 s. If this fails, stop.
