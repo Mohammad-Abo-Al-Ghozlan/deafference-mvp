@@ -281,16 +281,28 @@ def main() -> None:
         # whenever someone signs outside the list.
         leak = nm(out, allowed)
         assert not any(r["ok"] for r in leak), "an out-of-domain word scored correct; mask is wrong"
-        print(f"\nOUT-OF-DOMAIN LEAKAGE: the {len(leak)} non-subset words forced through the "
-              f"mask.\n  Every commit here is WRONG by construction -- the true class is masked "
-              f"out.\n    {'gate':>6} {'commits':>9}  (false-accept rate)")
-        for t in GATES:
-            n, _ = score(leak, L1_CONF=t, L1_MARGIN=V250["L1_MARGIN"],
-                         Q_STRONG=V250["Q_STRONG"], L2_CONF=t, L2_MARGIN=V250["L2_MARGIN"])
-            print(f"    {t:>6.2f} {f'{100*n/len(leak):.0f}%':>9}")
-        print("\n  Read this against the in-domain gain. Narrowing is worth it only if the\n"
-              "  in-domain lift exceeds what these confident-but-wrong commits cost -- and in\n"
-              "  a clinic, a confident wrong word is the expensive failure, not a rejection.")
+        if not leak:
+            # Every word in the clip dictionary is inside the mask, so there is nothing
+            # out-of-domain to leak and the measurement below is undefined. This happens
+            # when the clips npz was built over the SAME subset as --words (e.g.
+            # sign_clips_medical.npz is the 55 ship words and --words is that same list).
+            # Build the clips over the model's FULL class list to measure leakage.
+            print(f"\nOUT-OF-DOMAIN LEAKAGE: SKIPPED — all {len(sel)} words in "
+                  f"{Path(args.clips).name} are inside the mask, so there is no "
+                  f"out-of-domain word to force through it.\n  This is the measurement the "
+                  f"--words warning is about, so it is worth having: rebuild the clip "
+                  f"dictionary over the model's full class list, not the masked subset.")
+        else:
+            print(f"\nOUT-OF-DOMAIN LEAKAGE: the {len(leak)} non-subset words forced through "
+                  f"the mask.\n  Every commit here is WRONG by construction -- the true class "
+                  f"is masked out.\n    {'gate':>6} {'commits':>9}  (false-accept rate)")
+            for t in GATES:
+                n, _ = score(leak, L1_CONF=t, L1_MARGIN=V250["L1_MARGIN"],
+                             Q_STRONG=V250["Q_STRONG"], L2_CONF=t, L2_MARGIN=V250["L2_MARGIN"])
+                print(f"    {t:>6.2f} {f'{100*n/len(leak):.0f}%':>9}")
+            print("\n  Read this against the in-domain gain. Narrowing is worth it only if the\n"
+                  "  in-domain lift exceeds what these confident-but-wrong commits cost -- and in\n"
+                  "  a clinic, a confident wrong word is the expensive failure, not a rejection.")
 
     print("\nREAD THIS AS A SHAPE. One exemplar per word, so precision has an SE near 0.03 at\n"
           "50% accept on 250 and near 0.08 on a 43-word subset. No per-signer breakdown is\n"
