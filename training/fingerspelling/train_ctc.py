@@ -295,8 +295,15 @@ def ctc_feasible(T, labels, hand_frames, stride: int = TIME_STRIDE) -> bool:
             and hand_frames >= MIN_HAND_FRAMES_PER_CHAR * n_chars)
 
 
-def signer_split(parts, hand_rate, val_frac=0.15, seed=42):
+def signer_split(parts, hand_rate, val_frac=0.15, seed=42, force=None):
     """Signer-DISJOINT split, stratified by tracking quality.
+
+    `force` pins the held-out signers to an explicit list, which is what makes a scale-up
+    comparison MEAN anything. `--limit-files N` takes the first N of a sorted shard list, so
+    16 shards is a strict superset of 4 — but the automatic split would deal a DIFFERENT set
+    of val signers out of the larger pool, and then a CER change could be more data or could
+    be easier held-out people. Pinning the 13 signers from the 4-shard run (report.json ->
+    val_signers) turns it into one controlled variable: same people, 4x the training data.
 
     Finding 3: shards do NOT partition signers — 92 of 94 participants appear in just 4
     shards — so the obvious 'train on shards 1..60, validate on 61..68' puts the same signers
@@ -313,15 +320,30 @@ def signer_split(parts, hand_rate, val_frac=0.15, seed=42):
     rate = {p: float(np.mean([hand_rate[i] for i in idx])) for p, idx in by.items()}
     order = sorted(by, key=lambda p: rate[p])
     target = val_frac * len(parts)
-    val_signers, n = [], 0
-    # walk the quality-ordered list and take every k-th signer, so val spans the full
-    # tracking-quality range rather than clustering at one end
-    k = max(2, int(round(1.0 / val_frac)))
-    for j, p in enumerate(order):
-        if j % k == k // 2 and n + len(by[p]) <= target * 1.25:
-            val_signers.append(p); n += len(by[p])
-    if not val_signers:                                  # tiny corpora (selftest)
-        val_signers = [order[0]]
+
+    if force:
+        force = [int(p) for p in force]
+        val_signers = [p for p in force if p in by]
+        absent = [p for p in force if p not in by]
+        if absent:
+            print(f"[split] ⚠ {len(absent)} forced val signer(s) absent from this shard mix "
+                  f"and IGNORED: {absent}\n        The comparison is no longer over an "
+                  f"identical signer set — say so when quoting the delta.")
+        if not val_signers:
+            sys.exit(f"[err] none of the forced val signers {force} appear in this data. "
+                     f"Available: {sorted(by)[:20]}...")
+        print(f"[split] val signers PINNED to {len(val_signers)} of {len(force)} requested — "
+              f"stratification skipped on purpose")
+    else:
+        val_signers, n = [], 0
+        # walk the quality-ordered list and take every k-th signer, so val spans the full
+        # tracking-quality range rather than clustering at one end
+        k = max(2, int(round(1.0 / val_frac)))
+        for j, p in enumerate(order):
+            if j % k == k // 2 and n + len(by[p]) <= target * 1.25:
+                val_signers.append(p); n += len(by[p])
+        if not val_signers:                              # tiny corpora (selftest)
+            val_signers = [order[0]]
     val = np.array(sorted(i for p in val_signers for i in by[p]), dtype=np.int64)
     mask = np.ones(len(parts), bool); mask[val] = False
     return np.where(mask)[0], val, val_signers
@@ -619,6 +641,14 @@ def selftest() -> int:
     check(len(set(parts[tr]) & set(parts[va])) == 0, "train and val share NO signer")
     check(len(va) > 0 and len(tr) > 0, "both splits are non-empty")
 
+    # 5b. pinning the val signers is what makes a scale-up comparison controlled
+    tr2, va2, vs2 = signer_split(parts, hr, force=[2, 4])
+    check(sorted(vs2) == [2, 4], f"--val-signers pins the holdout exactly (got {sorted(vs2)})")
+    check(set(parts[va2].tolist()) == {2, 4} and 2 not in set(parts[tr2].tolist()),
+          "a pinned holdout is still signer-DISJOINT")
+    tr3, va3, vs3 = signer_split(parts, hr, force=[4, 999])     # 999 does not exist
+    check(sorted(vs3) == [4], "an absent forced signer is dropped, not silently accepted")
+
     # 6. batching respects the frame budget
     lens = np.array([10, 12, 400, 410, 11])
     bs = make_batches(np.arange(5), lens, batch_frames=1000, shuffle=False)
@@ -755,8 +785,11 @@ def train(args) -> int:
         sys.exit("[err] the filter removed everything — check the charset and lengths")
 
     # ── signer-disjoint, quality-stratified split ─────────────────────────────────────────
+    forced = ([int(s) for s in args.val_signers.replace(",", " ").split()]
+              if args.val_signers else None)
     tr_i, va_i, val_signers = signer_split(parts[keep], hand_rates[keep],
-                                           val_frac=args.val_frac, seed=args.seed)
+                                           val_frac=args.val_frac, seed=args.seed,
+                                           force=forced)
     tr_i, va_i = keep[tr_i], keep[va_i]
     print(f"[split] train {len(tr_i):,} seq / {len(set(parts[tr_i].tolist()))} signers | "
           f"val {len(va_i):,} seq / {len(val_signers)} signers")
@@ -825,6 +858,7 @@ def train(args) -> int:
     (out / "report.json").write_text(json.dumps({
         "best_val_cer": best, "final": {k: v for k, v in ev.items()},
         "val_signers": sorted(int(p) for p in val_signers),
+        "val_signers_pinned": forced is not None,
         "n_train": int(len(tr_i)), "n_val": int(len(va_i)),
         "time_stride": TIME_STRIDE, "n_classes": len(c2i) + 1, "features": N_FEAT,
         "charset_source": charset_source,
@@ -857,6 +891,12 @@ def main() -> int:
                     help="padded frames per batch (a budget, not a sample count — lengths "
                          "span 21..751 so a fixed batch size either wastes the tensor or OOMs)")
     ap.add_argument("--val-frac", type=float, default=0.15)
+    ap.add_argument("--val-signers", default=None,
+                    help="comma-separated participant ids to hold out, overriding the "
+                         "stratified draw. Use it to pin the SAME signers across a scale-up "
+                         "so a CER delta is attributable to data and not to an easier split. "
+                         "The 4-shard run held out: "
+                         "1,15,56,73,89,128,147,154,158,161,196,203,225")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--selftest", action="store_true",
                     help="prove the mechanism with no data and no GPU")
