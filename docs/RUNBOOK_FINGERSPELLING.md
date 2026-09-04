@@ -362,6 +362,32 @@ would mean the phase is not step-bound and my reasoning is wrong.
 
 ---
 
+## Part 5b — the 34-shard rung · same steps as Part 5, three values changed
+
+Confirmed by run 2: `best_val_cer` 0.3730 < `final` 0.3798, i.e. the optimum arrived **before**
+epoch 25, so the model is data-starved and not under-trained. 34 shards is the next rung that
+fits in host RAM (7.03 GB peak; 68 needs 14.07 against ~13 available).
+
+```
+subset :  --limit-files 34            ->  ~34,000 seqs, ~5.4M frames, ~4.9 GB, ~2.8 h CPU
+dataset:  deafference-fs75-34         ->  Private, brand-new name
+train  :  --epochs 20                 ->  ~8.2 min/epoch, ~2.7 h GPU
+          --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225   <- SAME 13, unchanged
+```
+
+**Why 20 epochs and not 25.** The optimum moves *earlier* in epoch terms as data grows: 4
+shards peaked at epoch 39/40, 16 shards before 25. The best-CER checkpoint is saved every time
+it improves, so an early peak loses nothing — only wall time.
+
+**Cell 1's size assert must change to `> 4e9`** (the 34-shard npz is ~4.9 GB; the 16-shard one
+is 2.29 GB and would otherwise pass).
+
+**Prediction on record: 0.320**, from −0.0487 CER per doubling. If 34 shards lands near 0.32,
+the log-linear model holds and the full corpus is worth the mmap refactor. If it lands at 0.36,
+the curve is flattening and the next lever is the architecture, not more shards.
+
+---
+
 ## Ordering, if you only have one session
 
 1. **Part 1** — promote `fs75.npz` (10 min, and nothing else can start without it)
