@@ -93,7 +93,16 @@ come back to Part 1 step 3.
 `MirroredStrategy` and no `mixed_precision`, so it uses **one** card and stays in FP32: the
 second T4 would sit idle for the whole run, and on FP32 a single P100 (~9.3 TFLOPS) beats a
 single T4 (~8.1). Same quota cost either way, so P100 is a free ~15%.
-**Add data:** `deafference-fs75` **and** `deafference-fs-code`.
+**Add data:** `deafference-fs75`, `deafference-fs-code`, **and the competition itself.**
+
+> 🔴 **Keep the competition attached.** I earlier said detaching it was harmless cleanup —
+> **that was wrong.** `character_to_prediction_index.json` lives there and it is the only
+> shard-independent source of the corpus's **59-character** charset. Without it the trainer
+> falls back to whatever the attached shards contain — the first run got **51** — and because
+> the map is `sorted(observed)`, adding shards later *reindexes* the characters instead of
+> appending them. Two runs with different shard mixes then share no label space, and neither
+> one's `charset.json` can be loaded against the other. Same failure as the 123-class medical
+> vocab. Confirm it worked: `report.json` must show `"n_classes": 60`.
 
 > **Do not copy the ``` fence lines** into a cell. A stray `python` on line 1 is
 > `NameError: name 'python' is not defined`, and every later cell then dies on
@@ -133,28 +142,47 @@ run (`--limit-seq`) rather than the 4-shard run.
 
 Then **Save & Run All (Commit)** so the weights survive the session.
 
-### What good looks like, and what to stop for
+### What good looks like — ✅ MEASURED 2026-09-04, no longer estimated
+
+The 4-shard run completed. **Full analysis: `docs/FINGERSPELLING_CTC_RESULT.md`.** These are the
+actual numbers, replacing the guesses that were here:
 
 ```
-[charset]  ~59 characters -> 60 classes with blank
-[filter]   kept ~86% of sequences        <- 3462/3997 is the expected figure
-[split]    train ~85% / val ~15%, NO shared signer
-           hand_rate train ~0.57  val ~0.57   <- close, because it is stratified
-[model]    ~2-4M params
-[ep   1]   train 40-90 | val ... CER 0.9-1.0     <- CER near 1.0 at first is NORMAL
-[ep  10]   CER should be clearly under 0.9
-[ep  40]   a first baseline in the 0.3-0.6 CER band is a real result
+[charset]  60 classes  <- ONLY if the competition is attached. 52 means the charset came
+                          from the shards (51 of the corpus's 59 chars) — see below
+[filter]   kept 3,458/3,997 (86.5%)      367 hand-frames · 170 T_out · 2 repeats
+[split]    2,999 train / 459 val, 13 held-out signers, NO overlap
+[model]    1.34M params   (I had said 2-4M)
+[ep   1]   train 84.9 | val 79.9 CER 1.0000 | 58s
+[ep  12]   CER still EXACTLY 1.0000        <- NORMAL. all-blank comes before characters
+[ep  19]   CER 0.7776                      <- the cliff
+[ep  39]   CER 0.4703  <- best. total wall time 39 MIN, not the 3-5 h I predicted
 ```
+
+| my earlier estimate | actual |
+|---|---|
+| `~2-4M params` | **1.34M** |
+| `~59 chars -> 60 classes` | **52** — a bug, now fixed |
+| `~3-5 h GPU` | **39 min** |
+| "CER clearly under 0.9 by epoch 10" | **epoch 19** — the old line would have killed a working run |
 
 **Stop the run and tell me if you see any of these:**
 
 | symptom | what it means |
 |---|---|
-| `⚠ N non-finite` on any epoch | a row slipped the feasibility filter — a real bug, I want the number |
-| `[filter] kept` below ~80% | the charset or the lengths are not what we measured |
-| `SIGNER LEAK` assertion | the split broke; the number would be meaningless |
-| CER flat at 1.000 past epoch 10 | not learning — send me `history.json` |
-| val CER falling then rising | overfitting; we cut epochs or raise dropout |
+| the run **exits** with `[err] non-finite training loss` | the filter leaked. Deliberate `sys.exit`. Most valuable output the run could give me |
+| `⚠ N non-finite` on an epoch line | same bug class, caught by the length guard. Send me N |
+| `[err] N character occurrences ... not in the charset` | wrong `--charset` for this data. Do not work around it — the labels would be truncated |
+| `[charset] source: OBSERVED ...` | the competition isn't attached, so the charset is shard-derived and **not comparable to any other run** |
+| `[filter] kept` below ~80% | expected **86.5%** |
+| `SIGNER LEAK` assertion | the split broke; every number after it is meaningless |
+| CER flat at 1.000 **past epoch 20** | not learning. Epochs 1–12 at exactly 1.0 are expected |
+
+> 🔴 **Watch `val_loss`, not `val_cer`, for overfitting.** Measured on this run: val loss
+> bottomed at **epoch 23 (48.67)** then rose **39%** to 67.58 by epoch 40, while train loss fell
+> **2.4×** — textbook memorisation. **CER never showed it**, drifting 0.0151 across epochs 27–40
+> with its best value at epoch 39. Greedy CTC decode keeps the argmax path roughly right while
+> the probabilities rot, so the old "val CER falling then rising" line would never have fired.
 
 ### What to send me
 
