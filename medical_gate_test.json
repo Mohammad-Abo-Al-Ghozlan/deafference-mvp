@@ -1,0 +1,2569 @@
+{
+ "note": "Confidence gate measured on the HELD-OUT test split (9 unseen signers). Supersedes measure_conf_gate.py, which scored TRAINING exemplars and reported precision 1.000 at every gate.",
+ "reproduced": {
+  "ensemble_acc": 0.8383,
+  "published": 0.8383,
+  "top5": 0.9512,
+  "per_fold": [
+   0.8099,
+   0.7946,
+   0.8208,
+   0.7997
+  ]
+ },
+ "n_clips": 1373,
+ "n_signers": 9,
+ "recommended_tau": 0.8,
+ "ship_recut_at_tau": {
+  "rescued": [
+   [
+    "eye",
+    0.625,
+    1.0,
+    5
+   ],
+   [
+    "hand",
+    0.75,
+    1.0,
+    3
+   ],
+   [
+    "more",
+    0.75,
+    1.0,
+    6
+   ],
+   [
+    "no",
+    0.7142857142857143,
+    1.0,
+    6
+   ],
+   [
+    "show",
+    0.7407407407407407,
+    1.0,
+    9
+   ],
+   [
+    "skin",
+    0.5454545454545454,
+    1.0,
+    6
+   ],
+   [
+    "tired",
+    0.7692307692307693,
+    1.0,
+    15
+   ],
+   [
+    "wait",
+    0.7741935483870968,
+    0.9130434782608695,
+    23
+   ],
+   [
+    "want",
+    0.7142857142857143,
+    1.0,
+    8
+   ],
+   [
+    "who",
+    0.45454545454545453,
+    0.875,
+    8
+   ],
+   [
+    "woman",
+    0.6923076923076923,
+    1.0,
+    7
+   ]
+  ],
+  "still_failing": [
+   [
+    "blood",
+    0.6666666666666666,
+    0.6666666666666666,
+    3
+   ],
+   [
+    "father",
+    0.8,
+    0.75,
+    4
+   ]
+  ],
+  "silenced_never_announced": [
+   "always",
+   "tell"
+  ]
+ },
+ "gate_curve": [
+  {
+   "tau": 0.0,
+   "coverage": 1.0,
+   "n_spoken": 1373,
+   "precision": 0.8383,
+   "errors_spoken": 222
+  },
+  {
+   "tau": 0.3,
+   "coverage": 0.9002,
+   "n_spoken": 1236,
+   "precision": 0.8859,
+   "errors_spoken": 141
+  },
+  {
+   "tau": 0.4,
+   "coverage": 0.8201,
+   "n_spoken": 1126,
+   "precision": 0.9227,
+   "errors_spoken": 87
+  },
+  {
+   "tau": 0.5,
+   "coverage": 0.7516,
+   "n_spoken": 1032,
+   "precision": 0.9448,
+   "errors_spoken": 57
+  },
+  {
+   "tau": 0.6,
+   "coverage": 0.6708,
+   "n_spoken": 921,
+   "precision": 0.9674,
+   "errors_spoken": 30
+  },
+  {
+   "tau": 0.7,
+   "coverage": 0.5936,
+   "n_spoken": 815,
+   "precision": 0.9791,
+   "errors_spoken": 17
+  },
+  {
+   "tau": 0.75,
+   "coverage": 0.5572,
+   "n_spoken": 765,
+   "precision": 0.9856,
+   "errors_spoken": 11
+  },
+  {
+   "tau": 0.8,
+   "coverage": 0.5113,
+   "n_spoken": 702,
+   "precision": 0.9872,
+   "errors_spoken": 9
+  },
+  {
+   "tau": 0.85,
+   "coverage": 0.4457,
+   "n_spoken": 612,
+   "precision": 0.9902,
+   "errors_spoken": 6
+  },
+  {
+   "tau": 0.9,
+   "coverage": 0.362,
+   "n_spoken": 497,
+   "precision": 0.994,
+   "errors_spoken": 3
+  },
+  {
+   "tau": 0.95,
+   "coverage": 0.2156,
+   "n_spoken": 296,
+   "precision": 1.0,
+   "errors_spoken": 0
+  }
+ ],
+ "per_word_recall_vs_precision": [
+  {
+   "word": "afternoon",
+   "recall": 0.75,
+   "n_true": 4,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.25
+  },
+  {
+   "word": "again",
+   "recall": 0.8666666666666667,
+   "n_true": 15,
+   "precision": 0.8666666666666667,
+   "n_said": 15,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 5
+  },
+  {
+   "word": "all",
+   "recall": 0.4444444444444444,
+   "n_true": 9,
+   "precision": 0.8,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3556
+  },
+  {
+   "word": "always",
+   "recall": 0.8,
+   "n_true": 5,
+   "precision": 0.8,
+   "n_said": 5,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.0,
+   "precision_at_tau": null,
+   "n_said_at_tau": 0
+  },
+  {
+   "word": "arm",
+   "recall": 0.5,
+   "n_true": 2,
+   "precision": 0.5,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "ask",
+   "recall": 1.0,
+   "n_true": 2,
+   "precision": 0.25,
+   "n_said": 8,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.75
+  },
+  {
+   "word": "baby",
+   "recall": 0.8529411764705882,
+   "n_true": 34,
+   "precision": 0.90625,
+   "n_said": 32,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.0533,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 19
+  },
+  {
+   "word": "back",
+   "recall": 0.5,
+   "n_true": 8,
+   "precision": 0.8,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3
+  },
+  {
+   "word": "bad",
+   "recall": 0.9523809523809523,
+   "n_true": 21,
+   "precision": 0.8,
+   "n_said": 25,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.1524,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "bathroom",
+   "recall": 0.8571428571428571,
+   "n_true": 14,
+   "precision": 0.9230769230769231,
+   "n_said": 13,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.0659,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "bed",
+   "recall": 0.7142857142857143,
+   "n_true": 7,
+   "precision": 1.0,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.2857
+  },
+  {
+   "word": "better",
+   "recall": 1.0,
+   "n_true": 3,
+   "precision": 0.75,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.25
+  },
+  {
+   "word": "big",
+   "recall": 0.9666666666666667,
+   "n_true": 30,
+   "precision": 0.8285714285714286,
+   "n_said": 35,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.1381,
+   "precision_at_tau": 0.9310344827586207,
+   "n_said_at_tau": 29
+  },
+  {
+   "word": "bleed",
+   "recall": 0.75,
+   "n_true": 4,
+   "precision": 0.5,
+   "n_said": 6,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.25
+  },
+  {
+   "word": "blood",
+   "recall": 0.8888888888888888,
+   "n_true": 9,
+   "precision": 0.6666666666666666,
+   "n_said": 12,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.2222,
+   "precision_at_tau": 0.6666666666666666,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "bone",
+   "recall": 0.6666666666666666,
+   "n_true": 3,
+   "precision": 1.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3333
+  },
+  {
+   "word": "breathe",
+   "recall": 1.0,
+   "n_true": 14,
+   "precision": 0.9333333333333333,
+   "n_said": 15,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.0667,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "burn",
+   "recall": 0.4,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.6
+  },
+  {
+   "word": "can",
+   "recall": 0.6666666666666666,
+   "n_true": 3,
+   "precision": 0.4,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.2667
+  },
+  {
+   "word": "child",
+   "recall": 0.0,
+   "n_true": 1,
+   "precision": null,
+   "n_said": 0,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "choke",
+   "recall": 1.0,
+   "n_true": 1,
+   "precision": 0.5,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.5
+  },
+  {
+   "word": "close",
+   "recall": 0.0,
+   "n_true": 1,
+   "precision": 0.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "cold",
+   "recall": 0.9487179487179487,
+   "n_true": 39,
+   "precision": 0.9024390243902439,
+   "n_said": 41,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0463,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 33
+  },
+  {
+   "word": "come",
+   "recall": 0.5,
+   "n_true": 6,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.5
+  },
+  {
+   "word": "cough",
+   "recall": 0.8333333333333334,
+   "n_true": 6,
+   "precision": 0.8333333333333334,
+   "n_said": 6,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 2
+  },
+  {
+   "word": "day",
+   "recall": 1.0,
+   "n_true": 14,
+   "precision": 0.9333333333333333,
+   "n_said": 15,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0667,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 11
+  },
+  {
+   "word": "dentist",
+   "recall": 0.9230769230769231,
+   "n_true": 13,
+   "precision": 1.0,
+   "n_said": 12,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.0769,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "dizzy",
+   "recall": 0.75,
+   "n_true": 4,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.25
+  },
+  {
+   "word": "doctor",
+   "recall": 0.7931034482758621,
+   "n_true": 29,
+   "precision": 0.8214285714285714,
+   "n_said": 28,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.0283
+  },
+  {
+   "word": "drink",
+   "recall": 1.0,
+   "n_true": 36,
+   "precision": 1.0,
+   "n_said": 36,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 30
+  },
+  {
+   "word": "ear",
+   "recall": 0.2,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.8
+  },
+  {
+   "word": "eat",
+   "recall": 0.5,
+   "n_true": 4,
+   "precision": 0.6666666666666666,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.1667
+  },
+  {
+   "word": "eye",
+   "recall": 1.0,
+   "n_true": 5,
+   "precision": 0.625,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.375,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 5
+  },
+  {
+   "word": "face",
+   "recall": 1.0,
+   "n_true": 2,
+   "precision": 1.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "faint",
+   "recall": 0.4,
+   "n_true": 5,
+   "precision": 0.6666666666666666,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.2667
+  },
+  {
+   "word": "family",
+   "recall": 1.0,
+   "n_true": 43,
+   "precision": 1.0,
+   "n_said": 43,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 40
+  },
+  {
+   "word": "father",
+   "recall": 1.0,
+   "n_true": 12,
+   "precision": 0.8,
+   "n_said": 15,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.2,
+   "precision_at_tau": 0.75,
+   "n_said_at_tau": 4
+  },
+  {
+   "word": "feel",
+   "recall": 1.0,
+   "n_true": 15,
+   "precision": 0.9375,
+   "n_said": 16,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0625,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 11
+  },
+  {
+   "word": "feet",
+   "recall": 1.0,
+   "n_true": 3,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "finish",
+   "recall": 0.9333333333333333,
+   "n_true": 30,
+   "precision": 0.875,
+   "n_said": 32,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0583,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 22
+  },
+  {
+   "word": "give",
+   "recall": 0.6153846153846154,
+   "n_true": 13,
+   "precision": 0.7272727272727273,
+   "n_said": 11,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.1119
+  },
+  {
+   "word": "glasses",
+   "recall": 1.0,
+   "n_true": 6,
+   "precision": 1.0,
+   "n_said": 6,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 2
+  },
+  {
+   "word": "go",
+   "recall": 0.5882352941176471,
+   "n_true": 17,
+   "precision": 0.7692307692307693,
+   "n_said": 13,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.181
+  },
+  {
+   "word": "hand",
+   "recall": 0.8571428571428571,
+   "n_true": 7,
+   "precision": 0.75,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1071,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "head",
+   "recall": 1.0,
+   "n_true": 6,
+   "precision": 0.8571428571428571,
+   "n_said": 7,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1429,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "headache",
+   "recall": 0.5,
+   "n_true": 2,
+   "precision": 0.5,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "heart",
+   "recall": 0.3333333333333333,
+   "n_true": 6,
+   "precision": 0.6666666666666666,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3333
+  },
+  {
+   "word": "help",
+   "recall": 0.9655172413793104,
+   "n_true": 29,
+   "precision": 0.9655172413793104,
+   "n_said": 29,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 19
+  },
+  {
+   "word": "hospital",
+   "recall": 0.9333333333333333,
+   "n_true": 15,
+   "precision": 0.9333333333333333,
+   "n_said": 15,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 7
+  },
+  {
+   "word": "hot",
+   "recall": 0.78125,
+   "n_true": 32,
+   "precision": 0.8333333333333334,
+   "n_said": 30,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.0521
+  },
+  {
+   "word": "hour",
+   "recall": 1.0,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 5,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 2
+  },
+  {
+   "word": "how",
+   "recall": null,
+   "n_true": 0,
+   "precision": 0.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "interpreter",
+   "recall": 1.0,
+   "n_true": 4,
+   "precision": 1.0,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "itch",
+   "recall": 0.0,
+   "n_true": 1,
+   "precision": null,
+   "n_said": 0,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "light",
+   "recall": 0.0,
+   "n_true": 1,
+   "precision": null,
+   "n_said": 0,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "long",
+   "recall": 0.6666666666666666,
+   "n_true": 6,
+   "precision": 0.8,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.1333
+  },
+  {
+   "word": "look",
+   "recall": 0.3333333333333333,
+   "n_true": 3,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.6667
+  },
+  {
+   "word": "lungs",
+   "recall": 0.5,
+   "n_true": 6,
+   "precision": 0.75,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.25
+  },
+  {
+   "word": "man",
+   "recall": 0.65,
+   "n_true": 20,
+   "precision": 0.8666666666666667,
+   "n_said": 15,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.2167
+  },
+  {
+   "word": "maybe",
+   "recall": 0.5333333333333333,
+   "n_true": 15,
+   "precision": 1.0,
+   "n_said": 8,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.4667
+  },
+  {
+   "word": "medicine",
+   "recall": 1.0,
+   "n_true": 16,
+   "precision": 0.9411764705882353,
+   "n_said": 17,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0588,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 6
+  },
+  {
+   "word": "minute",
+   "recall": 0.6,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.4
+  },
+  {
+   "word": "month",
+   "recall": 1.0,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 5,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 2
+  },
+  {
+   "word": "more",
+   "recall": 0.8571428571428571,
+   "n_true": 7,
+   "precision": 0.75,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.1071,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 6
+  },
+  {
+   "word": "morning",
+   "recall": 1.0,
+   "n_true": 14,
+   "precision": 0.8235294117647058,
+   "n_said": 17,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1765,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 11
+  },
+  {
+   "word": "mother",
+   "recall": 0.6666666666666666,
+   "n_true": 12,
+   "precision": 0.8888888888888888,
+   "n_said": 9,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.2222
+  },
+  {
+   "word": "mouth",
+   "recall": 0.5,
+   "n_true": 2,
+   "precision": 0.5,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "move",
+   "recall": 0.85,
+   "n_true": 20,
+   "precision": 0.85,
+   "n_said": 20,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 8
+  },
+  {
+   "word": "much",
+   "recall": 0.6,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.4
+  },
+  {
+   "word": "muscle",
+   "recall": 1.0,
+   "n_true": 4,
+   "precision": 0.8,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.2
+  },
+  {
+   "word": "need",
+   "recall": 0.6875,
+   "n_true": 16,
+   "precision": 1.0,
+   "n_said": 11,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3125
+  },
+  {
+   "word": "night",
+   "recall": 0.8461538461538461,
+   "n_true": 13,
+   "precision": 0.8461538461538461,
+   "n_said": 13,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 7
+  },
+  {
+   "word": "no",
+   "recall": 0.9090909090909091,
+   "n_true": 11,
+   "precision": 0.7142857142857143,
+   "n_said": 14,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.1948,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 6
+  },
+  {
+   "word": "nose",
+   "recall": 1.0,
+   "n_true": 2,
+   "precision": 0.4,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.6
+  },
+  {
+   "word": "not",
+   "recall": 0.6470588235294118,
+   "n_true": 17,
+   "precision": 1.0,
+   "n_said": 11,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3529
+  },
+  {
+   "word": "now",
+   "recall": 0.6666666666666666,
+   "n_true": 6,
+   "precision": 0.3076923076923077,
+   "n_said": 13,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.359
+  },
+  {
+   "word": "nurse",
+   "recall": 0.3333333333333333,
+   "n_true": 3,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.6667
+  },
+  {
+   "word": "open",
+   "recall": 0.8421052631578947,
+   "n_true": 19,
+   "precision": 0.8421052631578947,
+   "n_said": 19,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "pain",
+   "recall": 0.9714285714285714,
+   "n_true": 35,
+   "precision": 0.8717948717948718,
+   "n_said": 39,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.0996,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 23
+  },
+  {
+   "word": "pill",
+   "recall": 0.6666666666666666,
+   "n_true": 6,
+   "precision": 1.0,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3333
+  },
+  {
+   "word": "please",
+   "recall": 0.6666666666666666,
+   "n_true": 3,
+   "precision": 0.4,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.2667
+  },
+  {
+   "word": "show",
+   "recall": 1.0,
+   "n_true": 20,
+   "precision": 0.7407407407407407,
+   "n_said": 27,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.2593,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 9
+  },
+  {
+   "word": "sick",
+   "recall": 1.0,
+   "n_true": 33,
+   "precision": 0.8918918918918919,
+   "n_said": 37,
+   "in_ship": true,
+   "never_auto": true,
+   "gap": 0.1081,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 24
+  },
+  {
+   "word": "sit",
+   "recall": 0.9444444444444444,
+   "n_true": 18,
+   "precision": 0.85,
+   "n_said": 20,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0944,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "skin",
+   "recall": 1.0,
+   "n_true": 6,
+   "precision": 0.5454545454545454,
+   "n_said": 11,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.4545,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 6
+  },
+  {
+   "word": "sleep",
+   "recall": 0.9473684210526315,
+   "n_true": 38,
+   "precision": 0.9473684210526315,
+   "n_said": 38,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 33
+  },
+  {
+   "word": "some",
+   "recall": 0.42857142857142855,
+   "n_true": 7,
+   "precision": 0.5,
+   "n_said": 6,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.0714
+  },
+  {
+   "word": "sometimes",
+   "recall": 0.2,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.8
+  },
+  {
+   "word": "sorry",
+   "recall": 1.0,
+   "n_true": 7,
+   "precision": 0.875,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.125,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "start",
+   "recall": 0.8,
+   "n_true": 10,
+   "precision": 1.0,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.2,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 3
+  },
+  {
+   "word": "stop",
+   "recall": 0.8,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 4,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.2,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 1
+  },
+  {
+   "word": "strong",
+   "recall": 0.4,
+   "n_true": 5,
+   "precision": 0.6666666666666666,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.2667
+  },
+  {
+   "word": "surgery",
+   "recall": 0.7,
+   "n_true": 10,
+   "precision": 1.0,
+   "n_said": 7,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3
+  },
+  {
+   "word": "take",
+   "recall": 0.0,
+   "n_true": 6,
+   "precision": 0.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "teeth",
+   "recall": 0.8,
+   "n_true": 15,
+   "precision": 0.8571428571428571,
+   "n_said": 14,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.0571,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 4
+  },
+  {
+   "word": "tell",
+   "recall": 0.8,
+   "n_true": 5,
+   "precision": 1.0,
+   "n_said": 4,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.2,
+   "precision_at_tau": null,
+   "n_said_at_tau": 0
+  },
+  {
+   "word": "test",
+   "recall": 0.9583333333333334,
+   "n_true": 24,
+   "precision": 0.8846153846153846,
+   "n_said": 26,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0737,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 17
+  },
+  {
+   "word": "thankyou",
+   "recall": 1.0,
+   "n_true": 4,
+   "precision": 0.5,
+   "n_said": 8,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.5
+  },
+  {
+   "word": "throat",
+   "recall": 0.0,
+   "n_true": 1,
+   "precision": null,
+   "n_said": 0,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "tired",
+   "recall": 0.9523809523809523,
+   "n_true": 21,
+   "precision": 0.7692307692307693,
+   "n_said": 26,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1832,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 15
+  },
+  {
+   "word": "today",
+   "recall": 0.1,
+   "n_true": 10,
+   "precision": 0.5,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.4
+  },
+  {
+   "word": "tomorrow",
+   "recall": 0.8888888888888888,
+   "n_true": 9,
+   "precision": 1.0,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.1111,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 5
+  },
+  {
+   "word": "tongue",
+   "recall": 0.0,
+   "n_true": 2,
+   "precision": null,
+   "n_said": 0,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": null
+  },
+  {
+   "word": "touch",
+   "recall": 1.0,
+   "n_true": 4,
+   "precision": 1.0,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "understand",
+   "recall": 0.9285714285714286,
+   "n_true": 14,
+   "precision": 0.9285714285714286,
+   "n_said": 14,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 10
+  },
+  {
+   "word": "wait",
+   "recall": 0.96,
+   "n_true": 25,
+   "precision": 0.7741935483870968,
+   "n_said": 31,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1858,
+   "precision_at_tau": 0.9130434782608695,
+   "n_said_at_tau": 23
+  },
+  {
+   "word": "walk",
+   "recall": 0.9230769230769231,
+   "n_true": 13,
+   "precision": 1.0,
+   "n_said": 12,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": -0.0769,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 5
+  },
+  {
+   "word": "want",
+   "recall": 0.8823529411764706,
+   "n_true": 17,
+   "precision": 0.7142857142857143,
+   "n_said": 21,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.1681,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 8
+  },
+  {
+   "word": "water",
+   "recall": 0.9818181818181818,
+   "n_true": 55,
+   "precision": 0.9473684210526315,
+   "n_said": 57,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0344,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 49
+  },
+  {
+   "word": "weak",
+   "recall": 0.42857142857142855,
+   "n_true": 7,
+   "precision": 1.0,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.5714
+  },
+  {
+   "word": "week",
+   "recall": 1.0,
+   "n_true": 20,
+   "precision": 0.9523809523809523,
+   "n_said": 21,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.0476,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 12
+  },
+  {
+   "word": "what",
+   "recall": 0.5,
+   "n_true": 2,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.5
+  },
+  {
+   "word": "when",
+   "recall": 0.6666666666666666,
+   "n_true": 3,
+   "precision": 1.0,
+   "n_said": 2,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.3333
+  },
+  {
+   "word": "where",
+   "recall": 0.6363636363636364,
+   "n_true": 22,
+   "precision": 0.7368421052631579,
+   "n_said": 19,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.1005
+  },
+  {
+   "word": "which",
+   "recall": 0.5,
+   "n_true": 6,
+   "precision": 0.75,
+   "n_said": 4,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.25
+  },
+  {
+   "word": "who",
+   "recall": 1.0,
+   "n_true": 10,
+   "precision": 0.45454545454545453,
+   "n_said": 22,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.5455,
+   "precision_at_tau": 0.875,
+   "n_said_at_tau": 8
+  },
+  {
+   "word": "why",
+   "recall": 0.2,
+   "n_true": 5,
+   "precision": 0.3333333333333333,
+   "n_said": 3,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": -0.1333
+  },
+  {
+   "word": "woman",
+   "recall": 0.9,
+   "n_true": 10,
+   "precision": 0.6923076923076923,
+   "n_said": 13,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.2077,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 7
+  },
+  {
+   "word": "worse",
+   "recall": 1.0,
+   "n_true": 1,
+   "precision": 1.0,
+   "n_said": 1,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0
+  },
+  {
+   "word": "year",
+   "recall": 1.0,
+   "n_true": 7,
+   "precision": 0.875,
+   "n_said": 8,
+   "in_ship": true,
+   "never_auto": false,
+   "gap": 0.125,
+   "precision_at_tau": 1.0,
+   "n_said_at_tau": 1
+  },
+  {
+   "word": "yes",
+   "recall": 0.7142857142857143,
+   "n_true": 7,
+   "precision": 0.625,
+   "n_said": 8,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.0893
+  },
+  {
+   "word": "yesterday",
+   "recall": 1.0,
+   "n_true": 3,
+   "precision": 0.6,
+   "n_said": 5,
+   "in_ship": false,
+   "never_auto": false,
+   "gap": 0.4
+  }
+ ],
+ "never_auto_commit_precision": {
+  "always": {
+   "0.0": [
+    0.8,
+    5
+   ],
+   "0.3": [
+    1.0,
+    4
+   ],
+   "0.4": [
+    1.0,
+    2
+   ],
+   "0.5": [
+    1.0,
+    1
+   ],
+   "0.6": [
+    null,
+    0
+   ],
+   "0.7": [
+    null,
+    0
+   ],
+   "0.75": [
+    null,
+    0
+   ],
+   "0.8": [
+    null,
+    0
+   ],
+   "0.85": [
+    null,
+    0
+   ],
+   "0.9": [
+    null,
+    0
+   ],
+   "0.95": [
+    null,
+    0
+   ]
+  },
+  "bad": {
+   "0.0": [
+    0.8,
+    25
+   ],
+   "0.3": [
+    0.8333333333333334,
+    24
+   ],
+   "0.4": [
+    0.9047619047619048,
+    21
+   ],
+   "0.5": [
+    0.9,
+    20
+   ],
+   "0.6": [
+    0.9,
+    20
+   ],
+   "0.7": [
+    1.0,
+    17
+   ],
+   "0.75": [
+    1.0,
+    12
+   ],
+   "0.8": [
+    1.0,
+    10
+   ],
+   "0.85": [
+    1.0,
+    9
+   ],
+   "0.9": [
+    1.0,
+    7
+   ],
+   "0.95": [
+    1.0,
+    5
+   ]
+  },
+  "big": {
+   "0.0": [
+    0.8285714285714286,
+    35
+   ],
+   "0.3": [
+    0.9032258064516129,
+    31
+   ],
+   "0.4": [
+    0.9032258064516129,
+    31
+   ],
+   "0.5": [
+    0.9333333333333333,
+    30
+   ],
+   "0.6": [
+    0.9333333333333333,
+    30
+   ],
+   "0.7": [
+    0.9333333333333333,
+    30
+   ],
+   "0.75": [
+    0.9333333333333333,
+    30
+   ],
+   "0.8": [
+    0.9310344827586207,
+    29
+   ],
+   "0.85": [
+    0.9629629629629629,
+    27
+   ],
+   "0.9": [
+    0.96,
+    25
+   ],
+   "0.95": [
+    1.0,
+    14
+   ]
+  },
+  "blood": {
+   "0.0": [
+    0.6666666666666666,
+    12
+   ],
+   "0.3": [
+    0.7,
+    10
+   ],
+   "0.4": [
+    0.875,
+    8
+   ],
+   "0.5": [
+    0.8571428571428571,
+    7
+   ],
+   "0.6": [
+    0.8,
+    5
+   ],
+   "0.7": [
+    0.75,
+    4
+   ],
+   "0.75": [
+    0.6666666666666666,
+    3
+   ],
+   "0.8": [
+    0.6666666666666666,
+    3
+   ],
+   "0.85": [
+    0.6666666666666666,
+    3
+   ],
+   "0.9": [
+    1.0,
+    1
+   ],
+   "0.95": [
+    null,
+    0
+   ]
+  },
+  "breathe": {
+   "0.0": [
+    0.9333333333333333,
+    15
+   ],
+   "0.3": [
+    0.9333333333333333,
+    15
+   ],
+   "0.4": [
+    0.9333333333333333,
+    15
+   ],
+   "0.5": [
+    0.9333333333333333,
+    15
+   ],
+   "0.6": [
+    0.9333333333333333,
+    15
+   ],
+   "0.7": [
+    0.9285714285714286,
+    14
+   ],
+   "0.75": [
+    0.9230769230769231,
+    13
+   ],
+   "0.8": [
+    1.0,
+    10
+   ],
+   "0.85": [
+    1.0,
+    10
+   ],
+   "0.9": [
+    1.0,
+    8
+   ],
+   "0.95": [
+    1.0,
+    5
+   ]
+  },
+  "help": {
+   "0.0": [
+    0.9655172413793104,
+    29
+   ],
+   "0.3": [
+    0.9642857142857143,
+    28
+   ],
+   "0.4": [
+    1.0,
+    23
+   ],
+   "0.5": [
+    1.0,
+    23
+   ],
+   "0.6": [
+    1.0,
+    22
+   ],
+   "0.7": [
+    1.0,
+    22
+   ],
+   "0.75": [
+    1.0,
+    21
+   ],
+   "0.8": [
+    1.0,
+    19
+   ],
+   "0.85": [
+    1.0,
+    17
+   ],
+   "0.9": [
+    1.0,
+    17
+   ],
+   "0.95": [
+    1.0,
+    10
+   ]
+  },
+  "more": {
+   "0.0": [
+    0.75,
+    8
+   ],
+   "0.3": [
+    0.8571428571428571,
+    7
+   ],
+   "0.4": [
+    1.0,
+    6
+   ],
+   "0.5": [
+    1.0,
+    6
+   ],
+   "0.6": [
+    1.0,
+    6
+   ],
+   "0.7": [
+    1.0,
+    6
+   ],
+   "0.75": [
+    1.0,
+    6
+   ],
+   "0.8": [
+    1.0,
+    6
+   ],
+   "0.85": [
+    1.0,
+    6
+   ],
+   "0.9": [
+    1.0,
+    5
+   ],
+   "0.95": [
+    1.0,
+    4
+   ]
+  },
+  "no": {
+   "0.0": [
+    0.7142857142857143,
+    14
+   ],
+   "0.3": [
+    0.8888888888888888,
+    9
+   ],
+   "0.4": [
+    0.875,
+    8
+   ],
+   "0.5": [
+    0.8571428571428571,
+    7
+   ],
+   "0.6": [
+    0.8571428571428571,
+    7
+   ],
+   "0.7": [
+    0.8571428571428571,
+    7
+   ],
+   "0.75": [
+    1.0,
+    6
+   ],
+   "0.8": [
+    1.0,
+    6
+   ],
+   "0.85": [
+    1.0,
+    6
+   ],
+   "0.9": [
+    1.0,
+    4
+   ],
+   "0.95": [
+    1.0,
+    3
+   ]
+  },
+  "pain": {
+   "0.0": [
+    0.8717948717948718,
+    39
+   ],
+   "0.3": [
+    0.9714285714285714,
+    35
+   ],
+   "0.4": [
+    1.0,
+    34
+   ],
+   "0.5": [
+    1.0,
+    33
+   ],
+   "0.6": [
+    1.0,
+    31
+   ],
+   "0.7": [
+    1.0,
+    30
+   ],
+   "0.75": [
+    1.0,
+    27
+   ],
+   "0.8": [
+    1.0,
+    23
+   ],
+   "0.85": [
+    1.0,
+    19
+   ],
+   "0.9": [
+    1.0,
+    15
+   ],
+   "0.95": [
+    1.0,
+    8
+   ]
+  },
+  "sick": {
+   "0.0": [
+    0.8918918918918919,
+    37
+   ],
+   "0.3": [
+    0.9166666666666666,
+    36
+   ],
+   "0.4": [
+    1.0,
+    33
+   ],
+   "0.5": [
+    1.0,
+    32
+   ],
+   "0.6": [
+    1.0,
+    31
+   ],
+   "0.7": [
+    1.0,
+    26
+   ],
+   "0.75": [
+    1.0,
+    25
+   ],
+   "0.8": [
+    1.0,
+    24
+   ],
+   "0.85": [
+    1.0,
+    23
+   ],
+   "0.9": [
+    1.0,
+    21
+   ],
+   "0.95": [
+    1.0,
+    18
+   ]
+  }
+ },
+ "dangerous_confusions_observed": [
+  {
+   "true": "ear",
+   "predicted": "skin",
+   "n": 3,
+   "conf_median": 0.5214,
+   "conf_max": 0.7456,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "hot",
+   "predicted": "no",
+   "n": 1,
+   "conf_median": 0.734,
+   "conf_max": 0.734,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "hot",
+   "predicted": "bad",
+   "n": 5,
+   "conf_median": 0.3768,
+   "conf_max": 0.6734,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "start",
+   "predicted": "bleed",
+   "n": 1,
+   "conf_median": 0.6274,
+   "conf_max": 0.6274,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "teeth",
+   "predicted": "eye",
+   "n": 1,
+   "conf_median": 0.5992,
+   "conf_max": 0.5992,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "sleep",
+   "predicted": "hot",
+   "n": 1,
+   "conf_median": 0.5977,
+   "conf_max": 0.5977,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "close",
+   "predicted": "hot",
+   "n": 1,
+   "conf_median": 0.5555,
+   "conf_max": 0.5555,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "arm",
+   "predicted": "muscle",
+   "n": 1,
+   "conf_median": 0.5336,
+   "conf_max": 0.5336,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "eat",
+   "predicted": "hot",
+   "n": 1,
+   "conf_median": 0.4888,
+   "conf_max": 0.4888,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "back",
+   "predicted": "skin",
+   "n": 1,
+   "conf_median": 0.4466,
+   "conf_max": 0.4466,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "back",
+   "predicted": "eye",
+   "n": 1,
+   "conf_median": 0.4352,
+   "conf_max": 0.4352,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "headache",
+   "predicted": "pain",
+   "n": 1,
+   "conf_median": 0.3945,
+   "conf_max": 0.3945,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "faint",
+   "predicted": "close",
+   "n": 2,
+   "conf_median": 0.2754,
+   "conf_max": 0.3934,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "some",
+   "predicted": "blood",
+   "n": 1,
+   "conf_median": 0.3566,
+   "conf_max": 0.3566,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "teeth",
+   "predicted": "mouth",
+   "n": 1,
+   "conf_median": 0.3468,
+   "conf_max": 0.3468,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "heart",
+   "predicted": "water",
+   "n": 1,
+   "conf_median": 0.3329,
+   "conf_max": 0.3329,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "mouth",
+   "predicted": "eye",
+   "n": 1,
+   "conf_median": 0.3278,
+   "conf_max": 0.3278,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "doctor",
+   "predicted": "hot",
+   "n": 1,
+   "conf_median": 0.3248,
+   "conf_max": 0.3248,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "why",
+   "predicted": "sick",
+   "n": 2,
+   "conf_median": 0.3152,
+   "conf_max": 0.3217,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "feel",
+   "n": 1,
+   "conf_median": 0.3147,
+   "conf_max": 0.3147,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "baby",
+   "predicted": "blood",
+   "n": 1,
+   "conf_median": 0.3112,
+   "conf_max": 0.3112,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "look",
+   "predicted": "sick",
+   "n": 1,
+   "conf_median": 0.3088,
+   "conf_max": 0.3088,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "some",
+   "predicted": "help",
+   "n": 1,
+   "conf_median": 0.3086,
+   "conf_max": 0.3086,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "teeth",
+   "predicted": "nose",
+   "n": 1,
+   "conf_median": 0.3028,
+   "conf_max": 0.3028,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "finish",
+   "predicted": "hot",
+   "n": 1,
+   "conf_median": 0.3018,
+   "conf_max": 0.3018,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "weak",
+   "predicted": "bleed",
+   "n": 1,
+   "conf_median": 0.2961,
+   "conf_max": 0.2961,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "much",
+   "predicted": "more",
+   "n": 1,
+   "conf_median": 0.2904,
+   "conf_max": 0.2904,
+   "n_above_0.80": 0,
+   "kinds": [
+    "severity_change:INVERTS_MEANING"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "pill",
+   "predicted": "choke",
+   "n": 1,
+   "conf_median": 0.2814,
+   "conf_max": 0.2814,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "help",
+   "predicted": "now",
+   "n": 1,
+   "conf_median": 0.259,
+   "conf_max": 0.259,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "hand",
+   "predicted": "bleed",
+   "n": 1,
+   "conf_median": 0.2526,
+   "conf_max": 0.2526,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "tongue",
+   "predicted": "nose",
+   "n": 1,
+   "conf_median": 0.2465,
+   "conf_max": 0.2465,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "tongue",
+   "predicted": "teeth",
+   "n": 1,
+   "conf_median": 0.229,
+   "conf_max": 0.229,
+   "n_above_0.80": 0,
+   "kinds": [
+    "body_site:WRONG_SITE"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "sleep",
+   "predicted": "faint",
+   "n": 1,
+   "conf_median": 0.2263,
+   "conf_max": 0.2263,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "hot",
+   "predicted": "thankyou",
+   "n": 1,
+   "conf_median": 0.2159,
+   "conf_max": 0.2159,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "big",
+   "predicted": "heart",
+   "n": 1,
+   "conf_median": 0.2122,
+   "conf_max": 0.2122,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": false
+  },
+  {
+   "true": "heart",
+   "predicted": "tired",
+   "n": 1,
+   "conf_median": 0.2122,
+   "conf_max": 0.2122,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "pill",
+   "predicted": "pain",
+   "n": 1,
+   "conf_median": 0.2082,
+   "conf_max": 0.2082,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "cold",
+   "predicted": "pain",
+   "n": 1,
+   "conf_median": 0.2017,
+   "conf_max": 0.2017,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "start",
+   "predicted": "blood",
+   "n": 1,
+   "conf_median": 0.1758,
+   "conf_max": 0.1758,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "when",
+   "predicted": "pain",
+   "n": 1,
+   "conf_median": 0.1737,
+   "conf_max": 0.1737,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "want",
+   "predicted": "pain",
+   "n": 1,
+   "conf_median": 0.165,
+   "conf_max": 0.165,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "faint",
+   "predicted": "skin",
+   "n": 1,
+   "conf_median": 0.1623,
+   "conf_max": 0.1623,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "blood",
+   "predicted": "hospital",
+   "n": 1,
+   "conf_median": 0.1618,
+   "conf_max": 0.1618,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "heart",
+   "predicted": "big",
+   "n": 1,
+   "conf_median": 0.1538,
+   "conf_max": 0.1538,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:MISSED"
+   ],
+   "predicted_in_ship_vocab": true
+  },
+  {
+   "true": "take",
+   "predicted": "sick",
+   "n": 1,
+   "conf_median": 0.1417,
+   "conf_max": 0.1417,
+   "n_above_0.80": 0,
+   "kinds": [
+    "red_flag:FALSE_ALARM"
+   ],
+   "predicted_in_ship_vocab": true
+  }
+ ],
+ "dangerous_clips_total": 53,
+ "dangerous_clips_above_080": 0,
+ "per_signer": {
+  "11": {
+   "acc": 0.9176,
+   "n": 170,
+   "mean_conf": 0.7889
+  },
+  "23": {
+   "acc": 0.9107,
+   "n": 56,
+   "mean_conf": 0.7612
+  },
+  "24": {
+   "acc": 1.0,
+   "n": 4,
+   "mean_conf": 0.9164
+  },
+  "35": {
+   "acc": 0.9279,
+   "n": 208,
+   "mean_conf": 0.7779
+  },
+  "49": {
+   "acc": 0.7634,
+   "n": 617,
+   "mean_conf": 0.6308
+  },
+  "50": {
+   "acc": 0.8273,
+   "n": 110,
+   "mean_conf": 0.7521
+  },
+  "64": {
+   "acc": 0.9452,
+   "n": 73,
+   "mean_conf": 0.847
+  },
+  "74": {
+   "acc": 1.0,
+   "n": 2,
+   "mean_conf": 0.7696
+  },
+  "85": {
+   "acc": 0.8571,
+   "n": 133,
+   "mean_conf": 0.7287
+  }
+ }
+}

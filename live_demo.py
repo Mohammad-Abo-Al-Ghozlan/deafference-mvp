@@ -1708,9 +1708,31 @@ if __name__ == "__main__":
                   "explicitly if you accept that.")
         print(f"[cfg] 123-class MEDICAL model from {ARTIFACTS} — test 0.8383 "
               f"(top-5 0.9512), 9 held-out signers")
-        print("[cfg] ⚠️  gate values are inherited from the 250-word model and are "
-              "UNMEASURED here.\n      Run measure_conf_gate.py against artifacts_medical "
-              "before quoting a commit rate.")
+        # MEASURED 2026-09-04 by measure_medical_gate.py on the 1,373-clip held-out test
+        # split (9 unseen signers), after reproducing the published 0.8383 exactly. These
+        # replace the values inherited from the 250-word model, which were never measured
+        # here. Full curve in medical_gate_test.json; reasoning in docs/MEDICAL_SAFETY_GATES.md.
+        #
+        #   tau   speak   precision   spoken errors (222 ungated)
+        #   0.50  75.2%     0.9448     57
+        #   0.70  59.4%     0.9791     17     <- L2, and temporal confirmation sits on top
+        #   0.80  51.1%     0.9872      9     <- L1, instant commit
+        #   0.90  36.2%     0.9940      3        +0.007 precision for -15% coverage
+        #
+        # The reason 0.80 and not the 250-word 0.70: of 53 clips where a DANGEROUS confusion
+        # fired (red-flag missed/false-alarm, wrong body site), ZERO reached confidence 0.80.
+        # The highest any of them reached was 0.746 — 0.054 of headroom. So this threshold
+        # empirically suppressed every enumerated dangerous confusion in the test split.
+        # 0 of 53 bounds the true rate at ~5.7% (rule of three), not at zero.
+        L1_CONF, L2_CONF = 0.80, 0.70
+        print("[cfg] commit gates MEASURED on the held-out test split: "
+              f"L1_CONF {L1_CONF} (precision 0.987), L2_CONF {L2_CONF} (0.979)")
+        print("      0 of 53 dangerous-confusion clips reached 0.80 — the highest was 0.746. "
+              "Every\n      enumerated dangerous confusion in the test split is below this "
+              "gate.")
+        print("      Cost: ~51% of single clips clear 0.80. Temporal accumulation raises the "
+              "real\n      commit rate above that, but expect to repeat signs more than on "
+              "--vocab250.")
         print("[licence] Sem-Lex is CC BY-NC-SA: NON-COMMERCIAL, and share-alike "
               "arguably reaches\n          these weights. Demo and research only — not a "
               "shippable product.")

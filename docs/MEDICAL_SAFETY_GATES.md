@@ -16,6 +16,14 @@ shippable vocabulary     55 of 123 concepts, mean 0.9331
 > interpreter review.** That review is the point of this document. Argue with the
 > categories in §5 — they are the one part that is judgement rather than measurement.
 
+> ✅ **Updated 2026-09-04: the confidence gate is now MEASURED, not inherited — see §4b.**
+> Two results there change what this document claims. **(1)** All 53 dangerous-confusion
+> clips fired *below* confidence 0.80 — the highest reached 0.746 — so the gate suppressed
+> every one of them, and `--medical` now runs the measured `L1_CONF 0.80 / L2_CONF 0.70`.
+> **(2)** §1's and §2's 0.80 bar is on **recall**, and recall overstates **precision** for 20
+> of the 55 shipped words. `no` is 0.909 recall but **0.714 precision** ungated: more than one
+> spoken refusal in four is not a refusal. Read §4b before §1.
+
 ---
 
 ## 1. The finding that matters most: negation is asymmetric
@@ -116,6 +124,108 @@ The two rows that are *not* single-clip artefacts are `hot → bad` (5 clips, 16
 class) and `ear → skin` (3 clips, 60%). Both are in the cannot-express set, so neither is
 reachable in the shipping configuration — but both would return the moment someone widens
 the vocabulary past the 55.
+
+---
+
+## 4b. ✅ MEASURED 2026-09-04 — the confidence gate, and it works on the errors that matter
+
+Everything in 4b comes from `measure_medical_gate.py` on the **same 1,373 held-out clips**,
+written to `medical_gate_test.json`. The script **refuses to print a single gate figure until
+it reproduces the published 0.8383** — it does, exactly, along with all four per-fold
+accuracies, so the clip loading and the 123-class order are confirmed right.
+
+*(A previous attempt, `measure_conf_gate.py`, scored the per-word **exemplar** clips. Those
+are training data, so it reported precision **1.000 at every threshold** — pinned at the
+ceiling, no information. That file cannot answer this question and should not be used for it.)*
+
+### What a confidence threshold buys
+
+| τ | you speak | precision | wrong things spoken |
+|---|---|---|---|
+| 0.00 (ungated) | 100% | 0.8383 | **222** |
+| 0.50 | 75.2% | 0.9448 | 57 |
+| 0.70 | 59.4% | 0.9791 | 17 |
+| **0.80** | **51.1%** | **0.9872** | **9** ← 25× fewer |
+| 0.90 | 36.2% | 0.9940 | 3 |
+
+### 🔴 The decisive result: dangerous confusions all fire at LOW confidence
+
+I expected the opposite, and wrote the test to find out: *if* the §4 confusions fire at high
+confidence, then no threshold can stop them and the never-auto-commit list is the only
+defence. **They don't.**
+
+```
+53 clips in which a §4 dangerous confusion actually fired
+ 0 of them reached confidence 0.80
+highest confidence ANY dangerous confusion reached:  0.746   (ear -> skin)
+headroom to the gate:                                0.054
+```
+
+**A 0.80 gate suppressed every enumerated dangerous confusion in the test split** — all 53,
+including both non-artefact rows (`hot → bad` max 0.673, `ear → skin` max 0.746). Zero of 53
+bounds the true rate at about **5.7%** by the rule of three; it does not bound it at zero. But
+the direction is unambiguous and it is the strongest safety finding in this document.
+
+**So `--medical` now runs `L1_CONF 0.80 / L2_CONF 0.70`, measured, not inherited.** The cost is
+real: only ~51% of single clips clear 0.80, so expect to repeat signs more than on
+`--vocab250`. Temporal accumulation raises the true commit rate above 51%.
+
+### 🔴 And a flaw in this document: §2 and the ship list gate on the wrong quantity
+
+The 0.80 ship gate is on **recall** — P(model says X | truth is X). A speaking device needs
+**precision** — P(truth is X | model says X). When the tool says "pain" the clinician acts on
+"pain"; what matters is whether that utterance is trustworthy, not whether pain is usually
+caught. **Over the 55 shipped words, recall overstates precision by more than 0.10 for 20 of
+them.** The worst:
+
+| word | recall (the gate) | **precision** | times announced |
+|---|---|---|---|
+| `who` | **1.000** | **0.455** | 22 |
+| `skin` | **1.000** | 0.545 | 11 |
+| `eye` | **1.000** | 0.625 | 8 |
+| `blood` | 0.889 | 0.667 | 12 |
+| `no` | **0.909** | **0.714** | 14 |
+
+**`who` passes the gate at perfect recall and is wrong 55% of the time it is spoken.**
+
+**This sharpens §1.** The headline "the model ships `no` at 0.909" is a *recall* number. Its
+ungated precision is **0.714** — **more than one spoken refusal in four is not a refusal.** At
+τ=0.80 it becomes 1.000, so the gate fixes it; ungated, it does not hold.
+
+### The ship list re-cut on precision at τ=0.80
+
+**Rescued — 11 of 13 failing words pass, 9 of them at 1.000:**
+`eye` 0.625→1.000 · `skin` 0.545→1.000 · `no` 0.714→1.000 · `woman` 0.692→1.000 ·
+`want` 0.714→1.000 · `show` 0.741→1.000 · `tired` 0.769→1.000 · `hand` 0.750→1.000 ·
+`more` 0.750→1.000 · `wait` 0.774→0.913 · `who` 0.455→**0.875**
+
+**🔴 Still failing at τ=0.80 — the two de-ship candidates:**
+
+| word | ungated → at τ | note |
+|---|---|---|
+| `blood` | 0.667 → **0.667** | a **red-flag** word the gate does not help. Already never-auto-commit, so the human tap is the live defence. **Question for review: ship it at all?** |
+| `father` | 0.800 → **0.750** | gets *worse* under the gate. Not clinically critical |
+
+**Silenced, not passed — `always` and `tell` are never announced at τ=0.80 at all.** Their
+precision is undefined because the gate mutes them. That is not a pass; it means two shipped
+words cannot be spoken in the recommended configuration.
+
+> ⚠️ **Sample sizes.** At τ=0.80 only 702 of 1,373 clips are spoken across 55+ words, so the
+> per-word figures above rest on **3–23 clips each**. The aggregate (0.9872 on 702) is solid;
+> read the individual 1.000s as "no errors seen in a handful", not as certainty.
+
+### The gate knows when it is out of its depth
+
+```
+corr(per-signer mean confidence, per-signer accuracy) = 0.914     (7 signers with n>=50)
+worst signer p49: accuracy 0.7634 on 617 clips (45% of the test set), mean confidence 0.631
+```
+
+Per-signer accuracy spans only **1.31×** here (0.763 → 1.000), far tighter than the 250-word
+model's 2.65×. More usefully, **confidence tracks signer difficulty at r=0.914**, so the gate
+throttles itself on the signers it handles worst instead of failing confidently on them. That
+is the behaviour a safety gate needs and it was not designed in — it is worth confirming it
+survives on a wider signer pool before relying on it.
 
 ---
 
