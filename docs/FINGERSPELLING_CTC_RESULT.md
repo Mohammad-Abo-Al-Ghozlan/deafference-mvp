@@ -1,5 +1,64 @@
 # Fingerspelling CTC baseline — the first run, measured
 
+> ## ✅ RUN 2 · 2026-09-05 · 16 shards · **CER 0.4703 → 0.3730**
+>
+> **The data hypothesis is confirmed, and it was a controlled experiment.** Same 13 held-out
+> signers (`val_signers_pinned: true`), same architecture to within **1,544 params** — which
+> is exactly `8 extra classes × (192 dim + 1 bias)`, i.e. the charset fix and nothing else,
+> 0.1% of the model. One variable: **4× the training data.**
+>
+> ```
+> best val CER   0.4703 -> 0.3730    -0.0973   (-20.7% relative)
+> exact phrase   0.0174 -> 0.0445    2.6x
+> n_train         2,999 -> 11,924    n_val 459 -> 1,844 (same PEOPLE, more clips each)
+> n_classes          52 -> 60        charset from the competition file ✅
+> non-finite          0 -> 0         the length guard held again
+> ```
+>
+> **The 16-shard set provably contains the 4-shard set** — the subset log's 4th shard reads
+> `3,997 sequences, 635,755 frames`, identical to the first run's totals to the digit, because
+> `--limit-files N` takes the first N of a *sorted* list.
+>
+> **All 13 signers improved**, mean **−0.0953** (sd 0.032, range −0.023 … −0.135). No signer
+> regressed, so this is not a lucky draw.
+>
+> ### The equity picture, read carefully
+>
+> The **ratio** widened 2.77× → 3.06×, which looks like bad news and is not the right
+> statistic. `corr(old CER, absolute gain) = −0.547`: **harder signers gained *more* in
+> absolute CER**, so the absolute gap **narrowed** 0.4399 → 0.3945. A ratio widens whenever
+> near-equal absolute gains land on unequal bases.
+>
+> **What actually binds is the floor, and it is unmoved in kind:** p203 went from 31% to
+> **41% of characters right**, p161 from 70% to **81%**. Another 4× data would put p203 near
+> 50%. **Data alone will not make the worst-served signer usable** — the same conclusion the
+> 250-word model reached when an oracle per-signer mean-shift moved its worst signer −0.0018.
+>
+> ### The filter scaled linearly — except the repeat rule
+>
+> ```
+> fewer hand-frames than chars    367 -> 1497   x4.1
+> T_out < phrase_len              170 ->  701   x4.1
+> ONLY repeated characters          2 ->   15   x7.5   <- linear would be x4.0
+> kept                                  86.15%  (was 86.51%)
+> ```
+> 15 rows at ~7.5× rather than 4× is about 2.5σ on Poisson counts this small, so treat it as
+> noise around a real effect — but the correction that "earned 2 rows" now earns 15, each of
+> which would have carried ~90× the gradient of a real sample.
+>
+> ### Next: 34 shards, predicted **0.320**
+>
+> One observation gives **−0.0487 CER per doubling of data**. Extrapolated: 34 shards → 0.320,
+> 68 → 0.272. Weak (n=1) but testable. **34 shards peaks at 7.03 GB and is safe; 68 peaks at
+> 14.07 GB against a Kaggle GPU notebook's ~13 GB and still OOMs.**
+>
+> Going past 34 needs `subset_landmarks.py` to write `frames.npy` *separately* from the
+> metadata, so the trainer can `np.load(..., mmap_mode="r")` and never make the raw landmarks
+> resident. `np.load` cannot mmap a member of an `.npz`. That is the one blocking change for
+> the full corpus, and it is small.
+
+
+
 **Run 2026-09-04.** `train_ctc.py --epochs 40` on `fs75.npz` (4 of 68 shards). Source of every
 number below: `report.txt` at the repo root, the run's own `report.json`.
 
