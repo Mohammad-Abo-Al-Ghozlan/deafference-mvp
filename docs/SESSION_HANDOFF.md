@@ -1,21 +1,28 @@
-# Deafference — Session Handoff (2026-07-20 → **updated 2026-08-27**)
+# Deafference — Session Handoff (2026-07-20 → **updated 2026-09-07**)
 
 > **Purpose of this file.** A complete, self-contained record of what was built,
 > decided, and discussed across these working sessions. If you are a new
-> assistant/chat: **read §0.6 CURRENT STATE (2026-08-27) FIRST**, then §0.5.
+> assistant/chat: **read §0.8 CURRENT STATE (2026-09-07) FIRST**, then §0.7.
 >
 > **The rule for this file: the HIGHEST-NUMBERED §0.x is the live picture.** Lower ones are
-> kept for the reasoning trail. Supersession is often *partial* — §0.6 replaces §0.5 only on
-> the recognition headline number and on how to evaluate a fold-ensemble; §0.5's refuted
-> levers and its "Working with Salim" subsection are still current.
+> kept for the reasoning trail. Supersession is often *partial* — §0.8 replaces §0.7 only on
+> the medical gate values and on which statistic the ship list must be gated on; §0.7's corpus
+> build, its 0.8383 headline and its lexical-collision diagnosis all still stand, as do §0.5's
+> refuted levers and its "Working with Salim" subsection.
+>
+> ⚠️ **Note the file order: §0.8 and §0.7 sit ABOVE §0.6.** Newest is inserted above the
+> previous newest, so the sections after §0.5 read newest-first, not in numeric order.
 >
 > **Sections §0, §0.1 and §8 are history that has since completed.** They are kept for
 > the reasoning trail, not as current status. Where they conflict with §0.2, §0.2 wins.
 >
-> **Right now the active project is the MEDICAL-DOMAIN MVP** (§0.2) — the general
-> 250-word work is paused, both of its phases being demo-ready.
+> **Two tracks are active** (§0.8): the **MEDICAL-DOMAIN MVP** — which now has a measured
+> safety gate and four ship-list words awaiting Salim's decision — and **FINGERSPELLING**,
+> a CTC baseline at 0.3730 val CER with its next rung scoped. The general 250-word work is
+> paused, both of its phases being demo-ready.
 > Deeper detail lives in the companion docs, chiefly
-> [`MEDICAL_MVP_PLAN.md`](MEDICAL_MVP_PLAN.md) and [`explanation.md`](explanation.md).
+> [`MEDICAL_MVP_PLAN.md`](MEDICAL_MVP_PLAN.md), [`MEDICAL_SAFETY_GATES.md`](MEDICAL_SAFETY_GATES.md),
+> [`FINGERSPELLING_CTC_RESULT.md`](FINGERSPELLING_CTC_RESULT.md) and [`explanation.md`](explanation.md).
 
 ---
 
@@ -815,10 +822,196 @@ an intervention that would fail if the mechanism were false, not more descriptio
 
 ---
 
-## 0.7 CURRENT STATE (2026-08-27, later) — READ THIS FIRST IF YOU ARE A NEW CHAT
+## 0.8 CURRENT STATE (2026-09-07) — READ THIS FIRST IF YOU ARE A NEW CHAT
+
+Supersedes §0.7 on **two** things: the medical safety gate is now measured rather than
+inherited, and §0.7's ship list gates on the wrong statistic. Everything else in §0.7 — the
+corpus build, the 0.8383 headline, the lexical-collision diagnosis — is unchanged and still
+governs. **The fingerspelling track below is not in §0.7 at all.**
+
+Two tracks moved since §0.7: the **medical MVP** now has a measured gate, and
+**fingerspelling** went from nothing to a working CTC baseline in two runs.
+
+---
+
+### ✅ THE MEDICAL GATE IS MEASURED (`5c091dc`, 2026-09-04) — and it refuted its own framing
+
+`measure_medical_gate.py`, on the **1,373 held-out clips from 9 unseen signers**. It **refuses to
+print a gate figure until it reproduces the published 0.8383** — it does, exactly, and all four
+per-fold accuracies match to 4dp, so the clip loading and the 123-class order are confirmed.
+
+§0.7's open question was: *if the dangerous confusions fire at HIGH confidence, no threshold can
+stop them and the never-auto-commit list is the only defence.* **They don't.**
+
+```
+53 clips where a dangerous confusion actually fired
+ 0 of them reached confidence 0.80
+    highest any reached: 0.746 (ear -> skin), 0.054 of headroom
+```
+
+A 0.80 gate suppressed **every** enumerated dangerous confusion in the test split, including both
+non-artefact rows (`hot`→`bad` max 0.673). So `--medical` now runs the **measured L1_CONF 0.80 /
+L2_CONF 0.70** instead of the 250-word model's inherited values, and no longer prints the
+`UNMEASURED` warning. An explicit `--conf` still overrides.
+
+⚠️ **0 of 53 bounds the true rate at ~5.7% by the rule of three, not at zero.** The direction is
+unambiguous; the magnitude is not established.
+
+⚠️ **`measure_conf_gate.py` is superseded for this question.** It scored the per-word **exemplar**
+clips, which are *training data*, so it reported precision 1.000 at every threshold — pinned at
+the ceiling, carrying no information. Do not resurrect it to answer a gate question.
+
+### 🚨 §0.7's SHIP LIST GATES ON RECALL. A SPEAKING DEVICE NEEDS PRECISION.
+
+This is the most dangerous thing found since §0.7, and it is a flaw in our own safety doc.
+
+The 0.80 ship gate is on **recall** — P(says X | truth X). But when the tool says "pain", the
+clinician acts on "pain". That is **precision** — P(truth X | says X).
+
+| word | recall | precision (ungated) | |
+|---|---|---|---|
+| `who` | 1.000 | **0.455** | wrong 55% of the times it is spoken |
+| `no` | 0.909 | **0.714** | §0.7's own headline word — >1 spoken refusal in 4 is not a refusal |
+
+**Recall overstates precision by >0.10 for 20 of the 55 shipped words.**
+
+The gate mostly fixes it. Re-cut on precision at tau=0.80: **11 of 13 failing words rescued, 9 to
+1.000** (`no` reaches 1.000). But four words do not clear:
+
+| word | precision @ 0.80 | verdict |
+|---|---|---|
+| `blood` | 0.667, **unchanged by the gate** | red-flag word; already never-auto-commit, so the human tap is the live defence |
+| `father` | 0.750, **gets worse under the gate** | de-ship candidate |
+| `always` | never announced at 0.80 | the gate **mutes** it — that is not a pass |
+| `tell` | never announced at 0.80 | same |
+
+⚠️ **Per-word figures rest on 3–23 clips each** and are labelled as such in the report. The solid
+number is the aggregate: **0.9872 precision on 702 spoken clips**.
+
+**Also measured, and it is reassuring:** corr(per-signer mean confidence, per-signer accuracy) =
+**0.914** — the gate throttles itself on the signers it handles worst rather than failing
+confidently on them. Per-signer spread is **1.31×** here against the 250-word model's 2.65×.
+`p49` alone is 45% of the test split, at 0.7634.
+
+**A `selftest` asserts that recall and precision DISAGREE on a hand-built case**, so the
+distinction this file exists for cannot rot. 9 checks, no models needed.
+
+### ✅ FINGERSPELLING: A WORKING CTC BASELINE, 0.4703 → 0.3730 IN TWO RUNS
+
+Not covered in §0.7. Full analysis in [`FINGERSPELLING_CTC_RESULT.md`](FINGERSPELLING_CTC_RESULT.md),
+click-paths in [`RUNBOOK_FINGERSPELLING.md`](RUNBOOK_FINGERSPELLING.md).
+
+| | run 1 (4 shards, `fc6d23c`) | run 2 (16 shards, `5929cbe`) |
+|---|---|---|
+| best val CER | 0.4703 | **0.3730** (−0.0973, −20.7% rel) |
+| exact phrase | 0.0174 | 0.0445 (2.6×) |
+| n_classes | 52 *(bug)* | 60 *(from the competition file)* |
+| non-finite | 0 / 40 epochs | 0 |
+
+**`--val-signers` (`dc7873e`) made run 2 a controlled experiment.** `val_signers_pinned: true`,
+and the architecture differs by exactly **1,544 params** = 8 extra classes × (192 dim + 1 bias) —
+the charset fix and nothing else, 0.1% of the model. **One variable: 4× data.** The superset claim
+is empirical, not inferred: the subset log's 4th shard reads 3,997 sequences / 635,755 frames,
+identical to run 1's totals to the digit.
+
+**All 13 signers improved**, mean −0.0953, sd 0.032, no regressions.
+
+⚠️ **The equity statistic was misread once — the correction matters.** corr(old CER, absolute
+gain) = **−0.547**, so *harder* signers gained *more*: the absolute gap **narrowed** 0.4399 →
+0.3945. The ratio widened 2.77× → 3.06×, but **a ratio widens whenever near-equal absolute gains
+land on unequal bases** — it is the wrong statistic here. Use the absolute gap.
+
+🚨 **The floor is unmoved in kind.** `p203` went from 31% to 41% of characters right. Another 4×
+would put it near 50%. **Data alone will not make the worst-served signer usable** — which is the
+same conclusion the 250-word model reached when an oracle mean-shift moved its worst signer
+−0.0018 (§0.5).
+
+### 🚨 THE CHARSET WAS SHARD-DERIVED — 51 chars, not the corpus's 59 (`de7504e`)
+
+Run 1 reported `n_classes 52` against a predicted ~60. **That gap was a bug, and it is the
+123-class medical vocab trap wearing a new hat.**
+
+`build_charset()` did `sorted({c for p in phrases for c in p})` over the **attached** shards. Four
+shards contain 51 of the corpus's 59 characters. Because the map is a sort of the *observed set*,
+adding shards does not append the missing eight — it **inserts** them and shifts the index of
+nearly every character after each insertion point. Two silent consequences:
+
+* a 4-shard model and a 68-shard model **share no label space**, so their CER numbers are not comparable; and
+* loading one run's `charset.json` against the other's weights **remaps every character**.
+
+`build_charset`'s own docstring warned about precisely this while doing it. Fixed:
+
+* `load_charset()` prefers the competition's own `character_to_prediction_index.json` (59 chars),
+  auto-detected under `/kaggle/input`, overridable with `--charset`. **Keys are re-sorted rather
+  than trusting the file's indices**, so the mapping is a pure function of the key set.
+* the fallback still works but prints a five-line warning naming the hazard, and records
+  `charset_source` in **both** `charset.json` and `report.json` so a stale run identifies itself.
+* `train()` now **aborts** if any character in the data is missing from the charset. `encode()`
+  drops unknown chars, which truncates the label and trains against a phrase nobody wrote.
+* Selftest 26 → 32 checks, including one that demonstrates the reindex directly (`c: 2 → 3` when a
+  character is added), so the finding cannot rot.
+
+**Also fixed there:** `frames` is freed after the feature pass — it is 2.2× the size of the
+features (measured 0.57 vs 0.26 GB at 4 shards). At 68 shards that is **9.7 GB held for nothing**.
+
+### ⛔ THE MEMORY CEILING, AND THE ONE BLOCKING CHANGE FOR THE FULL CORPUS
+
+```
+34 shards   peaks 7.03 GB    safe
+68 shards   peaks 14.07 GB   OOMs against ~13 GB of GPU-notebook host RAM
+```
+
+**Next rung is 34 shards, predicted CER 0.320** from −0.0487 per doubling (n=1 — weak, but
+testable). Runbook part 5b (`9a15f75`) has the click-path, and **20 epochs, not 25**.
+
+Going past 34 needs `subset_landmarks.py` to write `frames.npy` **separately** from the metadata
+so the trainer can mmap it — **`np.load` cannot mmap a member of an `.npz`.** That is the single
+blocking change for the full corpus.
+
+### ✅ Avatar: the medical handoff is built, and the passive hand is REAL here (`bd924d9`)
+
+The medical avatar handoff exists — **55 signs**, [`MEDICAL_AVATAR_HANDOFF.md`](MEDICAL_AVATAR_HANDOFF.md).
+
+🚨 **The passive hand is recorded in 81% of Sem-Lex frames, against GISLR's 0.000.** So the
+250-word `renderer_contract` is **corpus-specific** and must not be reused as-is — **branch on
+`passiveHandRecorded`**. An avatar animator was hired 2026-09-01 and holds brief v6.1.
+
+⚠️ **The player source is not in this repo.** Runtime owner still unknown.
+
+### Licence position (`f3c2123`) — unchanged in substance, sharper in detail
+
+| corpus | terms | consequence |
+|---|---|---|
+| Sem-Lex | CC BY-NC-SA | non-commercial **and** share-alike |
+| ASL Citizen | non-commercial, **no share-alike** | a **free** release is clean on it; the commercial alias is dead |
+
+Still **licence-blocked for commercial shipping**. A free/research release is not blocked.
+
+### Next actions (2026-09-07)
+
+1. **Salim's call — the ship list.** `blood` (0.667, gate doesn't help) and `father` (0.750, gate
+   makes it worse) are de-ship candidates; `always` and `tell` are muted rather than passing.
+   Four words, a product decision, not a modelling one.
+2. **Re-cut `MEDICAL_SAFETY_GATES.md` on precision.** The doc's own gate statistic is wrong for a
+   speaking device; the numbers to replace it with are measured and in `5c091dc`.
+3. **The 34-shard fingerspelling run** — predicted 0.320, ~7 GB peak, click-path ready.
+4. **`frames.npy` written separately** if the full corpus is wanted. One change, clearly scoped.
+
+### The methodological rule this session earned
+
+**Name the statistic the product needs, then check the doc measures that one.** The gate work was
+sound and the ship list was gated — on recall, which reads like safety and is not. `who` at recall
+1.000 is wrong more than half the times it speaks. A measured number against the wrong definition
+is more dangerous than an unmeasured one, because it stops the question being asked.
+
+---
+
+## 0.7 STATE AS OF 2026-08-27 (later) — ⚠️ SUPERSEDED IN PART BY §0.8, READ THAT FIRST
 
 Supersedes §0.6 **only** on the medical track. §0.6's recognition-model numbers and its
 fold-ensemble evaluation rule are unchanged and still govern.
+⚠️ **§0.8 supersedes this section's gate values (now measured) and its ship list's gating
+statistic (recall, where the product needs precision).**
 
 ### The medical corpus is now buildable end to end
 
