@@ -913,12 +913,73 @@ distinction this file exists for cannot rot. 9 checks, no models needed.
 Not covered in §0.7. Full analysis in [`FINGERSPELLING_CTC_RESULT.md`](FINGERSPELLING_CTC_RESULT.md),
 click-paths in [`RUNBOOK_FINGERSPELLING.md`](RUNBOOK_FINGERSPELLING.md).
 
-| | run 1 (4 shards, `fc6d23c`) | run 2 (16 shards, `5929cbe`) |
-|---|---|---|
-| best val CER | 0.4703 | **0.3730** (−0.0973, −20.7% rel) |
-| exact phrase | 0.0174 | 0.0445 (2.6×) |
-| n_classes | 52 *(bug)* | 60 *(from the competition file)* |
-| non-finite | 0 / 40 epochs | 0 |
+| | run 1 (4 shards, `fc6d23c`) | run 2 (16 shards, `5929cbe`) | **run 3 (34 shards, 2026-09-08)** |
+|---|---|---|---|
+| val CER | 0.4703 *(best)* | **0.3730** *(best)* | **0.3302** *(final — `best` not yet read)* |
+| exact phrase | 0.0174 | 0.0445 (2.6×) | **0.084** (1.9×) |
+| n_classes | 52 *(bug)* | 60 | 60 ✅ *(TensorSpec `(None,None,60)`)* |
+| val sequences | 459 | — | **4,085** |
+| per-signer ratio | 2.77× | 3.06× | 3.71× *(wrong statistic — see below)* |
+| **absolute gap** | **0.4399** | **0.3945** | **0.3916** |
+
+### ✅ RUN 3 LANDED ON PREDICTION (2026-09-08) — and the scaling law holds
+
+**Predicted 0.320 on record before the run; measured 0.3302.** Off by 0.010.
+
+```
+ 4 -> 16 shards   2.000 doublings   dCER -0.0973   per doubling -0.0487
+16 -> 34 shards   1.087 doublings   dCER -0.0428   per doubling -0.0394
+                                    rate decayed to 80.9% of the earlier rate
+```
+
+Against §0.8's own pre-registered decision rule (~0.32 = log-linear holds, ~0.36 = flattening,
+>0.373 = data is not the lever), **0.3302 sits far nearer 0.32 than 0.36. The full corpus is
+worth the mmap refactor**, projecting **0.291–0.298 at 68 shards**.
+
+### 🚨 BUT DATA HAS STOPPED BUYING EQUITY, AND THAT IS THE FINDING THAT MATTERS
+
+The absolute gap — the statistic §0.8 established as the right one — has essentially stopped
+moving:
+
+```
+absolute gap   0.4399 -> 0.3945 -> 0.3916
+closed by            -0.0454      -0.0029     <- 6% as much
+```
+
+Run 1→2 closed the gap by 0.0454. Run 2→3 closed it by **0.0029**. And the worst signer's gains
+are halving with it:
+
+```
+p203 characters right   31.0% -> 41.0% -> 46.4%
+                              +10.0pt    +5.4pt
+```
+
+Extrapolating that halving, the **entire remaining corpus** buys p203 roughly **+2.7 points, to
+~49%**. **Half of that person's characters would still be wrong.** This is the same wall the
+250-word model hit when an oracle per-signer mean-shift moved its worst signer −0.0018 (§0.5),
+and the same conclusion stated at 16 shards, now with a third point confirming it.
+
+⚠️ **The per-signer ratio widened again (3.06 → 3.71) and must still not be quoted.** A ratio
+widens whenever near-equal absolute gains land on unequal bases; the gap is what binds.
+
+**So the strategy splits in two.** Finishing the corpus is cheap, mechanical, and worth doing for
+the mean. **It is not the lever for the worst-served signers, and no amount of it will be.**
+
+### ⚠️ Level-setting: this model is not usable yet, and the trend does not hide that
+
+CER 0.3302 means **a third of characters are wrong**, and exact-phrase 0.084 means **8 whole
+phrases in 100 come out right**. Fingerspelling exists in this product for patient names, drug
+names and dosages — where a near-miss is a wrong answer, not a typo. Three rungs of clean
+scaling is a real result about the *method*; it is not yet a result about the *product*.
+
+⚠️ **Two numbers still outstanding from run 3** — the paste was the tail only:
+* **`best_val_cer` from `report.json`.** 0.3302 is `final`; run 2's best (0.3730) beat its final
+  (0.3798), so run 3's best is probably lower and the table above understates the gain. **The
+  0.3730-vs-0.3302 comparison is best-vs-final and is therefore not yet apples-to-apples.**
+* **the per-epoch `val_loss` rows**, for the run-1 epoch-23 lesson (CER hid a 39% loss rise).
+
+Also note run 1's 0.4703 rested on **459** val sequences against run 3's **4,085** — same 13
+pinned signers, but the early figures were noisier than they looked.
 
 **`--val-signers` (`dc7873e`) made run 2 a controlled experiment.** `val_signers_pinned: true`,
 and the architecture differs by exactly **1,544 params** = 8 extra classes × (192 dim + 1 bias) —
@@ -1062,8 +1123,18 @@ Still **licence-blocked for commercial shipping**. A free/research release is no
    label the statistic and name the four words that move (`no`, `more`, `blood`, `always`); §3
    records that its exclusions were *conservative*, because recall overstates precision, so no
    word leaves the cannot-express list.
-3. **The 34-shard fingerspelling run** — predicted 0.320, ~7 GB peak, click-path ready.
-4. **`frames.npy` written separately** if the full corpus is wanted. One change, clearly scoped.
+3. ✅ **DONE 2026-09-08 — the 34-shard run landed at 0.3302 against 0.320 predicted.** Send the
+   full log when convenient: `best_val_cer` from `report.json` and the per-epoch `val_loss` rows
+   are the two numbers still missing.
+4. 🟢 **NOW UNBLOCKED AND WORTH DOING — `frames.npy` written separately.** Run 3 triggered the
+   pre-registered rule for it: the log-linear model held, so the full corpus projects to
+   **0.291–0.298**. `np.load` cannot mmap a member of an `.npz`, which is the only thing between
+   us and 68 shards. Small, mechanical, mine.
+5. 🔴 **NEW — the equity lever is now a separate problem and needs naming as one.** Data closed
+   the absolute gap by 0.0454, then by **0.0029**. The remaining corpus buys the worst signer
+   about +2.7 points, to ~49% of characters right. **Finishing the corpus will not fix this.**
+   Whatever does — architecture, per-signer adaptation, targeted recording — is unidentified, and
+   it is the same wall the 250-word track hit in §0.5.
 
 ### The methodological rule this session earned
 
