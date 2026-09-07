@@ -878,12 +878,24 @@ clinician acts on "pain". That is **precision** — P(truth X | says X).
 The gate mostly fixes it. Re-cut on precision at tau=0.80: **11 of 13 failing words rescued, 9 to
 1.000** (`no` reaches 1.000). But four words do not clear:
 
-| word | precision @ 0.80 | verdict |
-|---|---|---|
-| `blood` | 0.667, **unchanged by the gate** | red-flag word; already never-auto-commit, so the human tap is the live defence |
-| `father` | 0.750, **gets worse under the gate** | de-ship candidate |
-| `always` | never announced at 0.80 | the gate **mutes** it — that is not a pass |
-| `tell` | never announced at 0.80 | same |
+| word | ungated | @ τ=0.80 | **n said @ τ** |
+|---|---|---|---|
+| `blood` | 0.667 *(n=12)* | 0.667 | **3** |
+| `father` | 0.800 *(n=15)* | 0.750 | **4** |
+| `always` | 0.800 *(n=5)* | undefined | **0** |
+| `tell` | **1.000** *(n=4)* | undefined | **0** |
+
+🚨 **REVISED 2026-09-07 — these are NOT de-ship candidates, and this section said they were.**
+The `n` column was missing. At τ=0.80 the four are announced **3, 4, 0 and 0** times: two are
+never spoken, the others are 2-of-3 and 3-of-4. **`tell`'s ungated precision is 1.000** — its
+only failure is that the gate mutes it. `blood`'s sweep *collapses* rather than converging
+(0.667 n=12 → 0.875 n=8 at τ=0.4 → 0.667 n=3 → 1.000 **n=1**), so no operating point is
+readable from it. This is a **measurement gap, not a vocabulary decision**; `blood` has 9 true
+clips in the whole test split. The safety position is unchanged and independent of the number:
+`blood` is never-auto-commit, so a human tap gates it.
+
+**The one finding that survives:** `always` and `tell` are shipping words that **cannot be spoken
+at the default τ**. The list should not claim 55 words when two are muted.
 
 ⚠️ **Per-word figures rest on 3–23 clips each** and are labelled as such in the report. The solid
 number is the aggregate: **0.9872 precision on 702 spoken clips**.
@@ -978,6 +990,52 @@ The medical avatar handoff exists — **55 signs**, [`MEDICAL_AVATAR_HANDOFF.md`
 
 ⚠️ **The player source is not in this repo.** Runtime owner still unknown.
 
+### ✅ DECIDED 2026-09-07 — the 2s gate is OFF, and the SHIPPED clips were a third configuration
+
+Task 8 asked: passive-wrist gate `off` or `2s-only`? **Off**, and it is not close in either
+direction it was tested. But answering it surfaced something bigger.
+
+**The shipped `sign_clips_250.meta.json` was neither arm.** Its gate scope reads
+`['2a','2s']` — the gate was on for **both** classes, a third setting nobody had written down,
+and it is the worst of the three. All 250 words select a different source clip from either arm.
+
+```
+off  vs  2s-only     IMPROVED   0   unchanged 199   regressed 51   (25 fell into tier C)
+off  vs  SHIPPED     IMPROVED 237   unchanged   7   regressed  6
+
+tier movement, shipped -> off      C -> A  x56      B -> A  x35      C -> B  x6
+
+median VALID CANDIDATES        shipped -> off
+  class 1                          138 -> 143
+  class 2s                           3 ->  74        25x
+  class 2a                           5 -> 162        32x
+```
+
+🚨 **The mechanism is candidate starvation, and it explains both comparisons.** With a median of
+3 valid takes for 2s the selector has no choice; with 74 it does. That is why the gate regresses
+words *at full coverage* — a hanging passive wrist renders a wrong pose while scoring well.
+**56 words were sitting in tier C (unusable) purely because of it.**
+
+The 6 regressions are all class 1, all stay in tier A, and the largest is `hesheit` at −0.138
+(then `blow` −0.066, `lips` −0.042, `duck` −0.036, `carrot` −0.019, `talk` −0.009).
+
+⚠️ **Two arms, two CSVs — do not conflate them.** `docs/RESELECT_DIFF.csv` is `off` vs `2s-only`
+(cited by `SALIM_TASKS.md` §8); `docs/RESELECT_DIFF_shipped_vs_off.csv` is the new one.
+
+**The handoff was regenerated** from `clips_off.npz` + `clips_off.meta.json`
+(`gloss_to_motion.py --per-word`, contact sheet via `preview_signs.py --contact`) →
+`deafference_handoff_2026-09-07.zip`, 250 words + 11 files. The generator confirms the same
+finding from its own side: **`0 thin-pool (<=2 takes)`**, where the starved arm was built from
+pools of 3–5.
+
+⚠️ **`review_log.json` is deliberately omitted from the new package.** It held 28 verdicts, **all
+`"unsure"`**, recorded 2026-07-30 against exemplars that have since all been replaced. It carried
+no judgement even when current, and shipping it would imply a review of clips it never saw.
+
+⛔ **The zip and `animation_handoff_off/` are gitignored, so they are NOT backed up by git.** The
+source of truth for a rebuild is `clips_off.npz` plus the tracked lexicons — same rule as the
+`.gitignore` note on `animation_handoff/`.
+
 ### Licence position (`f3c2123`) — unchanged in substance, sharper in detail
 
 | corpus | terms | consequence |
@@ -989,10 +1047,13 @@ Still **licence-blocked for commercial shipping**. A free/research release is no
 
 ### Next actions (2026-09-07)
 
-1. **Salim's call — the ship list.** `blood` (0.667, gate doesn't help) and `father` (0.750, gate
-   makes it worse) are de-ship candidates; `always` and `tell` are muted rather than passing.
-   Four words, a product decision, not a modelling one. **This is the only open item that
-   needs him.**
+1. ✅ **RESOLVED 2026-09-07 — the ship list needs no de-shipping, and the question was malformed.**
+   Pulling the announcement counts out of `medical_gate_test.json` dissolved it: at τ=0.80 the
+   four words are said **3, 4, 0 and 0** times, and `tell`'s ungated precision is **1.000**. No
+   word is shown to be bad. **What remains is a measurement ask, not a decision** — `blood` has
+   9 true clips in the test split, `always` and `tell` 5 each. **The one real defect: the ship
+   list claims 55 words while `always` and `tell` are muted at the default τ.** Fixing that is
+   arithmetic on the list, not a clinical judgement.
 2. ✅ **DONE 2026-09-07 — `MEDICAL_SAFETY_GATES.md` now carries precision inline.** The
    precision re-cut itself already existed: `5c091dc` was **110 insertions, 0 deletions**, so it
    *appended* §4b and a top banner but never touched §1, §2 or §3. Every table a reviewer meets
