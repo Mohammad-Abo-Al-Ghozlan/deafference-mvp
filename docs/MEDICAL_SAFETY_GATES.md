@@ -22,21 +22,42 @@ shippable vocabulary     55 of 123 concepts, mean 0.9331
 > every one of them, and `--medical` now runs the measured `L1_CONF 0.80 / L2_CONF 0.70`.
 > **(2)** §1's and §2's 0.80 bar is on **recall**, and recall overstates **precision** for 20
 > of the 55 shipped words. `no` is 0.909 recall but **0.714 precision** ungated: more than one
-> spoken refusal in four is not a refusal. Read §4b before §1.
+> spoken refusal in four is not a refusal.
+>
+> ✅ **Updated 2026-09-07: §1, §2 and §3 now carry precision INLINE.** The 2026-09-04 pass
+> appended §4b without touching them, so every table a reviewer reads first still showed
+> recall unlabelled with the correction 170 lines below. Fixed — the columns now say which
+> statistic they are, and the four words that move materially (`no`, `more`, `blood`,
+> `always`) say so where they are listed. §4b remains the full derivation.
+>
+> ⚠️ **Two words are not what §2's list implies.** `blood` has precision **0.667 that the
+> gate does not improve**, and `always` is **muted entirely** at τ=0.80. Both are flagged in
+> §2 and both are open questions for this review.
 
 ---
 
 ## 1. The finding that matters most: negation is asymmetric
 
-**The model ships `no` and cannot ship `yes`.**
+**The model ships `no` — but only behind the confidence gate — and cannot ship `yes`.**
 
-| | test acc | ships? |
-|---|---|---|
-| `no` | **0.909** | ✅ |
-| `yes` | **0.714** | ❌ below the 0.80 gate |
-| `not` | 0.647 | ❌ |
-| `worse` | 1.000 on **1** test clip | ❌ unmeasured |
-| `better` | 1.000 on **3** test clips | ❌ unmeasured |
+⚠️ **The first column is RECALL**, P(model says X | truth is X). It is the quantity the ship
+gate uses and it is **not** the quantity a speaking device needs. See §4b.
+
+| | recall (what the gate uses) | precision, ungated | precision @ τ=0.80 | ships? |
+|---|---|---|---|---|
+| `no` | **0.909** | **0.714** | **1.000** | ✅ **only gated** — see below |
+| `yes` | **0.714** | — | — | ❌ below the 0.80 gate |
+| `not` | 0.647 | — | — | ❌ |
+| `worse` | 1.000 on **1** test clip | — | — | ❌ unmeasured |
+| `better` | 1.000 on **3** test clips | — | — | ❌ unmeasured |
+
+*(`—` means no published precision figure: §4b measures precision only for words that are
+actually announced, and these three never clear the ship gate. Absence is not a good number.)*
+
+🔴 **`no` at 0.909 is a recall number, and its ungated precision is 0.714** — **more than one
+spoken refusal in four is not a refusal.** At τ=0.80 it reaches 1.000, so the measured gate
+does fix it, but the headline does not hold without the gate. Any build that lowers `--conf`
+below 0.80 reopens this.
 
 So a patient answering a yes/no question can be rendered as a **refusal** and cannot be
 rendered as **consent**. In a clinical setting consent is the direction that carries legal
@@ -55,22 +76,36 @@ speaker, whatever the confidence — even at 1.00. A held word falls through to 
 chips, so committing it takes one deliberate tap. Enforced in `live_demo.py` immediately
 after `decide_commit()` and before `gloss_buf` / `speaker.say`.
 
-| word | test acc | why it is gated |
-|---|---|---|
-| `no` | 0.909 | negation — inverts meaning |
-| `bad` | 0.952 | severity |
-| `big` | 0.967 | severity |
-| `more` | 0.857 | severity |
-| `always` | 0.800 | certainty |
-| `pain` | 0.971 | red-flag symptom |
-| `blood` | 0.889 | red-flag symptom |
-| `breathe` | 1.000 | red-flag symptom |
-| `sick` | 1.000 | red-flag symptom |
-| `help` | 0.966 | red-flag symptom |
+⚠️ **Again, `recall` is the column the ship gate used.** The `precision` columns are the ones
+that describe what happens when the device *speaks* the word. Four of these ten move
+materially; the other six have no published precision figure because they are not in §4b's
+>0.10 gap set.
 
-**Note the accuracies are high.** The gate is not there because these words are weak — most
+| word | recall | precision, ungated | precision @ τ=0.80 | why it is gated |
+|---|---|---|---|---|
+| `no` | 0.909 | **0.714** | 1.000 | negation — inverts meaning |
+| `bad` | 0.952 | — | — | severity |
+| `big` | 0.967 | — | — | severity |
+| `more` | 0.857 | **0.750** | 1.000 | severity |
+| `always` | 0.800 | — | 🔴 **muted** | certainty |
+| `pain` | 0.971 | — | — | red-flag symptom |
+| `blood` | 0.889 | **0.667** | 🔴 **0.667** | red-flag symptom |
+| `breathe` | 1.000 | — | — | red-flag symptom |
+| `sick` | 1.000 | — | — | red-flag symptom |
+| `help` | 0.966 | — | — | red-flag symptom |
+
+**Note the recall figures are high.** The gate is not there because these words are weak — most
 are among the best in the vocabulary. It is there because they are the words where being
 wrong changes clinical meaning rather than just sounding odd. Confidence is not authority.
+
+🔴 **But two rows above are not reassuring, and both are on this list for a reason:**
+
+- **`blood` — precision 0.667, and the confidence gate does not improve it.** A red-flag word
+  that is wrong one time in three when spoken. The never-auto-commit hold *is* the live
+  defence here; nothing else is. **§4b asks whether to ship it at all.**
+- **`always` — muted entirely at τ=0.80.** It is never announced, so its precision is
+  undefined. A word that cannot be spoken in the recommended configuration is not a shipped
+  word, and listing it as gated overstates what the build does.
 
 **UX consequence, stated plainly:** in `topic_medical_symptom` (18 words) **9 are held**, so
 half of that topic needs a tap. That is the intended trade and a reviewer may disagree with
@@ -87,6 +122,12 @@ at startup and must be surfaced in any UI built on top.
 |---|---|---|
 | **too inaccurate to ship** | `yes` 0.714 · `not` 0.647 · `much` 0.600 · `maybe` 0.533 · `all` 0.444 · `weak` 0.429 · `some` 0.429 · `strong` 0.400 · `faint` 0.400 · `heart` 0.333 · `sometimes` 0.200 · `hot` 0.781 | trained, measured, below the 0.80 gate |
 | **unmeasured (<5 test clips)** | `choke` · `worse` · `better` · `bleed` | scored 1.00 / 1.00 / 1.00 / 0.75 on 1–4 clips — that measures nothing |
+
+✅ **These are recall figures too — but here that error runs in the SAFE direction.** Recall
+*overstates* precision (§4b), so a word already failing on recall would fail at least as badly
+on precision. **Excluding a word for low recall is conservative.** It was *including* one for
+high recall that was the mistake, which is why §1 and §2 needed re-cutting and this list did
+not. No word leaves the cannot-express list because of §4b.
 
 Three of these deserve naming individually:
 

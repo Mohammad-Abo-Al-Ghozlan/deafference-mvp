@@ -991,9 +991,16 @@ Still **licence-blocked for commercial shipping**. A free/research release is no
 
 1. **Salim's call — the ship list.** `blood` (0.667, gate doesn't help) and `father` (0.750, gate
    makes it worse) are de-ship candidates; `always` and `tell` are muted rather than passing.
-   Four words, a product decision, not a modelling one.
-2. **Re-cut `MEDICAL_SAFETY_GATES.md` on precision.** The doc's own gate statistic is wrong for a
-   speaking device; the numbers to replace it with are measured and in `5c091dc`.
+   Four words, a product decision, not a modelling one. **This is the only open item that
+   needs him.**
+2. ✅ **DONE 2026-09-07 — `MEDICAL_SAFETY_GATES.md` now carries precision inline.** The
+   precision re-cut itself already existed: `5c091dc` was **110 insertions, 0 deletions**, so it
+   *appended* §4b and a top banner but never touched §1, §2 or §3. Every table a reviewer meets
+   first still showed recall unlabelled, with the correction 170 lines below — in a document
+   whose stated purpose (line 3) is review by a Deaf signer or a medical interpreter. §1/§2 now
+   label the statistic and name the four words that move (`no`, `more`, `blood`, `always`); §3
+   records that its exclusions were *conservative*, because recall overstates precision, so no
+   word leaves the cannot-express list.
 3. **The 34-shard fingerspelling run** — predicted 0.320, ~7 GB peak, click-path ready.
 4. **`frames.npy` written separately** if the full corpus is wanted. One change, clearly scoped.
 
