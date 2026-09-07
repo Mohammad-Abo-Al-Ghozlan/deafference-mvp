@@ -43,6 +43,12 @@ semlex_metadata.csv
 # ^ 91,148 rows of Sem-Lex ASL-LEX annotation. Same CC BY-NC-SA redistribution question.
 gap_stats.txt
 # ^ per-sequence fingerspelling metadata from the Google competition corpus. Same reason.
+cand_off.csv
+# ^ 6.8 MB, one row per candidate clip with its selection metrics and reject reason, keyed
+# `word/participant_sequence` — per-clip GISLR metadata, so the same redistribution question
+# as the two above. Nothing tracked reads it: it is the human-readable audit trail behind the
+# reselect arms, and the arms themselves (clips_off/clips_2sonly.meta.json) ARE tracked
+# because training/diff_reselect_arms.py defaults to them. Regenerate alongside the arms.
 *_backup/
 __pycache__/
 *.pyc
