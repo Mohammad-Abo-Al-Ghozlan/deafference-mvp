@@ -362,29 +362,168 @@ would mean the phase is not step-bound and my reasoning is wrong.
 
 ---
 
-## Part 5b — the 34-shard rung · same steps as Part 5, three values changed
+## Part 5b — the 34-shard rung · SELF-CONTAINED, do not cross-reference Part 5
+
+**This is the next run.** Everything below has the 34-shard values already substituted — read
+only this part. Two sessions, and they are on different accelerators.
 
 Confirmed by run 2: `best_val_cer` 0.3730 < `final` 0.3798, i.e. the optimum arrived **before**
-epoch 25, so the model is data-starved and not under-trained. 34 shards is the next rung that
+epoch 25, so the model is **data-starved, not under-trained.** 34 shards is the next rung that
 fits in host RAM (7.03 GB peak; 68 needs 14.07 against ~13 available).
 
+### The names you will create
+
+| | name | where |
+|---|---|---|
+| subset notebook | **`deafference-fs-subset-34`** | Accelerator **None** (free, no GPU quota) |
+| output dataset | **`deafference-fs75-34`** | **Private**, brand-new name |
+| training notebook | **`deafference-fs-ctc-34`** | Accelerator **GPU P100** |
+
+**Total cost: ~2.8 h CPU (free) + ~2.7 h GPU** of your 30 h/week.
+
+### 🔴 The one trap that got worse
+
+There are now **three** datasets containing a file called `fs75.npz` — `deafference-fs75` (4
+shard), `deafference-fs75-16`, and the `-34` you are about to make. `subset_landmarks.py` always
+writes that same filename, so `glob(...)[0]` picks whichever sorts first and the run would
+silently retrain on old data and "show no improvement."
+
+**Attach only `deafference-fs75-34`. Detach both of the others.** Cell 1 refuses if it sees more
+than one, and the size assert catches the case where you attached the wrong single one.
+
+---
+
+### Step 1 — the subset, on CPU · ~2.8 h, zero GPU quota
+
+New notebook **`deafference-fs-subset-34`**. **Settings → Accelerator → None.**
+
+**Inputs to attach — two:**
+1. the **Google ASL fingerspelling competition** (`asl-fingerspelling`)
+2. **`deafference-fs-code`**
+
+```python
+# cell 1 — find the real paths. Kaggle mounts inputs NAMESPACED, so a one-level
+# glob finds nothing and the script's --base default never resolves.
+import glob, os
+BASE = os.path.dirname(glob.glob('/kaggle/input/**/train_landmarks', recursive=True)[0])
+CODE = os.path.dirname(glob.glob('/kaggle/input/**/subset_landmarks.py', recursive=True)[0])
+print('BASE =', BASE, '\nCODE =', CODE)
 ```
-subset :  --limit-files 34            ->  ~34,000 seqs, ~5.4M frames, ~4.9 GB, ~2.8 h CPU
-dataset:  deafference-fs75-34         ->  Private, brand-new name
-train  :  --epochs 20                 ->  ~8.2 min/epoch, ~2.7 h GPU
-          --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225   <- SAME 13, unchanged
+
+```python
+# cell 2 — the real run, 34 shards
+!python {CODE}/subset_landmarks.py --base {BASE} --out /kaggle/working --limit-files 34
+!ls -la /kaggle/working
 ```
 
-**Why 20 epochs and not 25.** The optimum moves *earlier* in epoch terms as data grows: 4
-shards peaked at epoch 39/40, 16 shards before 25. The best-CER checkpoint is saved every time
-it improves, so an early peak loses nothing — only wall time.
+Then **Save Version → Save & Run All (Commit)** — otherwise `/kaggle/working` dies with the
+session and you lose 2.8 hours.
 
-**Cell 1's size assert must change to `> 4e9`** (the 34-shard npz is ~4.9 GB; the 16-shard one
-is 2.29 GB and would otherwise pass).
+**Expect** `~33,974 sequences · ~5,400,000 frames · ~4.9 GB`. Peak RAM ~10 GB (the concatenate
+holds the list and the result at once) against ~30 GB on CPU — comfortable.
 
-**Prediction on record: 0.320**, from −0.0487 CER per doubling. If 34 shards lands near 0.32,
-the log-linear model holds and the full corpus is worth the mmap refactor. If it lands at 0.36,
-the curve is flattening and the next lever is the architecture, not more shards.
+### Step 2 — promote to a Private dataset · ~5 min
+
+Output tab → **⋮ → New Dataset** → title **`deafference-fs75-34`** → **Private** → Create.
+
+**A brand-new name. Never a new version of `deafference-fs75` or `-16`** — both are baselines and
+overwriting either destroys the comparison.
+
+### Step 3 — train · ~2.7 h GPU
+
+New notebook **`deafference-fs-ctc-34`**. **Settings → Accelerator → GPU P100.**
+
+**Inputs to attach — three:**
+1. **`deafference-fs75-34`** ← the one you just made
+2. **`deafference-fs-code`**
+3. the **competition** (for the charset — without it the charset goes shard-derived again)
+
+**Do NOT attach `deafference-fs75` or `deafference-fs75-16`.**
+
+```python
+# cell 1 — go/no-go. Refuses if more than one fs75.npz is mounted.
+import glob, os
+import tensorflow as tf
+
+npz  = sorted(glob.glob('/kaggle/input/**/fs75.npz',     recursive=True))
+code = glob.glob('/kaggle/input/**/train_ctc.py',        recursive=True)
+chs  = glob.glob('/kaggle/input/**/character_to_prediction_index.json', recursive=True)
+gpus = tf.config.list_physical_devices('GPU')
+
+for p in npz: print(f'  fs75.npz  {os.path.getsize(p)/1e6:>7.0f} MB   {p}')
+assert len(npz) == 1, 'detach deafference-fs75 AND -16; the wrong npz would win the glob'
+assert os.path.getsize(npz[0]) > 4e9, 'that is the 4- or 16-shard file; expected ~4.9 GB'
+assert code, 'train_ctc.py MISSING'
+assert chs,  'competition NOT attached — the charset would be shard-derived'
+assert gpus, 'no GPU — Settings > Accelerator'
+NPZ, CODE = npz[0], os.path.dirname(code[0])
+print('\nNPZ  =', NPZ, '\nCODE =', CODE, '\nGPU  =', gpus)
+```
+
+```python
+# cell 2 — selftest: 35 checks, ~30 s, no data needed. If this fails, STOP.
+!python {CODE}/train_ctc.py --selftest
+```
+
+```python
+# cell 3 — the run. Same 13 pinned signers as runs 1 and 2, so the ONLY variable is data.
+!python {CODE}/train_ctc.py --npz {NPZ} --out /kaggle/working/fs_out --epochs 20 \
+    --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225
+```
+
+Then **Save & Run All (Commit)**.
+
+**Why 20 epochs and not 25.** The optimum moves *earlier* in epoch terms as data grows: 4 shards
+peaked at 39/40, 16 shards before 25. The best-CER checkpoint is saved every time it improves,
+so an early peak loses nothing but wall time.
+
+**The trainer already has `--charset` and `--val-signers`** — run 2 used both, so the copy in
+`deafference-fs-code` is current. No re-upload needed. (Cell 3 will error on an unknown argument
+if that is somehow wrong, which is the check.)
+
+### What good looks like
+
+| line | expected | why |
+|---|---|---|
+| `[charset] source:` | ends `character_to_prediction_index.json` | competition attached |
+| `[charset] 59 characters -> 60 classes` | **60**, not 52 | corpus charset, not shard-derived |
+| `[split] val signers PINNED to 13 of 13` | 13 | the comparison is controlled |
+| `[filter] kept` | ~86% | 86.51% at 4 shards, ×4.1 at 16 |
+| `[mem] released ~5 GB` | ~5 GB | the `frames` free |
+| `[ep 1] ... \| ~490s` | **~8.2 min/epoch** | 230 s at 16 shards × 2.1 |
+| CER leaves 1.000 by | **epoch 2–3** | the all-blank phase is step-bound; 8.5× the steps of run 1 |
+
+🔴 **If CER is still 1.000 at epoch 6, stop and tell me.** At 4 shards it cracked at 13, at 16
+shards around 3–5. Still blank at 6 with 8.5× the steps would mean the phase is not step-bound
+and my reasoning is wrong.
+
+**Read `val_loss`, not `val_cer`, for the stopping point.** That is the epoch-23 lesson from run 1
+— CER hid a 39% loss rise.
+
+**The number to beat is `best_val_cer` 0.3730**, on the same 13 people.
+
+### The prediction, on record before the run
+
+**0.320**, from −0.0487 CER per doubling (n=1, so weak but falsifiable).
+
+| outcome | what it means | next lever |
+|---|---|---|
+| **~0.32** | the log-linear model holds | the full corpus is worth the mmap refactor |
+| **~0.36** | the curve is flattening | **architecture, not more shards** |
+| **>0.373** | data is no longer the lever at all | stop scaling; re-read the loss curves |
+
+### What to send me
+
+The **whole log** — not just the final line. Specifically `[charset]`, `[split]`, `[filter]`,
+`[mem]`, every `[ep N]` row, and `report.json`. The per-signer CER block matters as much as the
+headline: run 2's equity finding only appeared because all 13 were listed.
+
+### Past 34 — the one blocking change
+
+68 shards peaks at **14.07 GB against ~13 GB** of GPU-notebook host RAM and OOMs *after* a ~6 h
+subset job. Going further needs `subset_landmarks.py` to write **`frames.npy` separately from the
+metadata** so the trainer can mmap it — **`np.load` cannot mmap a member of an `.npz`.** That is
+mine, it is small, and it is the only thing standing between us and the full corpus.
 
 ---
 
