@@ -305,6 +305,41 @@ def main() -> int:
     results = []
     link_failures = []
 
+    def save(final=False):
+        """Write the aggregate after EVERY point, not just at the end.
+
+        --strategy both --epochs 200 is ~2 h of sequential training on Kaggle, and a session
+        that dies at point 9 of 10 used to lose the whole aggregate. The per-point
+        run_*/eval_*.json survive on disk either way, but reassembling the curve from them by
+        hand is exactly the kind of avoidable work a long job should not create.
+        """
+        # fit_curve is PER STRATEGY — spread and clustered are two different curves and
+        # pooling their points would fit a line through a mixture of two experiments.
+        curve = {}
+        for s in strategies:
+            pts = [r for r in results if r["strategy"] == s]
+            if pts:
+                curve[s] = fit_curve(pts)
+        doc = {
+            "note": "Accuracy vs clips-per-sign. Only TRAINING rows were subsampled; val and "
+                    "test are identical at every point (asserted per point, not assumed).",
+            "fold": a.fold, "epochs": a.epochs, "seed": a.seed,
+            "decimate": a.decimate,
+            "decimate_note": "handed to train.py. The demo runs at ~7fps, where decimate was "
+                             "worth +0.0218 on the 250-word model — but that has NOT been "
+                             "measured on the 123-class medical one. Run the decimate A/B "
+                             "first; a curve at the wrong setting prices a model we do not ship.",
+            "full_train_rows": full_train,
+            "points": results, "curve": curve,
+            "trained": bool(a.train),
+            "complete": final,
+            "points_done": len(results),
+            "points_expected": len(strategies) * len(ns),
+        }
+        (a.out_dir / "clips_per_sign.json").write_text(
+            json.dumps(doc, indent=1), encoding="utf-8")
+        return doc
+
     for strategy in strategies:
         for n in ns:
             sub, stats = subsample_manifest(man, n, a.fold, strategy, a.seed)
@@ -344,6 +379,7 @@ def main() -> int:
                     print(f"    val_acc = {rec['val_acc']}")
 
             results.append(rec)
+            save()          # after EVERY point — a 2 h run must not lose 9 points to a timeout
 
     if link_failures:
         src = (a.data_dir / "by_word").resolve()
@@ -356,30 +392,18 @@ def main() -> int:
         for d, _ in link_failures:
             print(f"         ln -s {src} {d / 'by_word'}")
 
-    curve = {}
-    for strategy in strategies:
-        pts = [r for r in results if r["strategy"] == strategy]
-        curve[strategy] = fit_curve(pts)
-
-    doc = {
-        "note": "Accuracy vs clips-per-sign. Only TRAINING rows were subsampled; val and test "
-                "are identical at every point (asserted per point, not assumed).",
-        "fold": a.fold, "epochs": a.epochs, "seed": a.seed,
-        "decimate": 0.5,
-        "decimate_note": "--decimate 0.5 is ON for every point, because the live demo runs at "
-                         "~7fps and decimate is worth a measured +0.0218 there. A curve trained "
-                         "without it would price a session for a model we do not ship.",
-        "full_train_rows": full_train,
-        "points": results, "curve": curve,
-        "trained": bool(a.train),
-    }
-    (a.out_dir / "clips_per_sign.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
-    print(f"\n[ok] {a.out_dir / 'clips_per_sign.json'}")
+    doc = save(final=True)
+    curve = doc["curve"]
+    print(f"\n[ok] {a.out_dir / 'clips_per_sign.json'}  "
+          f"({doc['points_done']}/{doc['points_expected']} points)")
 
     if not a.train:
         print("\n[dry] Manifests written, nothing trained. The row counts above are the free "
-              "sanity check —\n      confirm they look right, then re-run with --train "
-              "(~70-85 min GPU for 5 points).")
+              "sanity check —\n      confirm they look right, then re-run with --train.")
+        print("      MEASURED cost at --epochs 200 (0.11 s/train-step, 7 s/epoch at the full "
+              "4,149 rows):\n      ~55 min per strategy, ~1 h 50 m for both. Points are small, "
+              "so they are far\n      cheaper than a full-data run — the whole curve costs about "
+              "2.5 full runs.")
     else:
         for s, c in curve.items():
             if c.get("fitted"):
