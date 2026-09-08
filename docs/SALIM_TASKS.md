@@ -900,10 +900,21 @@ label order, and guessing it wrong is the bug that nearly made me hand you confi
 output. The check, once it is up:
 
 ```python
-!grep -c class_names /kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903/ensemble_eval.py
+# Glob, never a hardcoded dataset path — the name is yours to choose and Kaggle mounts
+# inputs NAMESPACED, so a literal path breaks the moment the dataset is named anything else.
+import glob
+p = glob.glob('/kaggle/input/**/ensemble_eval.py', recursive=True)
+print(p)
+!grep -c class_names {p[0]}
 ```
 
 **Non-zero = the fixed version.**
+
+✅ **Uploaded 2026-09-08 as `deafference-eval-code-1c9a2fa`** — named for the commit rather than
+the date, which is the better choice: it pins *which version* of the file is in the dataset, where
+a date only records the day it went up. Nothing depends on the name, because every notebook cell
+in these runbooks locates files by recursive glob. *(This snippet was the one exception and was
+hardcoded to the old name — fixed above.)*
 
 ### ☐ 8. Decide the 2s gate — **I have a recommendation: `off`, and it is not close**
 
