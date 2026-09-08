@@ -539,11 +539,38 @@ touched. With the sidecar, the frame block stays on disk and the OS pages in eac
 ```
 subset :  --limit-files 68   ->  ~67,949 seqs, ~10.8M frames, frames.npy ~9.8 GB, ~5.6 h CPU
 dataset:  deafference-fs75-68     Private, brand-new name, BOTH FILES
-train  :  --epochs 15             ~16.4 min/epoch, ~4.1 h GPU
+train  :  --epochs 25             ~13 min/epoch (measured), ~5.5 h GPU
           --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225   <- SAME 13
 ```
 
-**Prediction on record: 0.291–0.298**, from the observed −0.0394/doubling with mild decay.
+### 🔴 CORRECTED 2026-09-08 — this said `--epochs 15`, and that was wrong
+
+Run 3's `report.json` shows **`best_val_cer` == `final.cer` == `history[20].val_cer` ==
+0.33020183699102.** The best epoch *was* the last one: **the run hit its `--epochs` cap while
+still improving.** 0.3302 is therefore a **floor, not a converged value.**
+
+That refutes the reasoning this section was built on. I had written *"the optimum moves earlier
+as data grows: 4 shards peaked at 39/40, 16 before 25, so use 15 at 68."* But 39/40 was also a
+**cap**, not a peak. Re-read across all three runs:
+
+| run | cap | best at | verdict |
+|---|---|---|---|
+| 4 shards | 40 | 39 | at the cap — truncated |
+| 16 shards | 25 | <25 | **the only converged run** |
+| 34 shards | 20 | **20** | at the cap — truncated |
+
+**Two of the three data points were misread, and only run 2 ever converged.** So epoch count is
+not shrinking with data; we simply never gave runs 1 and 3 enough. Use **25, and 30 if quota
+allows** — the best-CER checkpoint is written on *every* improvement, so over-running costs
+wall time only, while under-running loses the result outright.
+
+⚠️ **The consequence for the scaling law: it is suggestive, not established.** The reported
+−0.0394/doubling compares a *converged* run 2 against a *truncated* run 3, so the true rate is
+**at least** that and the "80.9% decay / curve is flattening" reading has no support. A properly
+converged 68-shard run is the first clean second point we would have.
+
+**Prediction on record: 0.291–0.298**, and that is now a conservative ceiling on the CER rather
+than a centre estimate — a converged run should beat it.
 
 ### 🔴 THREE things changed and every one of them will bite
 
@@ -553,10 +580,9 @@ train  :  --epochs 15             ~16.4 min/epoch, ~4.1 h GPU
 2. **The old size assert is now WRONG.** `fs75.npz` is metadata-only, about **2 KB**, so
    `getsize(npz) > 4e9` would reject a correct dataset. **Assert on `frames.npy` instead** —
    cell 1 below does.
-3. **`--epochs 15`, provisionally.** The optimum has moved earlier every rung (39/40 → <25 →
-   ≤20). The best-CER checkpoint is saved whenever it improves, so an early peak costs only wall
-   time — but **if run 3's `best_val_cer` turns out to have arrived at epoch 19–20, use 18 here,
-   not 15.** That number is still outstanding from run 3's `report.json`.
+3. **`--epochs 25`, and that is settled now, not provisional.** Run 3's `best_val_cer` came at
+   epoch **20 of 20** — it was still improving when it stopped. See the correction above: the
+   "optimum moves earlier" premise was built on misreading two capped runs as peaks.
 
 ### Step 1 — subset, CPU · ~5.6 h
 
@@ -580,7 +606,7 @@ print('BASE =', BASE, '\nCODE =', CODE)
 **`deafference-fs75-68`** → **Private** → Create. Confirm the created dataset lists **both files**
 before moving on.
 
-### Step 2 — train, GPU · ~4.1 h
+### Step 2 — train, GPU · ~5.5 h (25 epochs × ~13 min, from run 3's measured 6.6 min at 34 shards)
 
 New notebook **`deafference-fs-ctc-68`** · **GPU P100** · attach **`deafference-fs75-68`**,
 **`deafference-fs-code`**, the **competition**. Detach every other `fs75` dataset.
@@ -616,7 +642,7 @@ print('\nNPZ =', NPZ, '\nCODE =', CODE, '\nGPU =', gpus)
 ```
 
 ```python
-!python {CODE}/train_ctc.py --npz {NPZ} --out /kaggle/working/fs_out --epochs 15 \
+!python {CODE}/train_ctc.py --npz {NPZ} --out /kaggle/working/fs_out --epochs 25 \
     --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225
 ```
 

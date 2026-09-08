@@ -915,55 +915,85 @@ click-paths in [`RUNBOOK_FINGERSPELLING.md`](RUNBOOK_FINGERSPELLING.md).
 
 | | run 1 (4 shards, `fc6d23c`) | run 2 (16 shards, `5929cbe`) | **run 3 (34 shards, 2026-09-08)** |
 |---|---|---|---|
-| val CER | 0.4703 *(best)* | **0.3730** *(best)* | **0.3302** *(final — `best` not yet read)* |
+| val CER | 0.4703 *(best, **truncated** at 39/40)* | **0.3730** *(best — the only **converged** run)* | **0.3302** *(best == final at 20/20, **truncated**)* |
 | exact phrase | 0.0174 | 0.0445 (2.6×) | **0.084** (1.9×) |
 | n_classes | 52 *(bug)* | 60 | 60 ✅ *(TensorSpec `(None,None,60)`)* |
 | val sequences | 459 | — | **4,085** |
 | per-signer ratio | 2.77× | 3.06× | 3.71× *(wrong statistic — see below)* |
 | **absolute gap** | **0.4399** | **0.3945** | **0.3916** |
 
-### ✅ RUN 3 LANDED ON PREDICTION (2026-09-08) — and the scaling law holds
+### 🔴 RUN 3 WAS TRUNCATED, NOT CONVERGED — read this before the analysis below it
 
-**Predicted 0.320 on record before the run; measured 0.3302.** Off by 0.010.
-
-```
- 4 -> 16 shards   2.000 doublings   dCER -0.0973   per doubling -0.0487
-16 -> 34 shards   1.087 doublings   dCER -0.0428   per doubling -0.0394
-                                    rate decayed to 80.9% of the earlier rate
-```
-
-Against §0.8's own pre-registered decision rule (~0.32 = log-linear holds, ~0.36 = flattening,
->0.373 = data is not the lever), **0.3302 sits far nearer 0.32 than 0.36. The full corpus is
-worth the mmap refactor**, projecting **0.291–0.298 at 68 shards**.
-
-### 🚨 BUT DATA HAS STOPPED BUYING EQUITY, AND THAT IS THE FINDING THAT MATTERS
-
-The absolute gap — the statistic §0.8 established as the right one — has essentially stopped
-moving:
+`report.json`, read 2026-09-08 **after** the first write-up:
 
 ```
-absolute gap   0.4399 -> 0.3945 -> 0.3916
-closed by            -0.0454      -0.0029     <- 6% as much
+best_val_cer        0.33020183699102
+final.cer           0.33020183699102
+history[20].val_cer 0.33020183699102     identical
+final.loss          26.743098199367523 == history[20].val_loss
 ```
 
-Run 1→2 closed the gap by 0.0454. Run 2→3 closed it by **0.0029**. And the worst signer's gains
-are halving with it:
+**The best epoch was the last epoch. The run hit its `--epochs 20` cap while still improving.**
+0.3302 is a **floor, not a converged value.**
+
+And that refutes the reasoning that chose 20. I had written *"the optimum moves earlier as data
+grows: 4 shards peaked at 39/40, 16 before 25."* **39/40 was also a cap.**
+
+| run | cap | best at | verdict |
+|---|---|---|---|
+| 4 shards | 40 | 39 | truncated |
+| 16 shards | 25 | <25 | **the only converged run we have** |
+| 34 shards | 20 | **20** | truncated |
+
+**Two of three points were misread, and only run 2 ever converged.**
+
+### ⚠️ WHAT THAT COSTS THE TWO HEADLINE FINDINGS — both are weakened
+
+Everything below was written against `final` figures from a truncated run and is kept for the
+reasoning trail, but **neither conclusion is established**:
+
+**1. "The scaling law holds / the curve is flattening 80.9%."** Not established. The
+−0.0394/doubling compares a *converged* run 2 with a *truncated* run 3, so the true rate is
+**at least** that — the apparent decay could be entirely the missing epochs.
 
 ```
-p203 characters right   31.0% -> 41.0% -> 46.4%
-                              +10.0pt    +5.4pt
+ 4 -> 16 shards   per doubling -0.0487    (truncated -> converged)
+16 -> 34 shards   per doubling -0.0394    (converged -> TRUNCATED, so understated)
 ```
 
-Extrapolating that halving, the **entire remaining corpus** buys p203 roughly **+2.7 points, to
-~49%**. **Half of that person's characters would still be wrong.** This is the same wall the
-250-word model hit when an oracle per-signer mean-shift moved its worst signer −0.0018 (§0.5),
-and the same conclusion stated at 16 shards, now with a third point confirming it.
+The direction — more data, lower CER — is solid. The *rate* is not, and **0.291–0.298 at 68
+shards is now a conservative ceiling rather than a centre estimate.**
 
-⚠️ **The per-signer ratio widened again (3.06 → 3.71) and must still not be quoted.** A ratio
-widens whenever near-equal absolute gains land on unequal bases; the gap is what binds.
+**2. "Data has stopped buying equity."** Also not established, and this was the more strongly
+worded of the two. The gap and p203 figures are from an under-trained model, so the flattening
+of both could be truncation:
 
-**So the strategy splits in two.** Finishing the corpus is cheap, mechanical, and worth doing for
-the mean. **It is not the lever for the worst-served signers, and no amount of it will be.**
+```
+absolute gap   0.4399 -> 0.3945 -> 0.3916      closed by -0.0454, then -0.0029
+p203 chars right  31.0% -> 41.0% -> 46.4%      +10.0pt, then +5.4pt
+```
+
+**What survives is the *existence* of the gap, not its trend.** p203 at 0.5361 against p161's
+0.1444 is a 3.71× spread on the same model, and that is real and large whatever the epoch count.
+The claim that *the remaining corpus buys p203 only ~+2.7 points* is withdrawn — it extrapolated
+a halving that may not be there.
+
+⚠️ **The per-signer ratio (2.77 → 3.06 → 3.71) is still the wrong statistic** regardless — it
+widens whenever near-equal absolute gains land on unequal bases. Use the absolute gap.
+
+**A properly converged 68-shard run is the first clean second point we would have**, which is
+why the runbook now says `--epochs 25`, not 15.
+
+### What run 3 does confirm, cleanly
+
+| | |
+|---|---|
+| `n_classes` | **60** — competition charset, `charset_source` names the competition file |
+| `val_signers_pinned` | **true**, all 13 — the comparison is controlled |
+| `nonfinite_train` / `_val` | **0 / 0** — the length guard held a third time |
+| filter | 29,236 kept + 4,723 dropped = **33,959** seqs, **86.1%** (86.5% at 4 shards) |
+| `params` | 1,342,524 — unchanged from run 2, so data really was the only variable |
+| epoch cost | **6.6 min measured**, against the 8.2 I predicted |
 
 ### ⚠️ Level-setting: this model is not usable yet, and the trend does not hide that
 
@@ -972,11 +1002,16 @@ phrases in 100 come out right**. Fingerspelling exists in this product for patie
 names and dosages — where a near-miss is a wrong answer, not a typo. Three rungs of clean
 scaling is a real result about the *method*; it is not yet a result about the *product*.
 
-⚠️ **Two numbers still outstanding from run 3** — the paste was the tail only:
-* **`best_val_cer` from `report.json`.** 0.3302 is `final`; run 2's best (0.3730) beat its final
-  (0.3798), so run 3's best is probably lower and the table above understates the gain. **The
-  0.3730-vs-0.3302 comparison is best-vs-final and is therefore not yet apples-to-apples.**
-* **the per-epoch `val_loss` rows**, for the run-1 epoch-23 lesson (CER hid a 39% loss rise).
+✅ **Both outstanding numbers arrived 2026-09-08, and one of them inverted the conclusion.**
+
+* **`best_val_cer` is 0.3302 — *equal* to `final`, not below it.** That equality is what
+  revealed the truncation. I had guessed run 3's best would come in *lower* than its final, by
+  analogy with run 2; it came in **equal**, which means the opposite of what the guess implied —
+  not "the gain was understated by a best/final mismatch" but "the run never finished."
+* **`val_loss` fell 81.16 → 26.74 across the 20 epochs with no rise, so there is no
+  overfitting.** Run 1's epoch-23 lesson (CER hid a 39% loss rise) does not apply here — this
+  run never got far enough to overfit, which is the same fact as the truncation seen from the
+  loss side.
 
 Also note run 1's 0.4703 rested on **459** val sequences against run 3's **4,085** — same 13
 pinned signers, but the early figures were noisier than they looked.
@@ -1177,18 +1212,18 @@ Still **licence-blocked for commercial shipping**. A free/research release is no
    label the statistic and name the four words that move (`no`, `more`, `blood`, `always`); §3
    records that its exclusions were *conservative*, because recall overstates precision, so no
    word leaves the cannot-express list.
-3. ✅ **DONE 2026-09-08 — the 34-shard run landed at 0.3302 against 0.320 predicted.** Send the
-   full log when convenient: `best_val_cer` from `report.json` and the per-epoch `val_loss` rows
-   are the two numbers still missing.
-4. 🟢 **NOW UNBLOCKED AND WORTH DOING — `frames.npy` written separately.** Run 3 triggered the
-   pre-registered rule for it: the log-linear model held, so the full corpus projects to
-   **0.291–0.298**. `np.load` cannot mmap a member of an `.npz`, which is the only thing between
-   us and 68 shards. Small, mechanical, mine.
-5. 🔴 **NEW — the equity lever is now a separate problem and needs naming as one.** Data closed
-   the absolute gap by 0.0454, then by **0.0029**. The remaining corpus buys the worst signer
-   about +2.7 points, to ~49% of characters right. **Finishing the corpus will not fix this.**
-   Whatever does — architecture, per-signer adaptation, targeted recording — is unidentified, and
-   it is the same wall the 250-word track hit in §0.5.
+3. ⚠️ **DONE but TRUNCATED 2026-09-08 — 0.3302 at epoch 20 of 20, still improving.** Not a
+   converged number. `report.json` received; no overfitting (val_loss 81.16 → 26.74, monotone).
+   **Re-running 34 shards is not worth the quota — go straight to 68 at `--epochs 25`.**
+4. ✅ **DONE 2026-09-08 (`6c6e9a6`) — `frames.npy` is a sidecar and 68 shards is reachable.**
+   `np.load` cannot mmap a member of an `.npz`; it now can, and both layouts load so the three
+   existing baselines stay readable. Runbook **Part 5c** has the click-path: `--epochs 25`,
+   ~5.6 h CPU + ~5.5 h GPU. **0.291–0.298 is a conservative ceiling, not a centre estimate.**
+5. ⚠️ **WEAKENED, not established — the equity trend.** The gap and p203 figures came from a
+   truncated run, so their flattening may be truncation. **What is solid is the SIZE of the
+   gap** (p203 0.5361 vs p161 0.1444, 3.71x on one model), not that data has stopped closing it.
+   Re-measure on the converged 68-shard run before concluding anything. My earlier "+2.7 points
+   and no more" is withdrawn.
 
 ### The methodological rule this session earned
 
