@@ -658,8 +658,59 @@ def normalize(frame: np.ndarray):
 
 
 # ── headless self-test — proves the model loads + runs, no camera needed ──────
+def check_scopes(path=None) -> list:
+    """Find names a nested function reads as a GLOBAL that no module-level name defines.
+
+    This is a whole class of bug that no amount of reading catches, and it cost us the
+    top-K correction for two weeks. `main()` holds a dozen nested helpers; a name assigned
+    in one of them is invisible to its SIBLINGS, but Python does not complain at import
+    time — it compiles the reference to a global lookup and raises NameError only when that
+    line finally executes. `pick_candidate` read `_t_enter`, `_detect_ms` and `_lat_path`,
+    all three locals of `commit_segment`, and since the key loop wraps neither call in a
+    try/except, every top-K tap killed the process.
+
+    Static, so it needs no camera, no model and no GPU, and it runs in milliseconds.
+
+    Verified to actually fire: against the pre-fix file it returns exactly those three
+    names, and zero afterwards. A check that cannot fail is decoration.
+    """
+    import builtins
+    import symtable
+
+    src = Path(path or __file__).read_text(encoding="utf-8-sig")
+    top = symtable.symtable(src, "live_demo.py", "exec")
+    # A function-local import (`import cv2` inside main) makes the name LOCAL to main, so a
+    # nested function sees it as FREE, not GLOBAL — those are correct and must not be flagged.
+    known = {s.get_name() for s in top.get_symbols()} | set(dir(builtins))
+
+    bad = []
+
+    def walk(t, path_):
+        if t.get_type() == "function":
+            for s in t.get_symbols():
+                if s.is_global() and s.get_name() not in known:
+                    bad.append((path_, s.get_name()))
+        for c in t.get_children():
+            walk(c, f"{path_}.{c.get_name()}")
+
+    walk(top, "<module>")
+    return sorted(bad)
+
+
 def selftest(single: bool):
     print("=== SELFTEST (no camera) ===")
+
+    # FIRST, because it needs nothing loaded and it is the check that would have caught the
+    # crash in every top-K tap — the wrong-word correction and the confirmation of all 10
+    # safety-held words, i.e. the two actions the confidence gate assumes a human can take.
+    leaks = check_scopes()
+    if leaks:
+        for where, name in leaks:
+            print(f"[FAIL] {where} reads `{name}` as a global — nothing defines it. "
+                  f"NameError when that line runs.")
+        raise AssertionError(f"{len(leaks)} latent NameError(s) — see above")
+    print("[ok] scopes: no nested function reads an undefined global")
+
     words = load_vocab()
     n = len(words)
     print(f"[ok] vocab: {n} words ({VOCAB_PATH.name})")
@@ -1004,7 +1055,20 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
             cand_buf.append([chosen])                # locked single choice
             state["cand_committed"] = True
         last_commit = (chosen, time.time())
-        LAT_LOG.append((_lat_path, _detect_ms, (time.time() - _t_enter) * 1000.0))
+        # NO LAT_LOG here, deliberately. This used to append
+        #   (_lat_path, _detect_ms, time.time() - _t_enter)
+        # but those three names are locals of commit_segment(), which is a SIBLING of this
+        # function, not its parent — so they resolved as globals and every pick raised
+        # NameError. symtable confirms it: LOCAL in commit_segment, GLOBAL here, and never
+        # bound in main(). The call sites in the key loop have no try/except, so the process
+        # died on every top-K tap: the wrong-word correction AND the confirmation of all 10
+        # safety-held words, i.e. the two things the gate depends on a human being able to do.
+        #
+        # Restoring the values would still be wrong. A pick is a CORRECTION, not a detection:
+        # _detect_ms would be the previous sign's figure and _t_enter would measure from that
+        # commit, so the elapsed time would include however long the signer spent reading the
+        # chips and deciding. That inflates the [lat] table with a number that measures human
+        # deliberation and calls it inference. A pick has no detection latency to report.
         now_line = f"{chosen}  (picked)"
         sentence = "" if ai_enabled else render_sentence(rules, gloss_buf)
         state["sentence"] = sentence
