@@ -68,6 +68,48 @@ Before stacking frames into the tensor, apply the **exact same normalization the
 
 **Action for frontend:** get the teammate's exact normalization code/formula and port it 1:1 to JS. Task **#26** (verify live == training normalization) is the checkpoint — test by feeding a known recorded clip through both and confirming identical arrays. **Do not skip #26.**
 
+### ✅ #26 now has a tool — `golden_parity.py` (built 2026-09-08)
+
+You no longer have to invent the test. The fixtures are generated from the **shipping**
+`live_demo.normalize`, so passing them means matching the code that trained the model.
+
+```bash
+python golden_parity.py --emit      # golden_fixtures.json  (committed — 10 cases + 2 invariants)
+python golden_parity.py --emit-js   # golden_parity.mjs     (the frontend half)
+node golden_parity.mjs              # run it
+```
+
+**Point `golden_parity.mjs` at your real `normalize` — an `import`, not the placeholder copy
+inside it.** Editing that copy until it passes tests the harness against itself.
+
+**Measured:** the JS reference implementation agrees with Python to **max 2.44e-7**, against a
+tolerance of 1e-6. That gap is float32-vs-float64, and it is the whole budget you have — a
+genuine logic difference lands orders of magnitude above it.
+
+**Four wrong-but-plausible implementations were checked to FAIL**, because a parity test that
+cannot fail is decoration:
+
+| the plausible mistake | what the harness says |
+|---|---|
+| centre on the **nose** (pose 0) instead of the shoulder midpoint | `FAIL shoulder midpoint is the origin` |
+| centre correctly but **never scale** | `FAIL shoulder distance is exactly 1` |
+| substitute **0** for a missing landmark | `FAIL nan_hand_is_PRESERVED_not_zeroed — 42 NaN mismatches` |
+| **keep** a frame whose shoulders are missing instead of dropping it | `FAIL left_shoulder_nan_DROPS_the_frame — NOT dropped` |
+
+⚠️ **The third and fourth are the ones prose cannot convey.** A missing hand must stay `NaN`
+through normalization — writing 0 places it at the shoulder midpoint, a real and plausible
+position, which is how **19,002 hand blocks once shipped as `[0,0,0]`**. And a frame with either
+shoulder missing must be **dropped entirely**, not passed through in raw 0–1 pixel coords.
+
+📌 **Two invariants you can assert on your own output with no fixture at all:** after
+normalization the shoulder midpoint is `(0,0)` and the shoulder distance is exactly `1`.
+Normalization is also **idempotent**, so applying it twice is harmless — don't "fix" a double
+call by deleting a needed one.
+
+*(`--with-model` adds a stage-3 fixture through the real SavedModel. Logits are compared at
+atol 2e-3 because TF.js kernels differ, but the **argmax must match exactly** and the
+confidence within 5e-3 — logits agreeing while the prediction flips would pass nothing.)*
+
 ---
 
 ## 4. Output tensor — shape `[1, 30]`, **raw logits**

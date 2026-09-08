@@ -1097,6 +1097,60 @@ no judgement even when current, and shipping it would imply a review of clips it
 source of truth for a rebuild is `clips_off.npz` plus the tracked lexicons — same rule as the
 `.gitignore` note on `animation_handoff/`.
 
+### ✅ BUILT 2026-09-08 — the golden-fixture parity harness (`golden_parity.py`)
+
+`MODEL_CONTRACT.md` §3 has said *"Do not skip #26"* since 2026-07-15 without providing any way
+to do it. It now has one, and #26 is no longer a prose instruction.
+
+The failure it guards is **silent**: a normalization mismatch feeds the model out-of-distribution
+input and the model answers anyway — no exception, just quietly wrong predictions. Every wrong
+variant below is a *reasonable* reading of the prose spec, which is why the spec was never enough.
+
+**The design rule: stages are separate, and so are their tolerances.**
+
+```
+stage 1  normalize      atol 1e-6    pure arithmetic — no excuse for drift
+stage 2  NaN semantics  exact        dropped / preserved / padding
+stage 3  model logits   atol 2e-3    different kernels — but ARGMAX must match, conf within 5e-3
+```
+
+Held under one loose tolerance, a real normalization bug hides inside "the model is only
+approximate". Separated, a failure says which stage broke.
+
+**Measured: the JS reference agrees with Python to max 2.44e-7 against a 1e-6 budget** — that gap
+is float32-vs-float64 and nothing else, so a genuine logic error lands orders of magnitude above
+it. Four plausible-but-wrong implementations were verified to **fail**, each with a diagnostic
+naming the actual mistake:
+
+| mistake | verdict |
+|---|---|
+| centre on the nose, not the shoulder midpoint | `FAIL shoulder midpoint is the origin` |
+| centre but never scale | `FAIL shoulder distance is exactly 1` |
+| substitute 0 for a missing landmark | `FAIL nan_hand_is_PRESERVED — 42 NaN mismatches` |
+| keep a shoulder-less frame instead of dropping it | `FAIL ..._DROPS_the_frame — NOT dropped` |
+
+*(42 = 21 hand landmarks × 2 channels, with z correctly still NaN in both — the diagnostic is
+precise, not merely red.)*
+
+⚠️ **Fixtures are generated from the SHIPPING `live_demo.normalize`, not reimplemented here** —
+the discipline `verify_fingerspelling_parity.py` established. A harness that restates the spec
+tests itself and passes while the demo is wrong.
+
+📌 **Two invariants need no fixture at all:** after normalization the shoulder midpoint is `(0,0)`
+and the shoulder distance is exactly `1`. Normalization is **idempotent**, so a double call is
+harmless — do not "fix" it by deleting a needed one.
+
+⚠️ **NaN crosses the wire as `null`.** JSON cannot carry NaN, and Python's `allow_nan=True`
+emits a bare `NaN` token that `JSON.parse` rejects. NaN is the contract's value for *not
+detected*, and the `[0,0,0]` bug was exactly a NaN becoming a zero in transit.
+
+**Noted, not yet resolved — two implementations of §3 differ on the same condition.**
+`live_demo.normalize` returns `None` (caller **drops** the frame); `build_sign_clips.normalize_clip`
+does `continue` (**keeps** it, un-normalized). Both are defensible *for their own inputs* —
+the clip builder's corpus is already normalized, so a skip leaves an already-correct frame
+alone, whereas the live path gets raw MediaPipe and must not pass raw coords through. **Written
+down so nobody "aligns" one to the other without re-reading which input it takes.**
+
 ### Licence position (`f3c2123`) — unchanged in substance, sharper in detail
 
 | corpus | terms | consequence |
