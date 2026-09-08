@@ -113,6 +113,51 @@ def hand_gaps(clip: np.ndarray) -> dict:
     }
 
 
+def write_subset(out: Path, all_frames: list, total: int,
+                 starts, lengths, ids, phrases, parts) -> tuple[Path, Path]:
+    """Write `frames.npy` (mmap-able) beside a metadata-only `fs75.npz`.
+
+    The split is not tidiness. `np.load` CANNOT mmap a member of an .npz, so a trainer handed
+    one self-contained fs75.npz has to materialise the entire frame block — 14.07 GB at 68
+    shards against a Kaggle GPU notebook's ~13 GB of host RAM. It OOMs on memory it never
+    uses, because train_ctc.py only ever reads `frames[s:s+n]`, one sequence at a time, which
+    is exactly what mmap serves. As its own .npy the block stays on disk.
+
+    ⚠️ CONSUMES `all_frames`: each clip is set to None once copied, so peak RAM is the input
+    list alone. `np.concatenate` held the list AND its result — 2x peak, ~28 GB at 68 shards
+    against ~30 GB on the CPU box.
+    """
+    frames_path, npz_path = out / "frames.npy", out / "fs75.npz"
+    fp = np.lib.format.open_memmap(frames_path, mode="w+", dtype=np.float32,
+                                   shape=(total, N_POINTS, 3))
+    # Assigning None per index, not list.pop(0) — pop(0) is O(n) per call and would make
+    # this O(n^2) over ~34k sequences.
+    off = 0
+    for i, clip in enumerate(all_frames):
+        fp[off:off + len(clip)] = clip
+        off += len(clip)
+        all_frames[i] = None
+    if off != total:
+        sys.exit(f"[err] wrote {off:,} frames but counted {total:,} — starts/lengths would "
+                 f"index past the end of frames.npy")
+    fp.flush()
+    mm = getattr(fp, "_mmap", None)      # release the handle; Windows keeps it open otherwise
+    del fp
+    if mm is not None:
+        mm.close()
+
+    # Metadata ONLY — deliberately no `frames` key, which is also how train_ctc.py tells the
+    # two layouts apart. frames_shape lets the reader prove the sidecar it found belongs to
+    # THIS manifest and not to another run left in the same folder.
+    np.savez(npz_path,
+             starts=np.array(starts, np.int64), lengths=np.array(lengths, np.int32),
+             sequence_id=np.array(ids, np.int64), phrase=np.array(phrases),
+             participant=np.array(parts, np.int32),
+             frames_file=np.array("frames.npy"),
+             frames_shape=np.array([total, N_POINTS, 3], np.int64))
+    return frames_path, npz_path
+
+
 def selftest() -> int:
     """Round-trip a synthetic parquet. Proves the reshape puts each landmark where we claim."""
     import pandas as pd
@@ -157,6 +202,49 @@ def selftest() -> int:
     left_ok = hand_gaps(c2)["dominant"] == "L"
     print(f"  {'ok  ' if left_ok else 'FAIL'} left-dominant sequence reads as L")
     ok &= left_ok
+
+    # the two-file write: it must equal np.concatenate exactly, and free as it goes
+    import tempfile
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+        d = Path(td)
+        rng = np.random.default_rng(0)
+        clips = [rng.random((n, N_POINTS, 3)).astype(np.float32) for n in (12, 5, 23)]
+        want = np.concatenate(clips, axis=0)          # the old behaviour, as the oracle
+        st, ln, total = [0, 12, 17], [12, 5, 23], 40
+        fpth, npth = write_subset(d, list(clips), total, st, ln,
+                                  [1, 2, 3], ["ab", "c", "de"], [7, 7, 8])
+
+        got = np.load(fpth, mmap_mode="r")
+        w = [(np.array_equal(np.asarray(got), want),
+              "streamed frames.npy is byte-identical to np.concatenate"),
+             (got.shape == (total, N_POINTS, 3) and got.dtype == np.float32,
+              f"frames.npy is {(total, N_POINTS, 3)} float32"),
+             (isinstance(got, np.memmap), "frames.npy loads as a memmap (the whole point)")]
+        mm = getattr(got, "_mmap", None)
+        del got
+        if mm is not None:
+            mm.close()
+
+        z = np.load(npth, allow_pickle=False)
+        w += [("frames" not in z.files,
+               "fs75.npz carries NO frames key — that is how the reader picks the layout"),
+              (tuple(int(v) for v in z["frames_shape"]) == (total, N_POINTS, 3),
+               "fs75.npz records frames_shape so a foreign sidecar can be caught"),
+              (npth.stat().st_size < fpth.stat().st_size,
+               "the npz is now metadata-sized, far smaller than the frame block")]
+        z.close()
+
+        # the memory claim has to be checked, not asserted: the caller's list is emptied
+        again = d / "again"
+        again.mkdir()
+        consumed = list(clips)
+        write_subset(again, consumed, total, st, ln, [1, 2, 3], ["ab", "c", "de"], [7, 7, 8])
+        w.append((all(c is None for c in consumed),
+                  "write_subset RELEASES each clip as it copies (peak is the list, not 2x)"))
+
+        for cond, label in w:
+            print(f"  {'ok  ' if cond else 'FAIL'} {label}")
+            ok &= bool(cond)
 
     print("\nALL CHECKS PASSED" if ok else "\nFAILURES ABOVE")
     return 0 if ok else 1
@@ -265,15 +353,16 @@ def main() -> int:
         return 0
 
     args.out.mkdir(parents=True, exist_ok=True)
-    frames = np.concatenate(all_frames, axis=0)
-    np.savez(args.out / "fs75.npz", frames=frames,
-             starts=np.array(starts, np.int64), lengths=np.array(lengths, np.int32),
-             sequence_id=np.array(ids, np.int64), phrase=np.array(phrases),
-             participant=np.array(parts, np.int32))
+    frames_path, npz_path = write_subset(args.out, all_frames, total,
+                                         starts, lengths, ids, phrases, parts)
     (args.out / "gap_stats.json").write_text(json.dumps(stats))
-    mb = (args.out / "fs75.npz").stat().st_size / 1e6
-    print(f"\n[ok] {args.out / 'fs75.npz'}  {frames.shape} float32  {mb:.0f} MB")
+    gb = frames_path.stat().st_size / 1e9
+    kb = npz_path.stat().st_size / 1e3
+    print(f"\n[ok] {frames_path}  ({total}, {N_POINTS}, 3) float32  {gb:.2f} GB  <- mmap-able")
+    print(f"[ok] {npz_path}  metadata only  {kb:.0f} KB")
     print(f"[ok] {args.out / 'gap_stats.json'}  {len(stats)} sequences")
+    print("\n⚠️  BOTH files are required. A Kaggle dataset built from only fs75.npz will fail "
+          "at load\n    time, because the frames are no longer inside it.")
     print("\nRagged on purpose: frames are concatenated with starts/lengths. Do NOT resize to a "
           "fixed frame count —\nthat is what would destroy the timing a letter sequence is made of.")
     return 0

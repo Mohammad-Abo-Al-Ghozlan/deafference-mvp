@@ -699,8 +699,164 @@ def selftest() -> int:
     except ImportError:
         print("  skip  TensorFlow not installed — model checks skipped")
 
+    # 9. the frames layout: sidecar mmap vs in-archive, and the mismatches that must NOT pass
+    import tempfile
+
+    def release(*objs):
+        """Drop mmap/npz handles. On Windows an open memmap makes the file undeletable, so
+        without this the temp-dir teardown raises WinError 32 and the selftest appears to
+        fail on cleanup rather than on anything it actually measured."""
+        for o in objs:
+            mm = getattr(o, "_mmap", None)
+            if mm is not None:
+                mm.close()
+            elif hasattr(o, "close"):
+                o.close()
+        gc.collect()
+
+    # Each case gets its OWN directory. Sharing one would mean overwriting a file that a live
+    # memmap still holds open — an OSError on Windows, and it also let case (b) accidentally
+    # pick up case (a)'s sidecar, which is how the precedence hole above was found.
+    # ignore_cleanup_errors so a stray handle can never mask the results.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+        root = Path(td)
+        raw = rng.random((40, N_POINTS, 3)).astype(np.float32)
+        st, ln = np.array([0, 25], np.int64), np.array([25, 15], np.int32)
+
+        def meta():
+            return dict(starts=st, lengths=ln, sequence_id=np.array([1, 2], np.int64),
+                        phrase=np.array(["ab", "cd"]), participant=np.array([7, 7], np.int32))
+
+        def new_layout(d, frames_arr):
+            d.mkdir(parents=True, exist_ok=True)
+            np.savez(d / "fs75.npz", frames_file=np.array("frames.npy"),
+                     frames_shape=np.array(raw.shape, np.int64), **meta())
+            np.save(d / "frames.npy", frames_arr)
+            return d / "fs75.npz"
+
+        # (a) NEW layout — metadata npz + sidecar .npy, and it must arrive as a real mmap
+        p = new_layout(root / "a", raw)
+        z = np.load(p, allow_pickle=False)
+        f, how = resolve_frames(p, z, st, ln)
+        check(isinstance(f, np.memmap), "sidecar frames.npy is MMAPPED, not materialised")
+        check(np.array_equal(np.asarray(f), raw), "mmap round-trips the frames byte-exactly")
+        check("MMAP" in how, "the log line says which layout was used")
+        # the slice the training loop actually takes must survive np.asarray
+        check(np.array_equal(np.asarray(f[25:40]), raw[25:40]),
+              "frames[s:s+n] through a memmap equals the same slice of the source")
+        release(f, z)
+
+        # (b) OLD layout — frames inside the npz. Three measured baselines depend on this.
+        (root / "b").mkdir()
+        np.savez(root / "b" / "fs75.npz", frames=raw, **meta())
+        zo = np.load(root / "b" / "fs75.npz", allow_pickle=False)
+        fo, how_o = resolve_frames(root / "b" / "fs75.npz", zo, st, ln)
+        check(not isinstance(fo, np.memmap) and np.array_equal(fo, raw),
+              "pre-split in-archive layout still loads (fs75 / -16 / -34 stay readable)")
+        check("IN-ARCHIVE" in how_o, "in-archive layout is labelled as such")
+        release(zo)
+
+        # (b2) BOTH layouts in one folder: the self-contained npz must win. A pre-split npz
+        # has no frames_shape, so the sidecar branch could not detect a mismatch and would
+        # train on the wrong frames in silence.
+        (root / "b2").mkdir()
+        np.savez(root / "b2" / "fs75.npz", frames=raw, **meta())
+        np.save(root / "b2" / "frames.npy", rng.random((99, N_POINTS, 3)).astype(np.float32))
+        zb = np.load(root / "b2" / "fs75.npz", allow_pickle=False)
+        fb, how_b = resolve_frames(root / "b2" / "fs75.npz", zb, st, ln)
+        check(np.array_equal(fb, raw) and "IN-ARCHIVE" in how_b,
+              "npz carrying its own frames WINS over a stray sidecar (no silent mismatch)")
+        release(zb)
+
+        # (c) a sidecar from a DIFFERENT run must be refused, not silently indexed
+        pc = new_layout(root / "c", rng.random((99, N_POINTS, 3)).astype(np.float32))
+        zc = np.load(pc, allow_pickle=False)
+        try:
+            bad, _ = resolve_frames(pc, zc, st, ln)
+            release(bad)
+            check(False, "a shape-mismatched sidecar is REFUSED")
+        except SystemExit:
+            check(True, "a shape-mismatched sidecar is REFUSED")
+        release(zc)
+
+        # (d) metadata-only npz with no sidecar must name the cause, not raise KeyError
+        (root / "d").mkdir()
+        np.savez(root / "d" / "fs75.npz", frames_file=np.array("frames.npy"),
+                 frames_shape=np.array(raw.shape, np.int64), **meta())
+        zd = np.load(root / "d" / "fs75.npz", allow_pickle=False)
+        try:
+            resolve_frames(root / "d" / "fs75.npz", zd, st, ln)
+            check(False, "metadata-only npz with no sidecar exits with a diagnosis")
+        except SystemExit:
+            check(True, "metadata-only npz with no sidecar exits with a diagnosis")
+        release(zd)
+
+        # (e) starts/lengths overrunning the block is the silent-corruption case
+        pe = new_layout(root / "e", raw)
+        ze = np.load(pe, allow_pickle=False)
+        try:
+            over, _ = resolve_frames(pe, ze, np.array([0, 100], np.int64),
+                                     np.array([25, 15], np.int32))
+            release(over)
+            check(False, "starts/lengths past the end of frames is REFUSED")
+        except SystemExit:
+            check(True, "starts/lengths past the end of frames is REFUSED")
+        release(ze)
+
     print("\n" + ("ALL CHECKS PASSED" if ok else "SOMETHING FAILED — see above"))
     return 0 if ok else 1
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════
+def resolve_frames(npz: Path, z, starts, lengths):
+    """Locate the frame block: a sidecar `frames.npy` (mmap) or a member of the .npz (RAM).
+
+    `np.load` CANNOT mmap a member of an .npz. So the in-archive layout has to materialise
+    the whole block — 14.07 GB at 68 shards against a Kaggle GPU notebook's ~13 GB of host
+    RAM — and it OOMs on memory it never uses, because every caller only ever touches
+    `frames[s:s+n]`, one sequence at a time. Written as its own .npy the block stays on disk
+    and the OS pages in exactly that slice.
+
+    Both layouts are supported on purpose: `deafference-fs75`, `-16` and `-34` were built
+    before the split and must keep loading, or three measured baselines become unreadable.
+
+    Returns `(frames, description)`; exits with a diagnosis rather than an IndexError.
+    """
+    sidecar = npz.parent / "frames.npy"
+    # ORDER MATTERS. An npz that carries its own `frames` is self-contained and wins, even if
+    # some other run's frames.npy is sitting in the same folder — a pre-split npz has no
+    # `frames_shape`, so the sidecar branch would have no way to detect the mismatch and
+    # would train on the wrong frames in silence. The new layout omits `frames` entirely,
+    # so it falls through to the sidecar with the shape check available.
+    if "frames" in z.files:
+        frames = z["frames"]
+        how = (f"{npz.name}  IN-ARCHIVE — {frames.nbytes/1e9:.2f} GB materialised "
+               f"(pre-split dataset; this layout cannot reach 68 shards)")
+        if sidecar.exists():
+            print(f"[warn] {sidecar.name} is also present and is being IGNORED: {npz.name} "
+                  f"carries its own frames.\n       Two layouts in one folder — check you "
+                  f"attached the dataset you meant to.")
+    elif sidecar.exists():
+        frames = np.load(sidecar, mmap_mode="r")
+        how = f"{sidecar.name}  MMAP — {frames.nbytes/1e9:.2f} GB stays on disk"
+        # A folder can hold one run's npz beside another's frames.npy. starts/lengths would
+        # then index the wrong frames and train perfectly happily on scrambled labels.
+        if "frames_shape" in z.files:
+            want = tuple(int(v) for v in z["frames_shape"])
+            if tuple(frames.shape) != want:
+                sys.exit(f"[err] {sidecar} is {tuple(frames.shape)} but {npz.name} was "
+                         f"written for {want}.\n      Two different runs — starts/lengths "
+                         f"would index the wrong frames.")
+    else:
+        sys.exit(f"[err] no frames anywhere. {npz.name} holds metadata only, and "
+                 f"{sidecar.name} is not beside it.\n      subset_landmarks.py writes BOTH — "
+                 f"build the Kaggle dataset from the whole output folder, not just the npz.")
+
+    if len(lengths) and int(starts[-1]) + int(lengths[-1]) > len(frames):
+        sys.exit(f"[err] the last sequence ends at frame "
+                 f"{int(starts[-1]) + int(lengths[-1]):,} but only {len(frames):,} exist — "
+                 f"fs75.npz and frames.npy are from different runs.")
+    return frames, how
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════
@@ -713,12 +869,14 @@ def train(args) -> int:
                  f"output as a Kaggle DATASET (notebook output is not an input).")
     print(f"[load] {npz}")
     z = np.load(npz, allow_pickle=False)
-    frames = z["frames"]
     starts, lengths = z["starts"], z["lengths"]
     phrases = [str(p) for p in z["phrase"]]
     parts = z["participant"]
+
+    frames, how = resolve_frames(npz, z, starts, lengths)
     print(f"[load] {len(lengths):,} sequences, {len(frames):,} frames, "
-          f"{len(set(parts.tolist()))} participants, {frames.nbytes/1e9:.2f} GB")
+          f"{len(set(parts.tolist()))} participants")
+    print(f"[load] frames from {how}")
 
     # ── features + the feasibility filter, in one pass ────────────────────────────────────
     t0 = time.time()
@@ -743,7 +901,9 @@ def train(args) -> int:
     dropped = Counter()
     for i in range(len(lengths)):
         s, n = int(starts[i]), int(lengths[i])
-        seq = frames[s:s + n]
+        # np.asarray forces the ONE sequence into RAM (~90 KB) when frames is a memmap, so
+        # features() and everything downstream see a plain ndarray regardless of layout.
+        seq = np.asarray(frames[s:s + n])
         F = features(seq)
         hf = float(F[:, -1].sum())
         hand_rates.append(hf / max(n, 1))
@@ -771,11 +931,20 @@ def train(args) -> int:
     # Scaled to all 68 shards that is 9.7 GB held for no reason against a Kaggle GPU
     # notebook's ~13 GB of host RAM, so the training loop would OOM on memory it does not
     # use. Freeing it drops steady-state from ~14 GB to ~4.4 GB at 68 shards.
+    # With the sidecar layout it was never IN RAM to release: the OS paged in each
+    # frames[s:s+n] slice and can reclaim those pages on demand. Say which happened, because
+    # "[mem] released 14.09 GB" on a run that peaked at 6 GB would be a lie in our own favour.
     held = frames.nbytes / 1e9
+    was_mmap = isinstance(frames, np.memmap)
     del frames, z
     gc.collect()
-    print(f"[mem] released {held:.2f} GB of raw landmarks — features_list "
-          f"({sum(f.nbytes for f in feats_list)/1e9:.2f} GB) is all the model reads")
+    feat_gb = sum(f.nbytes for f in feats_list) / 1e9
+    if was_mmap:
+        print(f"[mem] {held:.2f} GB of raw landmarks were MMAPPED, never resident — "
+              f"features_list ({feat_gb:.2f} GB) is all the model reads")
+    else:
+        print(f"[mem] released {held:.2f} GB of raw landmarks — features_list "
+              f"({feat_gb:.2f} GB) is all the model reads")
 
     print(f"[filter] kept {len(keep):,}/{len(lengths):,} ({100*len(keep)/len(lengths):.1f}%) "
           f"in {time.time()-t0:.0f}s")

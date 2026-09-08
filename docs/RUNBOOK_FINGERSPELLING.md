@@ -1,7 +1,7 @@
 # Runbook — the fingerspelling CTC baseline, step by step
 
 **Written 2026-09-04.** Everything below is a click-path or a cell. The code is committed and
-its `--selftest` passes 26 checks, so nothing here is waiting on me.
+its `--selftest` passes (26 checks when this was written; **44 now** — the frames-layout checks were added 2026-09-08). Nothing here is waiting on me.
 
 ```
 training/fingerspelling/train_ctc.py     the model  (committed, selftest green)
@@ -131,7 +131,8 @@ Expect `fs75.npz  547 MB`. A much smaller number means the dataset captured a sm
 run (`--limit-seq`) rather than the 4-shard run.
 
 ```python
-# cell 2 — SELFTEST FIRST. 26 checks, no data, ~30 s. If this fails, stop.
+# cell 2 — SELFTEST FIRST. 44 checks (26 when this part was written), no data, ~30 s.
+# If this fails, stop.
 !python {CODE}/train_ctc.py --selftest
 ```
 
@@ -327,7 +328,7 @@ print('\nNPZ  =', NPZ, '\nCODE =', CODE, '\nGPU  =', gpus)
 ```
 
 ```python
-# cell 2 — selftest: 35 checks, ~30 s. If it fails, stop.
+# cell 2 — selftest: 44 checks (35 when this part was written), ~30 s. If it fails, stop.
 !python {CODE}/train_ctc.py --selftest
 ```
 
@@ -461,7 +462,7 @@ print('\nNPZ  =', NPZ, '\nCODE =', CODE, '\nGPU  =', gpus)
 ```
 
 ```python
-# cell 2 — selftest: 35 checks, ~30 s, no data needed. If this fails, STOP.
+# cell 2 — selftest: 44 checks (35 when this part was written), ~30 s. If this fails, STOP.
 !python {CODE}/train_ctc.py --selftest
 ```
 
@@ -518,12 +519,127 @@ The **whole log** — not just the final line. Specifically `[charset]`, `[split
 `[mem]`, every `[ep N]` row, and `report.json`. The per-signer CER block matters as much as the
 headline: run 2's equity finding only appeared because all 13 were listed.
 
-### Past 34 — the one blocking change
+### ✅ Part 5b RESULT (2026-09-08): `final` val CER **0.3302** against 0.320 predicted
 
-68 shards peaks at **14.07 GB against ~13 GB** of GPU-notebook host RAM and OOMs *after* a ~6 h
-subset job. Going further needs `subset_landmarks.py` to write **`frames.npy` separately from the
-metadata** so the trainer can mmap it — **`np.load` cannot mmap a member of an `.npz`.** That is
-mine, it is small, and it is the only thing standing between us and the full corpus.
+Both traps held. `TensorSpec (None,None,60)` proved the competition charset; the per-signer block
+listed all 13 pinned signers. The scaling law holds — see §0.8 of the handoff for the analysis,
+including the finding that **the absolute per-signer gap has stopped closing** (−0.0454, then
+−0.0029).
+
+---
+
+## Part 5c — the FULL 68-shard corpus · ⚠️ NEW TWO-FILE LAYOUT, read cell 1 carefully
+
+**Unblocked 2026-09-08.** `subset_landmarks.py` now writes **`frames.npy` separately from
+`fs75.npz`**, because **`np.load` cannot mmap a member of an `.npz`** — the old single-file layout
+forced the trainer to materialise 14.07 GB against ~13 GB of host RAM and OOM on memory it never
+touched. With the sidecar, the frame block stays on disk and the OS pages in each
+`frames[s:s+n]` slice, which is the only thing the trainer ever reads.
+
+```
+subset :  --limit-files 68   ->  ~67,949 seqs, ~10.8M frames, frames.npy ~9.8 GB, ~5.6 h CPU
+dataset:  deafference-fs75-68     Private, brand-new name, BOTH FILES
+train  :  --epochs 15             ~16.4 min/epoch, ~4.1 h GPU
+          --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225   <- SAME 13
+```
+
+**Prediction on record: 0.291–0.298**, from the observed −0.0394/doubling with mild decay.
+
+### 🔴 THREE things changed and every one of them will bite
+
+1. **The dataset must contain BOTH files.** `frames.npy` (~9.8 GB) *and* `fs75.npz` (~2 KB).
+   Building it from only the npz produces a dataset that fails at load with a named error —
+   `train_ctc.py` says so explicitly rather than raising `KeyError`.
+2. **The old size assert is now WRONG.** `fs75.npz` is metadata-only, about **2 KB**, so
+   `getsize(npz) > 4e9` would reject a correct dataset. **Assert on `frames.npy` instead** —
+   cell 1 below does.
+3. **`--epochs 15`, provisionally.** The optimum has moved earlier every rung (39/40 → <25 →
+   ≤20). The best-CER checkpoint is saved whenever it improves, so an early peak costs only wall
+   time — but **if run 3's `best_val_cer` turns out to have arrived at epoch 19–20, use 18 here,
+   not 15.** That number is still outstanding from run 3's `report.json`.
+
+### Step 1 — subset, CPU · ~5.6 h
+
+New notebook **`deafference-fs-subset-68`** · Accelerator **None** · attach the **competition**
+and **`deafference-fs-code`** *(re-upload `subset_landmarks.py` first — the copy in that dataset
+predates the split and would write the old single-file layout).*
+
+```python
+import glob, os
+BASE = os.path.dirname(glob.glob('/kaggle/input/**/train_landmarks', recursive=True)[0])
+CODE = os.path.dirname(glob.glob('/kaggle/input/**/subset_landmarks.py', recursive=True)[0])
+print('BASE =', BASE, '\nCODE =', CODE)
+```
+
+```python
+!python {CODE}/subset_landmarks.py --base {BASE} --out /kaggle/working --limit-files 68
+!ls -la /kaggle/working          # expect frames.npy ~9.8 GB AND fs75.npz ~2 KB
+```
+
+**Save Version → Save & Run All (Commit).** Then Output → **⋮ → New Dataset** → title
+**`deafference-fs75-68`** → **Private** → Create. Confirm the created dataset lists **both files**
+before moving on.
+
+### Step 2 — train, GPU · ~4.1 h
+
+New notebook **`deafference-fs-ctc-68`** · **GPU P100** · attach **`deafference-fs75-68`**,
+**`deafference-fs-code`**, the **competition**. Detach every other `fs75` dataset.
+
+```python
+# cell 1 — go/no-go for the TWO-FILE layout. Asserts on frames.npy, not the npz.
+import glob, os
+import tensorflow as tf
+
+npz  = sorted(glob.glob('/kaggle/input/**/fs75.npz',   recursive=True))
+frm  = sorted(glob.glob('/kaggle/input/**/frames.npy', recursive=True))
+code = glob.glob('/kaggle/input/**/train_ctc.py', recursive=True)
+chs  = glob.glob('/kaggle/input/**/character_to_prediction_index.json', recursive=True)
+gpus = tf.config.list_physical_devices('GPU')
+
+for p in npz + frm: print(f'  {os.path.getsize(p)/1e6:>9.1f} MB   {p}')
+assert len(npz) == 1, f'{len(npz)} fs75.npz mounted — detach the other fs75 datasets'
+assert len(frm) == 1, f'{len(frm)} frames.npy mounted — detach the other fs75 datasets'
+assert os.path.dirname(npz[0]) == os.path.dirname(frm[0]), \
+       'frames.npy must sit BESIDE its fs75.npz — they are one dataset, not two'
+assert os.path.getsize(frm[0]) > 8e9,  'frames.npy too small for 68 shards (~9.8 GB expected)'
+assert os.path.getsize(npz[0]) < 1e7,  'fs75.npz should be metadata-only (~2 KB) — that looks '\
+                                       'like the OLD single-file layout, rebuilt from stale code'
+assert code, 'train_ctc.py MISSING'
+assert chs,  'competition NOT attached — the charset would be shard-derived'
+assert gpus, 'no GPU — Settings > Accelerator'
+NPZ, CODE = npz[0], os.path.dirname(code[0])
+print('\nNPZ =', NPZ, '\nCODE =', CODE, '\nGPU =', gpus)
+```
+
+```python
+!python {CODE}/train_ctc.py --selftest      # 44 checks, incl. both frame layouts
+```
+
+```python
+!python {CODE}/train_ctc.py --npz {NPZ} --out /kaggle/working/fs_out --epochs 15 \
+    --val-signers 1,15,56,73,89,128,147,154,158,161,196,203,225
+```
+
+### What proves the mmap actually worked
+
+```
+[load] frames from frames.npy  MMAP — 9.79 GB stays on disk
+[mem]  9.79 GB of raw landmarks were MMAPPED, never resident — features_list (4.5 GB) is all
+       the model reads
+```
+
+**If you see `IN-ARCHIVE — … materialised` instead, stop.** That means the dataset was built by
+the pre-split `subset_landmarks.py`, and at 68 shards it will OOM exactly as before. Re-upload
+the code and redo Step 1.
+
+A `[warn] frames.npy is also present and is being IGNORED` line means two layouts got mixed in
+one folder — the self-contained npz wins by design, but it is not the dataset you meant.
+
+### If it still OOMs
+
+The frame block is no longer the driver — `features_list` (~4.5 GB) is. In that case the next
+lever is to write the *features* to disk too, not more RAM. Tell me and I will do it; there is no
+point guessing at it before we have a measurement.
 
 ---
 
