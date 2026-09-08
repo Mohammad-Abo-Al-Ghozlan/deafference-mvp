@@ -242,6 +242,14 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--train", action="store_true",
                     help="actually invoke train.py per point (without this, only manifests are written)")
+    ap.add_argument("--train-py", type=Path, default=None,
+                    help=f"path to train.py. Defaults to {TRAIN_PY} (i.e. ../train.py, the repo "
+                         f"layout). On Kaggle a dataset usually flattens the tree, so pass this "
+                         f"explicitly or the default resolves ABOVE the dataset directory.")
+    ap.add_argument("--decimate", type=float, default=0.5,
+                    help="decimate probability handed to train.py (default 0.5, because the demo "
+                         "runs at ~7fps). Set 0.0 if the medical decimate A/B comes back negative "
+                         "— otherwise the whole curve measures a config you would not ship.")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
 
@@ -249,6 +257,18 @@ def main() -> int:
         return selftest()
     if not a.data_dir or not a.out_dir:
         ap.error("--data-dir and --out-dir are required (or pass --selftest)")
+
+    # Resolve train.py BEFORE any work. Without this the script writes every manifest, links
+    # every by_word, and only then fails once per point with "train.py exited 2" — and because
+    # TRAIN_PY is used ONLY under --train, the free dry-run passes and says everything is fine.
+    train_py = a.train_py or TRAIN_PY
+    if a.train and not train_py.exists():
+        sys.exit(f"[err] train.py not found at {train_py}\n"
+                 f"      The default is ../train.py relative to THIS file, which is the repo "
+                 f"layout.\n      A Kaggle dataset flattens the tree, so that resolves above the "
+                 f"dataset dir.\n      Pass --train-py /kaggle/input/<ds>/train.py, or recreate "
+                 f"the layout:\n"
+                 f"        training/train.py  and  training/medical/clips_per_sign_curve.py")
 
     import pandas as pd
 
@@ -310,9 +330,9 @@ def main() -> int:
 
             if a.train:
                 out = a.out_dir / f"run_{strategy}_n{n}"
-                cmd = [sys.executable, str(TRAIN_PY), "--data-dir", str(d), "--out-dir", str(out),
+                cmd = [sys.executable, str(train_py), "--data-dir", str(d), "--out-dir", str(out),
                        "--fold", str(a.fold), "--all-words", "--epochs", str(a.epochs),
-                       "--seed", str(a.seed), "--decimate", "0.5"]
+                       "--seed", str(a.seed), "--decimate", str(a.decimate)]
                 print(f"    -> {' '.join(cmd[1:])}")
                 r = subprocess.run(cmd, capture_output=True, text=True)
                 sys.stdout.write(r.stdout[-2000:] if r.stdout else "")
