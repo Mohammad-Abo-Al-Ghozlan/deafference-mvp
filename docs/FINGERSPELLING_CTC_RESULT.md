@@ -1,4 +1,104 @@
-# Fingerspelling CTC baseline — the first run, measured
+# Fingerspelling CTC baseline — four runs, measured
+
+> ## ✅ RUN 4 · 2026-09-08 · **ALL 68 shards** · **CER 0.3302 → 0.29177, and it CONVERGED**
+>
+> **`best_val_cer` 0.29176515 vs `final.cer` 0.29549741.** They differ, so the best epoch was
+> not the last one: **this run found its minimum before the cap.** It is only the second
+> converged run in the series and the first at scale, which is what makes everything below a
+> result rather than a floor.
+>
+> ```
+> best val CER   0.3302 -> 0.29177     n_train 25,151 -> 49,730   n_val 4,085 -> 8,146
+> exact phrase   0.0840 -> 0.11589     n_classes 60   charset from the competition file ✅
+> per-epoch      ~12 min x 25 = ~5 h   non-finite 0 in all 25 epochs, train AND val
+> filter kept    57,876 / 67,208 = 86.1%   (= n_train + n_val, reconciles exactly)
+> ```
+>
+> ### Two predictions were on record. One was right, and the other shows why truncation matters.
+>
+> | predicted by | for 68 shards | outcome |
+> |---|---|---|
+> | Run 2's extrapolation (§ below), at −0.0487/doubling | **0.272** | ❌ too optimistic |
+> | Run 3's write-up, as a *conservative ceiling* | **0.291–0.298** | ✅ 0.29177, at the lower edge |
+>
+> Run 2's rate came from 4→16 shards, and **run 1 was truncated** — its 0.4703 is too high, so
+> the drop it implied was too large and the rate too steep. A truncated point did not merely
+> mislabel itself; it inflated a rate that produced a wrong forecast two rungs later.
+>
+> The second prediction was right but its *framing* was wrong: it was called a ceiling "a
+> converged run should beat." It did not beat it. It landed on the edge.
+>
+> ### The scaling rate is now established
+>
+> Two converged endpoints — run 2 (16, 0.3730) and run 4 (68, 0.29177) — over 2.0875 doublings:
+>
+> ```
+> RATE = -0.0389 CER per doubling of data        <- established, both endpoints converged
+> ```
+>
+> ### Flattening is BACK, and this time the argument is sound
+>
+> It was withdrawn on 2026-09-08 because it compared converged run 2 against truncated run 3.
+> It holds now for a different reason: **run 3's truncation bounds both sub-intervals in the
+> same direction.** Its CER is too *high*, so the drop before it is a lower bound and the drop
+> after it an upper bound:
+>
+> ```
+> 16 -> 34 shards :  rate <= -0.0394 / doubling   (steeper, or equal)
+> 34 -> 68 shards :  rate >= -0.0384 / doubling   (shallower, or equal)
+> ```
+>
+> Both inequalities point the same way, so the conclusion survives *however* truncated run 3
+> was — **more truncation only strengthens it.** But the margin is thin: ≥2.4% relative decay,
+> and unknown above that. Do not quote a decay *rate*.
+>
+> ### 🔴 The shard lever is EXHAUSTED — and that is the real finding
+>
+> **68 of 68 files are in this run.** There is no next rung, and extrapolating to "136 shards"
+> is meaningless. The remaining licence-clean data is the **52,958 supplemental sequences**
+> against 67,208 train — 0.84 doublings, so **~0.259 expected** at the established rate. That is
+> the next move on this track and it is a *different job* from "more shards": a different split
+> with its own loader work, not another `--limit-files`.
+>
+> ### `--epochs 25` is settled, not provisional
+>
+> The run converged and then got slightly *worse* (0.29177 → 0.29550). More epochs would not
+> have helped. That closes the question the last three runs kept re-opening.
+>
+> ### Per-signer: the ratio warning, demonstrated rather than argued
+>
+> ```
+> best   p161  0.12265        worst  p128  0.49136        median 0.2990
+> ABSOLUTE gap 0.36871        ratio 4.01x                 above 0.40: p1, p128, p203
+> ```
+>
+> Against run 3 the **absolute gap NARROWED** (0.3917 → 0.36871) while the **ratio WIDENED**
+> (3.71× → 4.01×) — near-equal absolute gains landing on unequal bases, exactly what the
+> "ratio is the wrong statistic" note predicted. **Use the absolute gap.**
+>
+> ⚠️ And **the worst signer changed**: p203 → p128. Naming "the hard signer" off a single run
+> was never stable. (Run 3 was truncated, so read this comparison for direction only — the
+> equity *trend* still needs two converged runs' per-signer tables side by side.)
+>
+> ### Where the filter's losses actually go
+>
+> | reason | dropped |
+> |---|---|
+> | too few hand-frames per character | **6,290** |
+> | `T_out < phrase_len` | 2,971 |
+> | infeasible ONLY because of repeated characters | **71** |
+>
+> The repeat correction — the subtlest CTC insight in this file — moves **71 sequences of
+> 67,208.** It was right to fix, and it is not where the data goes. Tracking quality is.
+>
+> ### ⚠️ Level-set, unchanged by any of this
+>
+> 0.2918 CER is **29% of characters wrong**; exact-phrase 0.11589 is **12 phrases in 100.**
+> Clean scaling is a result about the *method*. It is not usable for patient names or dosages.
+>
+> **One thing still to read off the history:** which epoch held the best CER. If it was 24 the
+> plateau is barely established; if 18, comfortably. That decides how much weight
+> "the shard lever is done" can carry versus "this run wanted longer."
 
 > ## ✅ RUN 2 · 2026-09-05 · 16 shards · **CER 0.4703 → 0.3730**
 >

@@ -572,6 +572,16 @@ converged 68-shard run is the first clean second point we would have.
 **Prediction on record: 0.291–0.298**, and that is now a conservative ceiling on the CER rather
 than a centre estimate — a converged run should beat it.
 
+### ✅ RESOLVED 2026-09-08 — **0.29177, and it CONVERGED** (`best` 0.29177 vs `final` 0.29550)
+
+The range was right; it landed at the lower edge. **The "a converged run should beat it" framing
+was wrong** — it did not beat the range, it hit its edge.
+
+🔴 **This part is now DONE and cannot be re-run bigger: 68 of 68 shards are in it.** The shard
+lever is exhausted. The next rung on this track is the **52,958 supplemental sequences**
+(0.84 doublings → ~0.259 at the established −0.0389/doubling), which needs its own loader work
+rather than a larger `--limit-files`. Full analysis in `docs/FINGERSPELLING_CTC_RESULT.md`.
+
 ### 🔴 THREE things changed and every one of them will bite
 
 1. **The dataset must contain BOTH files.** `frames.npy` (~9.7 GB) *and* `fs75.npz` (~10 MB).
