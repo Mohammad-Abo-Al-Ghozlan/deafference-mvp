@@ -574,12 +574,21 @@ than a centre estimate — a converged run should beat it.
 
 ### 🔴 THREE things changed and every one of them will bite
 
-1. **The dataset must contain BOTH files.** `frames.npy` (~9.8 GB) *and* `fs75.npz` (~2 KB).
+1. **The dataset must contain BOTH files.** `frames.npy` (~9.7 GB) *and* `fs75.npz` (~10 MB).
    Building it from only the npz produces a dataset that fails at load with a named error —
    `train_ctc.py` says so explicitly rather than raising `KeyError`.
-2. **The old size assert is now WRONG.** `fs75.npz` is metadata-only, about **2 KB**, so
+2. **The old size assert is now WRONG.** `fs75.npz` no longer holds the frames, so
    `getsize(npz) > 4e9` would reject a correct dataset. **Assert on `frames.npy` instead** —
    cell 1 below does.
+
+   🔴 **CORRECTED 2026-09-08, after the real run.** This section twice said the npz would be
+   **"about 2 KB"**, and cell 1 asserted `getsize(npz) < 1e7` on the strength of it. The measured
+   file is **9,948,622 B — the assert passed with 51 KB of headroom, 0.5%.** It scales with
+   *sequence count* (67,208 rows of `starts`/`lengths`/`ids`/`phrases`/`parts`), not with frames,
+   so at ~72k sequences that assert would have **rejected a perfectly good dataset.**
+
+   The size heuristic is gone. **What actually separates the two layouts is whether `frames` is a
+   KEY in the npz** — that is exact, cannot false-positive, and reads only the zip directory.
 3. **`--epochs 25`, and that is settled now, not provisional.** Run 3's `best_val_cer` came at
    epoch **20 of 20** — it was still improving when it stopped. See the correction above: the
    "optimum moves earlier" premise was built on misreading two capped runs as peaks.
@@ -599,8 +608,29 @@ print('BASE =', BASE, '\nCODE =', CODE)
 
 ```python
 !python {CODE}/subset_landmarks.py --base {BASE} --out /kaggle/working --limit-files 68
-!ls -la /kaggle/working          # expect frames.npy ~9.8 GB AND fs75.npz ~2 KB
+!ls -la /kaggle/working          # expect frames.npy ~9.7 GB AND fs75.npz ~10 MB
 ```
+
+**Measured 2026-09-08** — the predictions above held: **67,208 sequences** (predicted ~67,949),
+**10,731,754 frames** (~10.8M), **frames.npy 9,658,578,728 B** (~9.8 GB). That byte count is
+*exactly* `10,731,754 × 75 × 3 × 4 + 128`, and `R 55,281 + L 11,927 = 67,208`, so the file is
+provably complete and no sequence was dropped.
+
+The corpus-level stats **confirm on all 94 signers** what the shard subsets showed, so nothing
+about the feature design needs revisiting:
+
+| statistic | full corpus | what it means |
+|---|---|---|
+| dominant-hand presence | mean 0.559, median 0.577, **p10 0.148** | 44% of frames have no tracked spelling hand — this is why `tracked` is a feature |
+| max interior gap | median 15, p90 53, max 358 | matches the "median 16-frame hole" the feature docstring cites |
+| sequences with a gap >10 | **63%** | interpolating them fabricates letters; we don't |
+| handedness | R 55,281 / **L 11,927 (17.7%)** | mirrored at feature time, so the model only sees a right hand |
+
+⚠️ **17.7% left-dominant is much higher than the 250-word corpus**, where the avatar docs state
+"the dominant hand is always the right one." That is a fact about *that* dataset, not this one.
+`extract_features` mirrors `shape`, `keep` and `mid` together (`wpos` is derived after both are
+mirrored, and `width` is a distance, so mirror-invariant) — the normalisation is complete. **Do
+not "fix" handedness in the subset script**; it would double-mirror.
 
 **Save Version → Save & Run All (Commit).** Then Output → **⋮ → New Dataset** → title
 **`deafference-fs75-68`** → **Private** → Create. Confirm the created dataset lists **both files**
@@ -612,8 +642,9 @@ New notebook **`deafference-fs-ctc-68`** · **GPU P100** · attach **`deafferenc
 **`deafference-fs-code`**, the **competition**. Detach every other `fs75` dataset.
 
 ```python
-# cell 1 — go/no-go for the TWO-FILE layout. Asserts on frames.npy, not the npz.
+# cell 1 — go/no-go for the TWO-FILE layout. Checks the npz's KEYS, not its size.
 import glob, os
+import numpy as np
 import tensorflow as tf
 
 npz  = sorted(glob.glob('/kaggle/input/**/fs75.npz',   recursive=True))
@@ -624,15 +655,37 @@ gpus = tf.config.list_physical_devices('GPU')
 
 for p in npz + frm: print(f'  {os.path.getsize(p)/1e6:>9.1f} MB   {p}')
 assert len(npz) == 1, f'{len(npz)} fs75.npz mounted — detach the other fs75 datasets'
-assert len(frm) == 1, f'{len(frm)} frames.npy mounted — detach the other fs75 datasets'
-assert os.path.dirname(npz[0]) == os.path.dirname(frm[0]), \
-       'frames.npy must sit BESIDE its fs75.npz — they are one dataset, not two'
-assert os.path.getsize(frm[0]) > 8e9,  'frames.npy too small for 68 shards (~9.8 GB expected)'
-assert os.path.getsize(npz[0]) < 1e7,  'fs75.npz should be metadata-only (~2 KB) — that looks '\
-                                       'like the OLD single-file layout, rebuilt from stale code'
 assert code, 'train_ctc.py MISSING'
 assert chs,  'competition NOT attached — the charset would be shard-derived'
 assert gpus, 'no GPU — Settings > Accelerator'
+
+# WHICH LAYOUT, before anything else. The npz's size cannot tell you — it scales with sequence
+# count, not frames. Whether 'frames' is a KEY can, exactly; .files reads only the zip directory.
+# This has to come BEFORE the frames.npy checks: a dataset built from stale code has NO sidecar,
+# so asserting on the sidecar first reports "0 frames.npy mounted — detach the other datasets",
+# which is the wrong diagnosis AND the wrong fix. And a genuinely old npz has no 'frames_shape'
+# key at all, so reading that before checking 'frames' raises KeyError instead of the real reason.
+with np.load(npz[0], allow_pickle=False) as z:
+    keys = set(z.files)
+    assert 'frames' not in keys, 'OLD single-file layout — the frames are INSIDE this npz. It was '\
+           'built by a stale subset_landmarks.py and WILL OOM at 68 shards exactly as before. '\
+           'Re-upload the code and redo Step 1 — detaching datasets will not help.'
+    assert 'frames_file' in keys, "no 'frames_file' key — not written by the split-layout code"
+    want = tuple(int(v) for v in z['frames_shape'])
+
+assert len(frm) == 1, f'{len(frm)} frames.npy mounted — detach the other fs75 datasets'
+assert os.path.dirname(npz[0]) == os.path.dirname(frm[0]), \
+       'frames.npy must sit BESIDE its fs75.npz — they are one dataset, not two'
+
+# frames.npy must be the file this npz describes. mmap reads only the header, so it is free —
+# and np.load RAISES if the file is shorter than its header claims ("mmap length is greater than
+# file size"), catching a half-finished upload: the one failure a size threshold waves through.
+mm = np.load(frm[0], mmap_mode='r')
+assert mm.shape == want and mm.dtype == np.float32, \
+       f'frames.npy is {mm.shape} {mm.dtype}, npz records {want} float32 — mismatched pair'
+print(f'[ok] {want[0]:,} frames x {want[1]} x {want[2]} float32, sidecar matches its npz')
+del mm
+
 NPZ, CODE = npz[0], os.path.dirname(code[0])
 print('\nNPZ =', NPZ, '\nCODE =', CODE, '\nGPU =', gpus)
 ```
