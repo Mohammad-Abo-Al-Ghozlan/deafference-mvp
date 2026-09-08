@@ -1154,18 +1154,26 @@ approximate". Separated, a failure says which stage broke.
 
 **Measured: the JS reference agrees with Python to max 2.44e-7 against a 1e-6 budget** — that gap
 is float32-vs-float64 and nothing else, so a genuine logic error lands orders of magnitude above
-it. Four plausible-but-wrong implementations were verified to **fail**, each with a diagnostic
-naming the actual mistake:
+it. **Current status: `PARITY OK` on both sides.**
 
-| mistake | verdict |
-|---|---|
-| centre on the nose, not the shoulder midpoint | `FAIL shoulder midpoint is the origin` |
-| centre but never scale | `FAIL shoulder distance is exactly 1` |
-| substitute 0 for a missing landmark | `FAIL nan_hand_is_PRESERVED — 42 NaN mismatches` |
-| keep a shoulder-less frame instead of dropping it | `FAIL ..._DROPS_the_frame — NOT dropped` |
+#### ✅ Sabotage tests — `FAIL` here is the DESIRED result, NOT an open bug
 
-*(42 = 21 hand landmarks × 2 channels, with z correctly still NaN in both — the diagnostic is
-precise, not merely red.)*
+> 🟢 **Read this before the table.** These are four deliberately-wrong copies of the JS, made
+> in a temp folder, run once to prove the harness catches them, then deleted. The shipping
+> `golden_parity.mjs` passes. A smoke-alarm test: the alarm sounding means the alarm works, and
+> **if any row said `ok`, *that* would be the defect** — a parity test that cannot fail is
+> decoration. (Salim read this table as a bug list on 2026-09-08, which is why the warning is
+> now this loud.)
+
+| deliberate sabotage | harness output | caught? |
+|---|---|---|
+| centre on the nose, not the shoulder midpoint | `FAIL shoulder midpoint is the origin` | ✅ |
+| centre but never scale | `FAIL shoulder distance is exactly 1` | ✅ |
+| substitute 0 for a missing landmark | `FAIL nan_hand_is_PRESERVED — 42 NaN mismatches` | ✅ |
+| keep a shoulder-less frame instead of dropping it | `FAIL ..._DROPS_the_frame — NOT dropped` | ✅ |
+
+**4 of 4 caught.** *(42 = 21 hand landmarks × 2 channels, with z correctly still NaN in both —
+the diagnostic is precise, not merely red.)*
 
 ⚠️ **Fixtures are generated from the SHIPPING `live_demo.normalize`, not reimplemented here** —
 the discipline `verify_fingerspelling_parity.py` established. A harness that restates the spec

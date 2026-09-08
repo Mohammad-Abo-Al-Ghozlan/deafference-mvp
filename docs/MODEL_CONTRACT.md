@@ -86,15 +86,24 @@ inside it.** Editing that copy until it passes tests the harness against itself.
 tolerance of 1e-6. That gap is float32-vs-float64, and it is the whole budget you have — a
 genuine logic difference lands orders of magnitude above it.
 
-**Four wrong-but-plausible implementations were checked to FAIL**, because a parity test that
-cannot fail is decoration:
+### ✅ SABOTAGE TESTS — `FAIL` below is the DESIRED result, not an open bug
 
-| the plausible mistake | what the harness says |
-|---|---|
-| centre on the **nose** (pose 0) instead of the shoulder midpoint | `FAIL shoulder midpoint is the origin` |
-| centre correctly but **never scale** | `FAIL shoulder distance is exactly 1` |
-| substitute **0** for a missing landmark | `FAIL nan_hand_is_PRESERVED_not_zeroed — 42 NaN mismatches` |
-| **keep** a frame whose shoulders are missing instead of dropping it | `FAIL left_shoulder_nan_DROPS_the_frame — NOT dropped` |
+> 🟢 **Nothing in this table is broken.** These are four deliberately-wrong copies of the JS,
+> made in a temp folder, run once to confirm the harness catches them, then deleted. The
+> shipping `golden_parity.mjs` passes: **`PARITY OK`, max deviation 2.44e-7.**
+>
+> It is a smoke-alarm test — the alarm sounding means the alarm works. **If any row below said
+> `ok`, *that* would be the defect,** because a parity test that cannot fail is decoration.
+
+| deliberate sabotage | harness output | caught? |
+|---|---|---|
+| centre on the **nose** (pose 0), not the shoulder midpoint | `FAIL shoulder midpoint is the origin` | ✅ |
+| centre correctly but **never scale** | `FAIL shoulder distance is exactly 1` | ✅ |
+| substitute **0** for a missing landmark | `FAIL nan_hand_is_PRESERVED_not_zeroed — 42 NaN mismatches` | ✅ |
+| **keep** a shoulder-less frame instead of dropping it | `FAIL left_shoulder_nan_DROPS_the_frame — NOT dropped` | ✅ |
+
+**4 of 4 caught.** Reproduce any of them by editing the `normalize` in `golden_parity.mjs` and
+re-running `node golden_parity.mjs`.
 
 ⚠️ **The third and fourth are the ones prose cannot convey.** A missing hand must stay `NaN`
 through normalization — writing 0 places it at the shoulder midpoint, a real and plausible
