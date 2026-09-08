@@ -884,13 +884,19 @@ instructions in front of you at once, which is what caused the mix-up:
 **This is not urgent and nothing is blocked on it.** Nothing is running an ensemble eval today; the
 consumers are the decimate A/B and the clips-per-sign curve, both mine. Do it when convenient.
 
-#### The steps
+#### ✅ DONE 2026-09-08 — uploaded as `deafference-eval-code-1c9a2fa`
+
+Kept for the record. The steps were:
 
 1. Kaggle -> **Datasets** -> **New Dataset**.
 2. Drag **one file**: `training/ensemble_eval.py`. *(Not `subset_landmarks.py` — that one is done.)*
-3. **Title:** `deafference-eval-code-20260903`. **Visibility: Private.** Create.
-4. Send me the resulting path. It will be
-   `/kaggle/input/datasets/mohammedsalim1/deafference-eval-code-20260903`.
+3. **Visibility: Private.** Create.
+
+**The title does not matter and no cell should depend on it.** I had specified
+`deafference-eval-code-20260903`; Salim used **`deafference-eval-code-1c9a2fa`**, which is
+better — it names the commit that made the file worth uploading rather than the day it went up,
+so the dataset identifies *which version* it holds. Every cell here locates files by recursive
+glob (`/kaggle/input/**/ensemble_eval.py`), so a rename breaks nothing.
 
 #### Why it matters at all
 
