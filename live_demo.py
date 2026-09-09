@@ -184,6 +184,66 @@ Q_STRONG  = 0.60            #   quality needed to allow an instant level-1 commi
 L2_CONF   = 0.50            # LEVEL 2 (medium) — commit after temporal confirmation
 L2_MARGIN = 0.18
 L2_STABLE = 2               #   previews the top word must persist for a level-2 commit
+# ── LEVEL 1a: FOLD AGREEMENT. The ensemble runs four folds and averages them into one
+# number, discarding whether they agreed. Agreement is independent of magnitude, so
+# requiring it lets the confidence bar drop without letting errors through. MEASURED on
+# the 1,373-clip held-out split (9 unseen signers), first-try rate / wrong words spoken:
+#
+#            mask         mean>=0.80          3/4 folds + mean>=0.60
+#         intake27   0.9086  0 wrong        0.9572  0 wrong      <- free
+#           ship55   0.7728  1 wrong        0.8817  5 wrong      <- cheap
+#           all123   0.4957  6 wrong        0.6534 23 wrong      <- EXPENSIVE
+#
+# +0.049 first-try for nothing on a 27-word mask; at 123 words the same relaxation
+# quadruples the wrong words. So it is gated on mask size and MUST stay that way —
+# AGREE_MAX_VOCAB is a safety bound, not a tuning knob.
+AGREE_K         = 3         # folds (of 4) that must independently pick the same word
+AGREE_CONF      = 0.60      # mean-prob floor once they do
+AGREE_MAX_VOCAB = 30        # never below this narrow: see the all123 row above
+
+# ══ --window: segment by CLASSIFIER CONFIDENCE, not by stillness ═════════════════════
+# The default segmenter starts a segment when a hand persists and ends it on stillness /
+# hands down / a length ceiling, previewing from SEGMENT START to now. In fluent signing
+# no boundary fires — the still-run inside an utterance is shorter than still_fr — so
+# that window grows to span several signs and the preview classifies a clip that is no
+# longer one word. This alternative never asks where a sign begins: it classifies the
+# last W frames continuously and emits the best-scoring window of each agreement run.
+#
+# MEASURED offline (window_ab*.py): 3-sign utterances built from held-out test clips of
+# ONE signer at 7 fps, real durations from semlex_metadata.csv, intake27's 22 speakable
+# words, 62 utterances over 2 seeds. Score = utterances delivered EXACTLY right, and the
+# precision of everything spoken. ORACLE = handed each sign's true boundaries, so it is
+# the ceiling no segmenter can pass.
+#
+#                       ORACLE          today           --window
+#     no gap at all   52/62 p1.00    4/62 p0.68      36/62 p0.98
+#     0.30 s pause    52/62 p1.00    6/62 p0.64      48/62 p0.98
+#     0.50 s pause    52/62 p1.00    4/62 p0.63      42/62 p0.94
+#     0.50 s down     52/62 p1.00    4/62 p0.63      45/62 p0.95
+#
+# --window with NO pause beats the default WITH the 0.5 s pause the docs ask for, by
+# 36/62 against 4/62. The default's real defect was not missed signs but INSERTIONS: it
+# spoke 115-135 words for 93 intended, because COOLDOWN_SEC 0.40 is 3 frames at 7 fps
+# and cannot stop an overlapping window re-emitting the same sign. Hence the two
+# suppression terms below, which are what took precision 0.78 -> 0.98.
+#
+# 🔴 CAVEAT, and it is the reason this is not the default: the utterances are
+# CONCATENATED isolated clips, so they contain no movement epenthesis — the transition
+# frames where the hand travels from one sign to the next. Real fluent signing has them
+# and this corpus has none, so "no gap" here is not the same thing as fluent signing,
+# and is easier. This needs ONE camera session to promote.
+WINDOW_SEC       = (0.9, 1.5, 2.4)  # trailing window lengths, spanning p10..p90 of the
+                                    #   real duration distribution (1.22 / 1.94 / 3.25 s)
+WINDOW_STRIDE_FR = 2        # frames between scans (3 fold-0 passes each, ~9 ms apiece)
+WINDOW_PEAK      = 0.50     # masked-prob floor for a window to join an agreement run
+WINDOW_COOL_SEC  = 1.4      # total silence after any commit (~one sign)
+WINDOW_REFRAC_SEC = 2.9     # extra suppression of the SAME word. Cost: signing a word
+                            #   twice inside 2.9 s speaks it once. Rare, and the
+                            #   alternative measured worse on every condition.
+WINDOW_MODE      = False    # set by --window. OFF by default until a camera confirms it
+                            #   (see the CAVEAT above: no corpus has co-articulated
+                            #   transitions, so the offline win is measured on
+                            #   concatenated clips and cannot settle real fluent signing)
 
 # ── sign segmentation (auto-commit): a "sign" = hands active, then a pause ────
 # The signer raises hands, signs, then lowers hands / holds still → the word is
@@ -301,6 +361,36 @@ def predict(fns, x):
     return probs / len(fns)
 
 
+def predict_batch(fns, x) -> np.ndarray:
+    """x: (B, 64, 75, 3) -> (B, n_classes) averaged softmax. One graph call per fold for
+    the whole batch, which is what makes --window's multi-scale scan affordable: three
+    window lengths cost one call, not three."""
+    import tensorflow as tf
+    probs = None
+    for f in fns:
+        out = f(landmarks=tf.constant(x))
+        logits = out["output_0"] if "output_0" in out else list(out.values())[0]
+        p = tf.nn.softmax(logits, axis=1).numpy()
+        probs = p if probs is None else probs + p
+    return probs / len(fns)
+
+
+def predict_folds(fns, x) -> list:
+    """Same forward passes as predict(), but keeps the folds APART.
+
+    predict() averages four folds into one number and throws away whether they agreed.
+    Agreement is evidence the magnitude does not carry: four models that independently
+    pick the same word out of the mask is a different claim from one blurred mean that
+    happens to be high. AGREE_K below spends it."""
+    import tensorflow as tf
+    out = []
+    for f in fns:
+        o = f(landmarks=x)
+        logits = o["output_0"] if "output_0" in o else list(o.values())[0]
+        out.append(tf.nn.softmax(logits, axis=1).numpy()[0])
+    return out
+
+
 def time_resize(a: np.ndarray, n: int = MAX_LEN) -> np.ndarray:
     """Resample a (T,75,3) sequence to exactly n frames by linear interpolation.
     This is what training did to every isolated-sign clip (train.time_resize) —
@@ -313,6 +403,48 @@ def time_resize(a: np.ndarray, n: int = MAX_LEN) -> np.ndarray:
     hi = np.minimum(lo + 1, t - 1)
     w = (idx - lo).astype(np.float32)[:, None, None]
     return (a[lo] * (1.0 - w) + a[hi] * w).astype(np.float32)
+
+
+def fit_to_maxlen(a: np.ndarray, n: int = MAX_LEN) -> np.ndarray:
+    """train.fit_to_maxlen, exactly: resize DOWN if too long, NaN-PAD if too short.
+
+    This is not the same as time_resize and the difference is measured. Stretching a
+    short clip to 64 was this file's own invention; training never did it. train.py:305
+    builds a per-frame mask from `~is_nan(x[:,:,0,0])` and zeros the NaN, so a padded
+    clip is a FIRST-CLASS input the network was trained on — the 0.7-1.4x temporal
+    resample in `augment` puts roughly half of all augmented clips under 64 frames,
+    where fit_to_maxlen pads them.
+
+    Measured on the 1,373-clip held-out split, 9 unseen signers, simulating the
+    capture rate by subsampling the stored 30 fps clips and rebuilding to 64:
+
+        capture rate   STRETCH (was)   NaN-PAD (now)
+             30 fps       0.8383          0.8383      <- identical, nothing to pad
+             10 fps       0.8230          0.8332
+              7 fps       0.8150          0.8296      <- the demo's rate: +0.0146
+              5 fps       0.8055          0.8216
+
+    It matters most where the demo lives. On the 27-word intake mask at 7 fps the
+    first-try rate goes 0.8889 -> 0.9066 at the shipped gate, and at the 3/4-fold gate
+    0.9357 -> 0.9533 **with precision back to 1.0000** — stretching at 7 fps was the
+    one configuration that let a wrong word through that gate.
+
+    Why stretching loses is NOT established. The obvious velocity argument runs the
+    wrong way: interpolating 15 frames up to 64 preserves the per-frame delta scale
+    the model trained on, where padding leaves it ~4x too large. Interpolation also
+    destroys real detail — 64 frames carrying only 15 knots — and that appears to cost
+    more than the scale error. Do not repeat the velocity reasoning as an explanation.
+
+    The residual -0.0087 at 7 fps is genuine capture-rate loss and this cannot reach
+    it: the shipped folds were trained with DECIMATE_P=0.0, so they never saw a
+    decimated clip. Recovering it needs a retrain with `--decimate`, where the 250-word
+    model measured +0.0218."""
+    if a.shape[0] > n:
+        return time_resize(a, n)
+    if a.shape[0] < n:
+        pad = np.full((n - a.shape[0],) + a.shape[1:], np.nan, np.float32)
+        return np.concatenate([a.astype(np.float32), pad], axis=0)
+    return a.astype(np.float32)
 
 
 # FLIP_MAP swaps the two hand blocks, which is right for a LEGACY model and actively wrong for
@@ -439,11 +571,12 @@ def trim_preroll(seq, preroll_n, lead_fr):
 
 def classify_segment(fns, seg) -> np.ndarray:
     """seg: list of (75,3) normalized frames for one sign -> softmax probs.
-    Resamples to 64 frames (training parity) and, if USE_TTA, averages the clip
-    with its mirror (the model was trained with hflip)."""
+    Fits to 64 frames the way TRAINING did — resize down, NaN-pad up, never stretch
+    (see fit_to_maxlen) — and, if USE_TTA, averages the clip with its mirror (the
+    model was trained with hflip)."""
     if CANONICAL_HAND:
         seg = canonicalize_seg(seg)
-    arr = time_resize(np.stack(seg), MAX_LEN)[None].astype(np.float32)   # (1,64,75,3)
+    arr = fit_to_maxlen(np.stack(seg))[None].astype(np.float32)          # (1,64,75,3)
     probs = predict(fns, arr)
     if USE_TTA:
         probs = (probs + predict(fns, _mirror(arr))) / 2.0
@@ -468,10 +601,30 @@ def classify_commit(fns, seg) -> np.ndarray:
     #   capture ~0.3-0.8s at every commit and reading as "it missed my sign".
     probs = None
     for v in views:
-        arr = time_resize(v, MAX_LEN)[None].astype(np.float32)
+        arr = fit_to_maxlen(v)[None].astype(np.float32)      # NOT time_resize — see fit_to_maxlen
         p = predict(fns, arr) + predict(fns, _mirror(arr))   # view + its mirror
         probs = p if probs is None else probs + p
     return _mask_probs(probs / (2.0 * len(views)))
+
+
+def classify_commit_folds(fns, seg) -> tuple:
+    """classify_commit, but also reports how many folds independently agree.
+
+    Returns (masked_probs, n_agree) where n_agree counts folds whose own top-1 —
+    computed on the SAME mask, since agreement outside the mask is irrelevant — matches
+    the ensemble's top-1. Each fold's vote averages that fold over the clip and its
+    mirror, so a fold is not credited for agreeing on only one of the two views.
+
+    With one fold loaded n_agree is 1 and the LEVEL 1a path can never fire, which is
+    correct: there is no agreement to measure. Feeds decide_commit(agree=...)."""
+    if CANONICAL_HAND:
+        seg = canonicalize_seg(seg)
+    arr = fit_to_maxlen(np.stack(seg))[None].astype(np.float32)
+    a, b = predict_folds(fns, arr), predict_folds(fns, _mirror(arr))
+    per = [_mask_probs((p + q) / 2.0) for p, q in zip(a, b)]
+    probs = _mask_probs(np.mean(per, axis=0))
+    top = int(probs.argmax())
+    return probs, sum(1 for p in per if int(p.argmax()) == top)
 
 
 def segment_quality(seg) -> tuple:
@@ -499,7 +652,7 @@ def segment_quality(seg) -> tuple:
     return score, hand_presence
 
 
-def decide_commit(conf, second, quality, stable) -> tuple:
+def decide_commit(conf, second, quality, stable, agree=None) -> tuple:
     """The 3-level commit DECISION ENGINE (Parts 4/5/6). Returns (action, level, reason).
 
       action: 'commit'  -> add the word now
@@ -515,6 +668,14 @@ def decide_commit(conf, second, quality, stable) -> tuple:
     margin = conf - second
     if conf >= L1_CONF and margin >= L1_MARGIN and quality >= Q_STRONG:
         return "commit", 1, f"strong c{conf:.2f} m{margin:.2f}"
+    # LEVEL 1a — fold agreement on a NARROW mask. Only reachable when the caller
+    # measured agreement (the 4-fold pause commit; never the fold-0 preview) and the
+    # active mask is at most AGREE_MAX_VOCAB words. See the AGREE_* block: on 27 words
+    # this is +0.049 first-try for zero wrong words, on 123 it quadruples them.
+    n_vocab = len(ALLOWED_IDX) if ALLOWED_IDX is not None else None
+    if (agree is not None and agree >= AGREE_K and conf >= AGREE_CONF
+            and n_vocab is not None and n_vocab <= AGREE_MAX_VOCAB):
+        return "commit", "1a", f"{agree}/4 folds agree c{conf:.2f} on {n_vocab} words"
     if conf >= L2_CONF and margin >= L2_MARGIN:
         if stable >= L2_STABLE:
             return "commit", 2, f"medium c{conf:.2f} m{margin:.2f} stable x{stable}"
@@ -711,6 +872,51 @@ def selftest(single: bool):
         raise AssertionError(f"{len(leaks)} latent NameError(s) — see above")
     print("[ok] scopes: no nested function reads an undefined global")
 
+    # fit_to_maxlen vs time_resize. Worth an assertion rather than a comment because the
+    # two are interchangeable-looking, the wrong one costs -0.0146 at the demo's 7 fps,
+    # and a stretched clip is not detectably wrong — it just scores lower.
+    _short = np.ones((15, N_POINTS, N_RAW_CH), np.float32)
+    _f = fit_to_maxlen(_short)
+    assert _f.shape == (MAX_LEN, N_POINTS, N_RAW_CH), _f.shape
+    assert np.isfinite(_f[:15]).all(), "the 15 REAL frames must survive unchanged"
+    assert np.isnan(_f[15:]).all(), "frames 15..63 must be NaN-PADDED, not interpolated"
+    assert not np.isnan(time_resize(_short)).any(), \
+        "time_resize must still stretch — fit_to_maxlen is the padding one, not this"
+    _long = np.ones((90, N_POINTS, N_RAW_CH), np.float32)
+    assert fit_to_maxlen(_long).shape[0] == MAX_LEN and not np.isnan(fit_to_maxlen(_long)).any(), \
+        "a clip LONGER than 64 must resize down, with no padding"
+    assert np.isnan(_mirror(_f[None])).sum() == np.isnan(_f).sum(), \
+        "the mirror TTA view must preserve the NaN mask, or half the views are junk"
+    print("[ok] fit_to_maxlen: pads short (NaN), resizes long, mirror keeps the mask")
+
+    # LEVEL 1a. The vocabulary bound is the safety-bearing half of this gate: the same
+    # relaxation that is free on 27 words took wrong-words-spoken from 6 to 23 on 123.
+    # Assert the bound holds rather than trusting the constant to stay put.
+    global ALLOWED_IDX
+    _saved_mask = ALLOWED_IDX
+    try:
+        ALLOWED_IDX = np.arange(27)                       # a narrow topic mask
+        assert decide_commit(0.65, 0.20, 0.9, 0, agree=3)[1] == "1a", \
+            "3/4 folds at conf 0.65 on 27 words must reach LEVEL 1a"
+        assert decide_commit(0.65, 0.20, 0.9, 0, agree=2)[1] != "1a", \
+            f"only {AGREE_K} folds or more may open LEVEL 1a"
+        assert decide_commit(0.55, 0.20, 0.9, 0, agree=4)[1] != "1a", \
+            f"below AGREE_CONF={AGREE_CONF} LEVEL 1a must not fire however many folds agree"
+        assert decide_commit(0.65, 0.20, 0.9, 0, agree=None)[1] != "1a", \
+            "the fold-0 preview measures no agreement and must never reach LEVEL 1a"
+        ALLOWED_IDX = np.arange(AGREE_MAX_VOCAB + 1)      # one word too wide
+        a1a = decide_commit(0.65, 0.20, 0.9, 0, agree=4)
+        assert a1a[1] != "1a", (
+            f"LEVEL 1a fired on {AGREE_MAX_VOCAB + 1} words. It is measured safe only on a "
+            f"NARROW mask — at 123 words the same relaxation spoke 23 wrong words against 6.")
+        ALLOWED_IDX = None                                # no mask at all = full vocabulary
+        assert decide_commit(0.65, 0.20, 0.9, 0, agree=4)[1] != "1a", \
+            "with no mask the vocabulary is the full class list — LEVEL 1a must stay shut"
+    finally:
+        ALLOWED_IDX = _saved_mask
+    print(f"[ok] LEVEL 1a: opens at {AGREE_K}/4 folds + conf {AGREE_CONF} on "
+          f"<={AGREE_MAX_VOCAB} words, shut otherwise")
+
     words = load_vocab()
     n = len(words)
     print(f"[ok] vocab: {n} words ({VOCAB_PATH.name})")
@@ -723,6 +929,29 @@ def selftest(single: bool):
     t1 = time.time(); probs = predict(fns, x); dt2 = (time.time() - t1) * 1000  # warm
 
     assert probs.shape == (n,), f"bad output shape {probs.shape} (expected ({n},))"
+
+    # predict_batch is what makes --window's multi-scale scan affordable, so it must
+    # agree with predict() rather than merely run. A batching bug here would shift every
+    # window's confidence and there is nothing on screen that would show it.
+    _xb = np.concatenate([x, _mirror(x), x * 0.5], 0).astype(np.float32)
+    _pb = predict_batch(fns, _xb)
+    assert _pb.shape == (3, n), _pb.shape
+    for _r in range(3):
+        _one = predict(fns, _xb[_r:_r + 1])
+        _d = float(np.abs(_pb[_r] - _one).max())
+        assert _d < 1e-5, f"predict_batch row {_r} differs from predict by {_d:.2e}"
+    print("[ok] predict_batch: matches predict() row-for-row (max diff < 1e-5)")
+
+    # classify_commit_folds feeds LEVEL 1a. With the full ensemble the agreement count
+    # must be a real vote in 1..len(fns); with one fold it must be 1, which is what
+    # keeps LEVEL 1a shut on a single-fold run.
+    _seg = [x[0, i] for i in range(MAX_LEN)]
+    _p, _ag = classify_commit_folds(fns, _seg)
+    assert _p.shape == (n,) and 1 <= _ag <= len(fns), (_p.shape, _ag, len(fns))
+    assert abs(float(_p.sum()) - 1.0) < 1e-4, f"masked probs sum to {_p.sum():.4f}"
+    assert classify_commit_folds(fns[:1], _seg)[1] == 1, \
+        "a single fold cannot agree with itself more than once"
+    print(f"[ok] classify_commit_folds: {_ag}/{len(fns)} folds agreed, probs sum 1.0")
     assert abs(probs.sum() - 1.0) < 1e-3, f"softmax doesn't sum to 1: {probs.sum()}"
     top = probs.argsort()[::-1][:3]
     print(f"[ok] output shape ({n},), sums to {probs.sum():.4f}")
@@ -889,6 +1118,18 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
     dbg = {"word": "-", "conf": 0.0, "second_word": "-", "second": 0.0, "margin": 0.0,
            "quality": 0.0, "frames": 0, "decision": "-", "level": 0, "reason": "idle"}
     preroll = deque(maxlen=PRE_ROLL)  # recent frames from before the hand appears
+    # --window state (see WINDOW_* and the block in the loop). Separate from the
+    # segmentation state above because the two are alternative segmenters, not layers.
+    #   sized for the longest window at 30 fps: _fps is not known until inside the loop,
+    #   and a buffer too long only costs a little memory, where one too short silently
+    #   truncates the widest window and biases the scan toward short signs.
+    wbuf: deque = deque(maxlen=round(max(WINDOW_SEC) * 30.0) + 4)
+    w_burst: list = []              # (t, conf, win_len) of the current agreement run
+    w_burst_i = None                # class index the burst agrees on
+    w_block_until = -1              # frame index before which nothing may commit
+    w_last = (None, -1)             # (word, frame index it stops being suppressed)
+    w_tick = 0                      # frames since the last scan
+    w_frame = 0                     # monotone frame counter (the loop has none)
     hand_hist = deque(maxlen=24)    # recent hand-detected flags (capture-quality coach)
     center_luma = 255.0             # brightness of the signer region (capture-quality coach)
 
@@ -997,7 +1238,12 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         # Early commit trusts the preview probs (the fold-0 preview already APPROVED); pause
         # commits (pre_probs=None) use the robust multi-view ensemble. This removes the
         # "preview locks on the right word but the ensemble re-scores and rejects it" retry.
-        probs = pre_probs if pre_probs is not None else classify_commit(fns, sig)
+        # The early path trusts the fold-0 preview, so there is no agreement to measure
+        # and `agree` stays None (LEVEL 1a unreachable there — deliberately).
+        if pre_probs is not None:
+            probs, n_agree = pre_probs, None
+        else:
+            probs, n_agree = classify_commit_folds(fns, sig)
         order = probs.argsort()[::-1]
         idx = int(order[0]); conf = float(probs[idx]); word = words[idx]
         second = float(probs[order[1]]) if len(order) > 1 else 0.0
@@ -1022,7 +1268,8 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         # is already satisfied (stable=L2_STABLE) -> accept LEVEL 1 & 2, reject only
         # LEVEL 3 (weak/ambiguous). This is exactly where HELLO 0.61 / HAT 0.20 (a
         # LEVEL-2 prediction the old 0.78 gate rejected) now commits.
-        action, level, reason = decide_commit(conf, second, q, stable=L2_STABLE)
+        action, level, reason = decide_commit(conf, second, q, stable=L2_STABLE,
+                                              agree=n_agree)
         dbg.update(word=word, second_word=words[int(order[1])] if len(order) > 1 else "-",
                    conf=conf, second=second, margin=conf - second, quality=q,
                    frames=len(s), decision=action.upper(), level=level, reason=reason)
@@ -1250,9 +1497,11 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         prev_norm = norm
 
         # ── sign segmentation: hands active -> collect; pause/lower -> commit ──
+        # WINDOW_MODE swaps this whole state machine out — the two are alternative
+        # segmenters, not layers, so every branch below is guarded rather than reused.
         if cooldown > 0:
             cooldown -= 1
-        if norm is not None and hand:
+        if (not WINDOW_MODE) and norm is not None and hand:
             hand_run += 1                            # consecutive hand frames (start debounce)
             if not seg_active and cooldown == 0 and hand_run >= start_fr:
                 seg_active = True                    # start only after the hand PERSISTS,
@@ -1278,7 +1527,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 #   forcing a full hands-down between every sign.
                 if len(seg) >= max_seg_fr:
                     commit_segment()
-        else:
+        elif not WINDOW_MODE:
             hand_run = 0                             # reset the start-debounce run
             if seg_active:
                 nohand_count += 1
@@ -1287,7 +1536,74 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                                                      # these frames (like training)
         if norm is not None:
             preroll.append(norm)                     # rolling pre-sign context
-        if seg_active and (len(seg) - preroll_n) >= early_min_fr and len(seg) % preview_fr == 0:
+        if WINDOW_MODE and norm is not None:
+            # ── CONFIDENCE-PEAK SEGMENTER (--window). See the WINDOW_* block. ──
+            # Scan the last W frames at three window lengths, keep the best-scoring one,
+            # and group consecutive scans that agree on a word into a "burst". A burst
+            # ends when the winning word changes or confidence drops below WINDOW_PEAK;
+            # at that point the burst's PEAK window — not its latest — is what gets
+            # committed. That is the whole idea: the classifier's own confidence
+            # trajectory locates the sign, so no boundary has to be detected.
+            wbuf.append(norm)
+            w_tick += 1
+            w_frame += 1        # monotone frame clock for the two suppression timers
+            w_wins = sorted({max(3, round(s * _fps)) for s in WINDOW_SEC})
+            if w_tick >= WINDOW_STRIDE_FR and len(wbuf) >= w_wins[0]:
+                w_tick = 0
+                buf = list(wbuf)
+                cands = [buf[-w:] for w in w_wins if len(buf) >= w]
+                # one batched fold-0 pass over the window lengths (~9 ms each)
+                arr = np.stack([fit_to_maxlen(np.stack(c)) for c in cands]).astype(np.float32)
+                pbatch = predict_batch(fns[:1], arr)
+                bi, bc, bclip = None, -1.0, cands[0]
+                for c, p in zip(cands, pbatch):
+                    pm = _mask_probs(p)
+                    j = int(pm.argmax())
+                    if float(pm[j]) > bc:
+                        bi, bc, bclip = j, float(pm[j]), c
+                # a burst ENDS on disagreement or on losing confidence; the FLUSH decides,
+                # never the scan we happen to be on. The burst carries its own frames so
+                # the peak window is replayed exactly, not reconstructed from indices —
+                # wbuf has rolled on by then and index arithmetic against it is a bug.
+                ending = (not hand) or bc < WINDOW_PEAK or \
+                         (w_burst_i is not None and bi != w_burst_i)
+                if ending and w_burst:
+                    c_pk, clip, word_pk = max(w_burst, key=lambda r: r[0])
+                    w_cool = max(2, round(WINDOW_COOL_SEC * _fps))
+                    w_refr = max(2, round(WINDOW_REFRAC_SEC * _fps))
+                    suppressed = (word_pk == w_last[0] and w_frame < w_last[1])
+                    if w_frame >= w_block_until and not suppressed:
+                        # hand the peak window to the SHARED commit path so the quality
+                        # gate, top-K, safety holds, sentence and TTS behave identically
+                        # to the default segmenter — this changes WHICH clip is judged,
+                        # not how it is judged.
+                        seg = list(clip); preroll_n = 0; seg_active = True
+                        seg_hands = sum(1 for f in clip
+                                        if np.isfinite(f[POSE_N:N_POINTS, :2]).all(-1).any())
+                        nohand_count = 0
+                        # gloss_buf is the committed-words list (`sentence` is the
+                        # RENDERED string and would not change on a safety hold).
+                        # Suppression must only start when a word was really spoken:
+                        # arming it on a held or rejected clip would blank the next
+                        # 1.4 s for nothing.
+                        n_before = len(gloss_buf)
+                        commit_segment()
+                        seg = []; seg_active = False
+                        if len(gloss_buf) > n_before:
+                            w_block_until = w_frame + w_cool
+                            w_last = (gloss_buf[-1], w_frame + w_refr)
+                    w_burst, w_burst_i = [], None
+                if bc >= WINDOW_PEAK and hand:
+                    if w_burst_i is None:
+                        w_burst_i = bi
+                    if bi == w_burst_i:
+                        w_burst.append((bc, list(bclip), words[bi]))
+                        now_line = f"~ {words[bi]} ({bc:.2f})"
+                        dbg.update(word=words[bi], conf=bc, frames=len(bclip),
+                                   decision="WINDOW", level="w",
+                                   reason=f"burst x{len(w_burst)} w{len(bclip)}")
+        if (not WINDOW_MODE) and seg_active and (len(seg) - preroll_n) >= early_min_fr \
+                and len(seg) % preview_fr == 0:
             # PREVIEW + DECISION ENGINE (Parts 4-6): a cheap single-model preview
             # feeds the 3-level decision. LEVEL 1 (strong) commits instantly; LEVEL 2
             # (medium — e.g. HELLO 0.61 / HAT 0.20) commits once the word is temporally
@@ -1314,9 +1630,10 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                        level=level, reason=reason)
             if action == "commit":
                 commit_segment(pre_probs=p)          # trust the preview that just approved
-        if seg_active and seg_moved and still_count >= still_fr and (len(seg) - preroll_n) >= min_seg_fr:
+        if (not WINDOW_MODE) and seg_active and seg_moved and still_count >= still_fr \
+                and (len(seg) - preroll_n) >= min_seg_fr:
             commit_segment()                         # real motion + THEN hold still -> word
-        elif seg_active and nohand_count >= end_fr:
+        elif (not WINDOW_MODE) and seg_active and nohand_count >= end_fr:
             commit_segment()                         # hands lowered -> word
 
         # draw skeleton on the raw camera frame
@@ -1635,7 +1952,33 @@ if __name__ == "__main__":
     ap.add_argument("--debug", action="store_true",
                     help="developer dashboard overlay: live conf / 2nd / margin / "
                          "hand-quality / frames / decision + reason (Part 13). For tuning.")
+    ap.add_argument("--window", action="store_true",
+                    help="segment by CLASSIFIER CONFIDENCE instead of stillness: classify "
+                         "the last W frames continuously and speak the peak of each "
+                         "agreement run, so no sign boundary has to be detected. MEASURED "
+                         "offline on 3-sign utterances (62, 2 seeds, 7 fps, real durations, "
+                         "intake27): utterances delivered exactly right went 4/62 -> 36/62 "
+                         "with NO pause and 4/62 -> 42/62 with a 0.5 s pause, precision "
+                         "0.63 -> 0.94-0.98, against a true-boundary ceiling of 52/62. "
+                         "NOT the default: the test concatenates isolated clips, which have "
+                         "no co-articulated transition frames, so it needs one camera "
+                         "session to confirm. Try it — this is the fluent-signing fix.")
     args = ap.parse_args()
+    if args.window:
+        WINDOW_MODE = True
+        print("[cfg] --window: segmenting by CONFIDENCE PEAK, not stillness. The motion "
+              "state machine\n"
+              f"      (STILL_SEC / END_SEC / MAX_SEG_SEC) is OFF. Windows "
+              f"{WINDOW_SEC} s, peak {WINDOW_PEAK},\n"
+              f"      then {WINDOW_COOL_SEC} s silence and {WINDOW_REFRAC_SEC} s before "
+              f"the SAME word may repeat.\n"
+              "      MEASURED offline on 3-sign utterances: 4/62 -> 36/62 delivered exactly "
+              "right with\n"
+              "      NO pause, precision 0.63 -> 0.98. But the test concatenates isolated "
+              "clips, which\n"
+              "      have no co-articulated transitions — so YOU are the confirmation. "
+              "Sign three\n"
+              "      words fluently and compare against a run without --window.")
     if args.words:
         DEMO_WORDS_PATH = Path(args.words)
     if args.vocab250:                      # switch to the 250-word ensemble (folds 0-3)
