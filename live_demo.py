@@ -947,28 +947,47 @@ def selftest(single: bool):
     # Assert the bound holds rather than trusting the constant to stay put.
     global ALLOWED_IDX
     _saved_mask = ALLOWED_IDX
-    try:
-        ALLOWED_IDX = np.arange(27)                       # a narrow topic mask
-        assert decide_commit(0.65, 0.20, 0.9, 0, agree=3)[1] == "1a", \
-            "3/4 folds at conf 0.65 on 27 words must reach LEVEL 1a"
-        assert decide_commit(0.65, 0.20, 0.9, 0, agree=2)[1] != "1a", \
-            f"only {AGREE_K} folds or more may open LEVEL 1a"
-        assert decide_commit(0.55, 0.20, 0.9, 0, agree=4)[1] != "1a", \
-            f"below AGREE_CONF={AGREE_CONF} LEVEL 1a must not fire however many folds agree"
-        assert decide_commit(0.65, 0.20, 0.9, 0, agree=None)[1] != "1a", \
-            "the fold-0 preview measures no agreement and must never reach LEVEL 1a"
-        ALLOWED_IDX = np.arange(AGREE_MAX_VOCAB + 1)      # one word too wide
-        a1a = decide_commit(0.65, 0.20, 0.9, 0, agree=4)
-        assert a1a[1] != "1a", (
-            f"LEVEL 1a fired on {AGREE_MAX_VOCAB + 1} words. It is measured safe only on a "
-            f"NARROW mask — at 123 words the same relaxation spoke 23 wrong words against 6.")
-        ALLOWED_IDX = None                                # no mask at all = full vocabulary
-        assert decide_commit(0.65, 0.20, 0.9, 0, agree=4)[1] != "1a", \
-            "with no mask the vocabulary is the full class list — LEVEL 1a must stay shut"
-    finally:
-        ALLOWED_IDX = _saved_mask
-    print(f"[ok] LEVEL 1a: opens at {AGREE_K}/4 folds + conf {AGREE_CONF} on "
-          f"<={AGREE_MAX_VOCAB} words, shut otherwise")
+    # The probe confidence has to sit ABOVE AGREE_CONF (so 1a may open) and BELOW L1_CONF
+    # (so plain LEVEL 1 does not answer first). Under --vocab250 no such value exists:
+    # L1_CONF is 0.58 against AGREE_CONF 0.60, so anything that could open 1a has already
+    # cleared LEVEL 1 and 1a is UNREACHABLE there. That is harmless — LEVEL 1 is strictly
+    # more permissive on confidence — but it must be asserted rather than discovered, and
+    # a fixed 0.65 probe silently became a LEVEL 1 result instead of failing honestly.
+    if AGREE_CONF < L1_CONF:
+        _c = (AGREE_CONF + L1_CONF) / 2.0
+        try:
+            ALLOWED_IDX = np.arange(27)                   # a narrow topic mask
+            assert decide_commit(_c, 0.20, 0.9, 0, agree=3)[1] == "1a", \
+                f"{AGREE_K}/4 folds at conf {_c:.2f} on 27 words must reach LEVEL 1a"
+            assert decide_commit(_c, 0.20, 0.9, 0, agree=2)[1] != "1a", \
+                f"only {AGREE_K} folds or more may open LEVEL 1a"
+            assert decide_commit(AGREE_CONF - 0.05, 0.20, 0.9, 0, agree=4)[1] != "1a", \
+                f"below AGREE_CONF={AGREE_CONF} LEVEL 1a must not fire however many agree"
+            assert decide_commit(_c, 0.20, 0.9, 0, agree=None)[1] != "1a", \
+                "the fold-0 preview measures no agreement and must never reach LEVEL 1a"
+            ALLOWED_IDX = np.arange(AGREE_MAX_VOCAB + 1)  # one word too wide
+            assert decide_commit(_c, 0.20, 0.9, 0, agree=4)[1] != "1a", (
+                f"LEVEL 1a fired on {AGREE_MAX_VOCAB + 1} words. It is measured safe only "
+                f"on a NARROW mask — at 123 words the same relaxation spoke 23 wrong "
+                f"words against 6.")
+            ALLOWED_IDX = None                            # no mask = full vocabulary
+            assert decide_commit(_c, 0.20, 0.9, 0, agree=4)[1] != "1a", \
+                "with no mask the vocabulary is the full class list — 1a must stay shut"
+        finally:
+            ALLOWED_IDX = _saved_mask
+        print(f"[ok] LEVEL 1a: opens at {AGREE_K}/4 folds + conf {AGREE_CONF} on "
+              f"<={AGREE_MAX_VOCAB} words, shut otherwise (probed at {_c:.2f})")
+    else:
+        try:
+            ALLOWED_IDX = np.arange(27)
+            assert decide_commit(AGREE_CONF, 0.20, 0.9, 0, agree=4)[1] != "1a", (
+                f"L1_CONF={L1_CONF} <= AGREE_CONF={AGREE_CONF}, so LEVEL 1 answers first "
+                f"and 1a must be unreachable — a 1a result here means the ordering in "
+                f"decide_commit changed")
+        finally:
+            ALLOWED_IDX = _saved_mask
+        print(f"[ok] LEVEL 1a: deliberately UNREACHABLE in this config "
+              f"(L1_CONF {L1_CONF} <= AGREE_CONF {AGREE_CONF}; LEVEL 1 is more permissive)")
 
     # MASS. The whole point is that it survives renormalisation, so the check is that
     # mask_mass reads the UNMASKED distribution while _mask_probs cannot see it at all.
@@ -2203,6 +2222,17 @@ if __name__ == "__main__":
         L2_STABLE = 2          # two agreeing previews. Was 1 because a 4-frame window at
                                #   ~7fps had no room for a second; EARLY_MIN_SEC 0.80 with
                                #   PREVIEW_SEC 0.20 leaves room for four.
+        # PROVISIONAL out-of-topic threshold — the only number here not measured on this
+        # model. --vocab250 boots into a ~20-word topic, and a narrow mask cannot say
+        # "not in this topic": on the 123-class medical model that meant 13.6-20.3% of
+        # out-of-topic signs were SPOKEN as a wrong word. This repo has no held-out test
+        # SET for the 250 model (sign_clips_250.npz is the exemplar clips = TRAINING data,
+        # which report precision 1.000 at every threshold), so the value is the
+        # class-count-scaled equivalent of the 0.20 that measured free on medical: mass is
+        # the probability landing on the topic, and a diffuse prediction over 250 classes
+        # puts ~25/250 on a 25-word topic against ~25/123 for the medical one, so the same
+        # threshold is materially stricter here. docs/KAGGLE_250_TOPIC_EVAL.md measures it.
+        MASS_MIN  = 0.10
         USE_TTA       = False  # live PREVIEW stays single-pass; the COMMIT does its
                                #   own multi-view+mirror averaging (classify_commit)
         # The 30-word rule grammar can't cover 250 words, so the sentence on DONE is
