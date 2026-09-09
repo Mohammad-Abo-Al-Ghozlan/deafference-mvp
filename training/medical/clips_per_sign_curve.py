@@ -375,8 +375,12 @@ def main() -> int:
                     print(f"    [FAIL] train.py exited {r.returncode}")
                     sys.stderr.write(r.stderr[-2000:] if r.stderr else "")
                 else:
-                    rec["val_acc"] = _scrape_val_acc(out, r.stdout)
-                    print(f"    val_acc = {rec['val_acc']}")
+                    rec.update(_read_result(out, r.stdout))
+                    trunc = (" ⚠ HIT THE --epochs CAP, this point is a FLOOR"
+                             if rec.get("truncated") else "")
+                    print(f"    val_acc = {rec['val_acc']}  "
+                          f"[{rec['epochs_run']}/{rec['epochs_cap']} epochs, "
+                          f"from {rec['acc_source']}]{trunc}")
 
             results.append(rec)
             save()          # after EVERY point — a 2 h run must not lose 9 points to a timeout
@@ -415,30 +419,59 @@ def main() -> int:
     return 0
 
 
-def _scrape_val_acc(out_dir: Path, stdout: str):
-    """Prefer a json artifact; fall back to the last val_acc printed."""
-    for name in ("report.json", "history.json", "metrics.json"):
-        p = out_dir / name
-        if p.exists():
-            try:
-                j = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            for k in ("best_val_acc", "val_acc", "best_val_accuracy"):
-                if isinstance(j, dict) and k in j:
-                    return float(j[k])
-    best = None
-    for line in (stdout or "").splitlines():
-        if "val_acc" not in line and "val_accuracy" not in line:
+def _read_result(out_dir: Path, stdout: str) -> dict:
+    """The point's held-out accuracy and whether the run converged.
+
+    🔴 REWRITTEN 2026-09-09. The previous version silently reported PEAK TRAINING
+    ACCURACY for all ten points of a completed 2-hour run, and two headline conclusions
+    were drawn from it before the numbers were checked against train.py's own artifact.
+
+    It failed twice over:
+
+      1. It looked for report.json / history.json / metrics.json. train.py writes NONE of
+         those — it writes `eval_{tag}_fold{fold}.json` and `history_{tag}_fold{fold}.csv`.
+         So the artifact branch never once fired and everything fell to the text fallback.
+      2. The fallback took the MAX of every float in [0,1] on any line containing "val_acc".
+         A Keras epoch line is
+             64/64 - 7s - loss: 3.4961 - acc: 0.3096 - val_loss: 5.1368 - val_acc: 0.0022
+         where both `acc` and `val_acc` are in range — so max() returned the TRAIN number,
+         then maxed it across every epoch. Measured damage: clustered n=32 was reported
+         0.8590 against a true 0.7525, and the error grew as the training set shrank
+         (small data memorises), which manufactured a clean-looking curve out of nothing.
+
+    So: read the file train.py actually writes, and take the value it actually names. The
+    text fallback now reads the token immediately AFTER `val_acc`, never a max, and is
+    marked so a scraped number is never mistaken for the artifact's.
+
+    Also returns epochs_run/epochs_cap. This project has now been bitten four times by
+    reading a capped run as a converged one, so a point that hit its cap must SAY so in
+    the output rather than leaving it in a file nobody opens.
+    """
+    for p in sorted(out_dir.glob("eval_*.json")):
+        try:
+            j = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
             continue
-        for tok in line.replace(":", " ").replace("=", " ").split():
-            try:
-                v = float(tok)
-            except ValueError:
-                continue
-            if 0.0 <= v <= 1.0:
-                best = v if best is None else max(best, v)
-    return best
+        if not isinstance(j, dict) or "overall_acc" not in j:
+            continue
+        cfg = j.get("config") or {}
+        ran, cap = cfg.get("epochs_run"), cfg.get("epochs")
+        return {"val_acc": float(j["overall_acc"]), "epochs_run": ran, "epochs_cap": cap,
+                "truncated": bool(ran and cap and ran >= cap), "acc_source": p.name}
+
+    # Fallback only. Take the token FOLLOWING val_acc — never a max over the line.
+    val = None
+    for line in (stdout or "").splitlines():
+        toks = line.replace(":", " ").replace("=", " ").replace(",", " ").split()
+        for i, t in enumerate(toks):
+            if t in ("val_acc", "val_accuracy") and i + 1 < len(toks):
+                try:
+                    val = float(toks[i + 1])
+                except ValueError:
+                    pass
+    return {"val_acc": val, "epochs_run": None, "epochs_cap": None,
+            "truncated": None,
+            "acc_source": "SCRAPED from stdout — no eval_*.json found, treat with suspicion"}
 
 
 # ── selftest ──────────────────────────────────────────────────────────────────────────────
@@ -532,6 +565,43 @@ def selftest() -> int:
           "a SATURATING curve shows shrinking consecutive gains (which is the decision signal)")
     check(fit_curve([{"n_clips": 4, "val_acc": 0.6, "strategy": "s"}])["fitted"] is False,
           "one point does not get a fitted line")
+
+    # ── _read_result: the bug that invalidated a finished 2-hour run ──────────────────
+    # The old scraper reported PEAK TRAINING ACCURACY for all ten points because (a) it
+    # looked for json files train.py never writes and (b) its text fallback took the max
+    # of every float in [0,1] on the val_acc line, where `acc` also lives. These checks
+    # pin both halves. The first one is the whole bug in a single assertion.
+    import tempfile
+
+    KERAS = ("Epoch 200/200\n"
+             "64/64 - 7s - loss: 0.9 - acc: 0.9012 - val_loss: 2.1 - val_acc: 0.3456\n")
+    got = _read_result(Path(tempfile.gettempdir()) / "definitely-not-a-run-dir", KERAS)
+    check(got["val_acc"] == 0.3456,
+          f"stdout fallback reads val_acc (0.3456), NOT the train acc 0.9012 "
+          f"(got {got['val_acc']}) — this is the bug that faked a whole curve")
+    check("SCRAPED" in got["acc_source"],
+          "a scraped number labels itself as scraped, so it is never trusted like an artifact")
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        # the file train.py ACTUALLY writes, with the key it ACTUALLY uses
+        (d / "eval_all250_fold0.json").write_text(json.dumps({
+            "fold": 0, "overall_acc": 0.7525,
+            "config": {"epochs": 200, "epochs_run": 200}}), encoding="utf-8")
+        r = _read_result(d, KERAS)
+        check(r["val_acc"] == 0.7525,
+              f"eval_*.json's overall_acc WINS over stdout (got {r['val_acc']})")
+        check(r["acc_source"] == "eval_all250_fold0.json",
+              "the result names the artifact it came from")
+        check(r["truncated"] is True,
+              "epochs_run == epochs is reported as TRUNCATED — a floor, not a result")
+
+        (d / "eval_all250_fold0.json").write_text(json.dumps({
+            "overall_acc": 0.7868,
+            "config": {"epochs": 200, "epochs_run": 191}}), encoding="utf-8")
+        r2 = _read_result(d, KERAS)
+        check(r2["truncated"] is False and r2["val_acc"] == 0.7868,
+              "epochs_run < epochs is reported as converged")
 
     print("\n" + ("ALL CHECKS PASSED" if ok else "SOMETHING FAILED — see above"))
     return 0 if ok else 1
