@@ -1,0 +1,35 @@
+{
+ "note": "Auto-generated 2026-09-10 by the topic build. One of 13 topics whose UNION covers all 107 topic-eligible words (123 classes minus the 16 cannot_express concepts, which are deliberately unreachable so that policy claim stays structurally true). Press T to cycle. Semantic categories are SPLIT into _a/_b halves so that signs the model confuses land in different halves -- measured, that took wrong words spoken from 35 to 14 across the set. The on-screen word panel is the real navigation aid: with it visible the half you are in is readable, so the _a/_b labels do not have to carry the meaning by themselves.",
+ "mass_min": 0.1,
+ "mass_min_why": "Out-of-topic rejection for THIS topic: refuse unless at least this much of the model's UNMASKED probability lands on these words. Chosen SAFETY-FIRST: the threshold with the best first-try among those holding out-of-topic false speech at or under 10% for this topic. Per-topic because the exchange rate depends on topic width -- 0.50 costs 0.045 of first-try on the 27-word intake mask and 0.21 on a 9-word half, since splitting confusable signs apart is what pushes an in-topic sign's own mass outside its topic. Without any threshold a narrow mask MUST name one of its own words, so an out-of-topic sign is spoken as a wrong one.",
+ "measured_2026_09_10": {
+  "how": "4-fold ensemble (artifacts_medical/savedmodel_fold{0..3}) over the 1,373-clip held-out test split, 9 unseen signers. Gate is LEVEL 1a: 3 of 4 folds agree AND mean masked prob >= 0.60, then mass_min above. Masking replicates live_demo._mask_probs; the same pipeline reproduces the published unmasked 0.8383 exactly.",
+  "words": 7,
+  "first_try": 0.9206,
+  "precision": 1.0,
+  "spoken": 58,
+  "wrong_spoken": 0,
+  "wrong_pairs": [],
+  "answerable_clips": 134,
+  "held_for_tap": 71,
+  "off_topic_clips": 1239,
+  "off_topic_false_speech": 0.0178,
+  "mean_per_word_test_clips": 19.1,
+  "min_per_word_test_clips": 2
+ },
+ "caveat": "first_try is the fraction of in-topic signs spoken on the FIRST attempt, with safety-held words excluded from the denominator because a hold is a prompt for a tap, not speech. precision is over the spoken words only. A topic whose min_per_word_test_clips is small is weakly measured -- 34 of the 123 classes have fewer than 5 test clips, so for those words absence of a recorded error is not evidence of safety.",
+ "never_auto_commit_in_this_topic": [
+  "big",
+  "blood",
+  "sick"
+ ],
+ "words": [
+  "big",
+  "blood",
+  "cold",
+  "cough",
+  "feel",
+  "headache",
+  "sick"
+ ]
+}

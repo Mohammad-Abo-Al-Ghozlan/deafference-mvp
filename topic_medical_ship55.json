@@ -1,5 +1,7 @@
 {
  "note": "Clinical topic mask for live_demo.py --medical (55 words). Every word is in the 55-word shippable set (>=5 held-out test clips, >=0.80). Press T to cycle topics at runtime.",
+ "mass_min": 0.5,
+ "mass_min_why": "MEASURED on this mask: first-try 0.8817 -> 0.8696 and out-of-topic false speech 20.3% -> 10.7%. Same sweep as intake27.",
  "mean_test_acc": 0.9331,
  "min_test_acc": 0.8,
  "never_auto_commit_in_this_topic": [

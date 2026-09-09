@@ -200,6 +200,12 @@ L2_STABLE = 2               #   previews the top word must persist for a level-2
 AGREE_K         = 3         # folds (of 4) that must independently pick the same word
 AGREE_CONF      = 0.60      # mean-prob floor once they do
 AGREE_MAX_VOCAB = 30        # never below this narrow: see the all123 row above
+# ── MASS: is the signed word even IN the active topic? See mask_mass() for the table.
+# 0.50 is the shipped default under --medical: it costs 0.045 of in-topic first-try and
+# cuts wrong words spoken for out-of-topic signs by 5.4x (13.6% -> 2.5%). That is the
+# right side of the trade for a device that speaks clinical words aloud, and it is a
+# JUDGEMENT about consequence, not a measurement — `--mass` overrides it. 0.20 is free.
+MASS_MIN        = 0.0       # 0.0 = off (no out-of-topic rejection); --medical sets 0.50
 
 # ══ --window: segment by CLASSIFIER CONFIDENCE, not by stillness ═════════════════════
 # The default segmenter starts a segment when a hand persists and ends it on stillness /
@@ -519,8 +525,39 @@ def _mask_probs(probs: np.ndarray) -> np.ndarray:
     return m / s if s > 0 else probs
 
 
+def mask_mass(probs: np.ndarray) -> float:
+    """How much UNMASKED probability the model put on the active topic at all.
+
+    This is the number `_mask_probs` throws away, and it is the only thing that can tell
+    a topic mask "the signer just signed something you do not contain". Renormalising
+    makes it structurally impossible for the model to answer "none of these" — it must
+    name an allowed word — so **every out-of-topic sign that clears the gate is a wrong
+    word spoken aloud.** MEASURED on the held-out split, at the LEVEL 1a gate:
+
+        mask       out-of-topic clips   spoken as a WRONG WORD
+        intake27          708                 13.6%   (96)
+        ship55            428                 20.3%   (87)
+
+    About one in six. For a device that speaks in a clinic that is worse than asking for
+    a repeat, and it is the real price of narrow topics — nothing else in this file
+    measures it. Requiring MASS >= MASS_MIN buys most of it back:
+
+        MASS >=   in-topic first-try   in-precision   off-topic false speech
+          0.00        0.9572             1.0000            13.6%   <- was
+          0.20        0.9572             1.0000             7.5%   <- FREE
+          0.50        0.9125             1.0000             2.5%   <- shipped
+          0.60        0.8794             1.0000             1.0%
+
+    0.20 is free to four decimal places, so there is no reason to ever run below it.
+    Returns 1.0 with no mask, which makes the check a no-op on the full vocabulary —
+    correct, since nothing is out-of-topic when every word is in the topic."""
+    if ALLOWED_IDX is None:
+        return 1.0
+    return float(np.sum(probs[ALLOWED_IDX]))
+
+
 def build_masks(words, demo_path=None, demo_idx=None) -> list:
-    """[(name, idx|None)] — the vocabulary masks the T key cycles through.
+    """[(name, idx|None, mass_min|None)] — the vocabulary masks the T key cycles through.
 
     Narrowing is the only lever that measured large: masking to a ~34-word topic takes the
     commit rate from 12% to 68% at gate 0.90 at the same precision (measure_conf_gate.py).
@@ -531,27 +568,35 @@ def build_masks(words, demo_path=None, demo_idx=None) -> list:
     def _of(path: Path):
         raw = json.loads(path.read_text(encoding="utf-8"))
         allow = raw["words"] if isinstance(raw, dict) else raw
+        # Each topic carries its OWN out-of-topic threshold, because the exchange rate
+        # depends on topic width: 0.50 costs 0.045 of first-try on the curated 27-word
+        # intake mask and 0.21 on a 9-word half of `body`. One global number would either
+        # cripple the narrow topics or leave the wide ones speaking words nobody signed.
+        mm = raw.get("mass_min") if isinstance(raw, dict) else None
         # `if w in words` drops anything the loaded vocabulary lacks. That is deliberate and
         # stays silent HERE: these are auto-discovered topic files, and under a different
         # vocabulary most of their words are legitimately absent, so a warning per file would
         # bury the one case that matters. A mask the user NAMED is different — main() warns
         # about its unknown words before this runs (see the DEMO_WORDS_PATH block).
         idx = sorted({words.index(w) for w in allow if w in words})
-        return np.array(idx, dtype=np.int64) if idx else None
+        return (np.array(idx, dtype=np.int64), mm) if idx else (None, None)
 
-    out = [(f"ALL {len(words)}", None)]
+    out = [(f"ALL {len(words)}", None, 0.0)]   # nothing is out-of-topic on the full vocab
     if demo_path is not None and demo_idx is not None:
         # Same label whether the mask arrived via --words or was discovered on disk; the name
         # is shown on the debug overlay, so "topic_everyday" vs "everyday" would read as two.
-        out.append((demo_path.stem.replace("topic_", ""), demo_idx))
+        # A mask named with --words has no file to carry a threshold, so it inherits the
+        # global MASS_MIN rather than silently running with none.
+        _dm = _of(demo_path)[1] if demo_path.exists() else None
+        out.append((demo_path.stem.replace("topic_", ""), demo_idx, _dm))
     # TOPIC_GLOB is narrowed by --medical: the shipped topic_*.json are the 250-word demo's
     # topics (animals, colors, food), so under the clinical vocabulary they would offer the
     # T key a set of accidental part-masks that mean nothing clinically.
     for p in sorted(HERE.glob(TOPIC_GLOB)):
         if demo_path is None or p.name != demo_path.name:
-            m = _of(p)
+            m, mm = _of(p)
             if m is not None:
-                out.append((p.stem.replace("topic_", ""), m))
+                out.append((p.stem.replace("topic_", ""), m, mm))
     return out
 
 
@@ -569,18 +614,20 @@ def trim_preroll(seq, preroll_n, lead_fr):
     return seq[start:] if start < len(seq) else seq
 
 
-def classify_segment(fns, seg) -> np.ndarray:
-    """seg: list of (75,3) normalized frames for one sign -> softmax probs.
+def classify_segment(fns, seg) -> tuple:
+    """seg: list of (75,3) normalized frames for one sign -> (masked probs, mask MASS).
+
     Fits to 64 frames the way TRAINING did — resize down, NaN-pad up, never stretch
     (see fit_to_maxlen) — and, if USE_TTA, averages the clip with its mirror (the
-    model was trained with hflip)."""
+    model was trained with hflip). MASS is read BEFORE masking, because renormalising
+    destroys it (see mask_mass)."""
     if CANONICAL_HAND:
         seg = canonicalize_seg(seg)
     arr = fit_to_maxlen(np.stack(seg))[None].astype(np.float32)          # (1,64,75,3)
     probs = predict(fns, arr)
     if USE_TTA:
         probs = (probs + predict(fns, _mirror(arr))) / 2.0
-    return _mask_probs(probs)
+    return _mask_probs(probs), mask_mass(probs)
 
 
 def classify_commit(fns, seg) -> np.ndarray:
@@ -610,21 +657,27 @@ def classify_commit(fns, seg) -> np.ndarray:
 def classify_commit_folds(fns, seg) -> tuple:
     """classify_commit, but also reports how many folds independently agree.
 
-    Returns (masked_probs, n_agree) where n_agree counts folds whose own top-1 —
+    Returns (masked_probs, n_agree, mass). n_agree counts folds whose own top-1 —
     computed on the SAME mask, since agreement outside the mask is irrelevant — matches
     the ensemble's top-1. Each fold's vote averages that fold over the clip and its
     mirror, so a fold is not credited for agreeing on only one of the two views.
 
     With one fold loaded n_agree is 1 and the LEVEL 1a path can never fire, which is
-    correct: there is no agreement to measure. Feeds decide_commit(agree=...)."""
+    correct: there is no agreement to measure. Feeds decide_commit(agree=...).
+
+    `mass` is computed from the ensemble mean BEFORE masking — the same quantity
+    mask_mass() documents, and the only signal that the sign might not be in the topic
+    at all."""
     if CANONICAL_HAND:
         seg = canonicalize_seg(seg)
     arr = fit_to_maxlen(np.stack(seg))[None].astype(np.float32)
     a, b = predict_folds(fns, arr), predict_folds(fns, _mirror(arr))
-    per = [_mask_probs((p + q) / 2.0) for p, q in zip(a, b)]
+    raw = [(p + q) / 2.0 for p, q in zip(a, b)]
+    per = [_mask_probs(r) for r in raw]
     probs = _mask_probs(np.mean(per, axis=0))
     top = int(probs.argmax())
-    return probs, sum(1 for p in per if int(p.argmax()) == top)
+    return (probs, sum(1 for p in per if int(p.argmax()) == top),
+            mask_mass(np.mean(raw, axis=0)))
 
 
 def segment_quality(seg) -> tuple:
@@ -917,6 +970,27 @@ def selftest(single: bool):
     print(f"[ok] LEVEL 1a: opens at {AGREE_K}/4 folds + conf {AGREE_CONF} on "
           f"<={AGREE_MAX_VOCAB} words, shut otherwise")
 
+    # MASS. The whole point is that it survives renormalisation, so the check is that
+    # mask_mass reads the UNMASKED distribution while _mask_probs cannot see it at all.
+    _saved_mask = ALLOWED_IDX
+    try:
+        _p = np.zeros(8, np.float32)      # size is irrelevant; the mask indices are not
+        _p[0] = 0.7; _p[1] = 0.2; _p[2] = 0.1        # 0.9 inside a {0,1} mask, 0.1 outside
+        ALLOWED_IDX = np.array([0, 1])
+        assert abs(mask_mass(_p) - 0.9) < 1e-6, mask_mass(_p)
+        ALLOWED_IDX = np.array([2])
+        assert abs(mask_mass(_p) - 0.1) < 1e-6, mask_mass(_p)
+        # the trap this gate exists to close: a 0.1-mass topic still renormalises to 1.00
+        # confidence, so `conf` ALONE cannot tell an out-of-topic sign from a perfect one.
+        assert abs(float(_mask_probs(_p).max()) - 1.0) < 1e-6, \
+            "a single-word mask must renormalise to 1.0 — that is why MASS is needed"
+        ALLOWED_IDX = None
+        assert mask_mass(_p) == 1.0, "with no mask nothing is out-of-topic"
+    finally:
+        ALLOWED_IDX = _saved_mask
+    print(f"[ok] mask_mass: reads the unmasked distribution (MASS_MIN={MASS_MIN}); "
+          f"a 0.1-mass topic still renormalises to conf 1.00")
+
     words = load_vocab()
     n = len(words)
     print(f"[ok] vocab: {n} words ({VOCAB_PATH.name})")
@@ -946,12 +1020,18 @@ def selftest(single: bool):
     # must be a real vote in 1..len(fns); with one fold it must be 1, which is what
     # keeps LEVEL 1a shut on a single-fold run.
     _seg = [x[0, i] for i in range(MAX_LEN)]
-    _p, _ag = classify_commit_folds(fns, _seg)
+    _p, _ag, _ms = classify_commit_folds(fns, _seg)
     assert _p.shape == (n,) and 1 <= _ag <= len(fns), (_p.shape, _ag, len(fns))
     assert abs(float(_p.sum()) - 1.0) < 1e-4, f"masked probs sum to {_p.sum():.4f}"
     assert classify_commit_folds(fns[:1], _seg)[1] == 1, \
         "a single fold cannot agree with itself more than once"
-    print(f"[ok] classify_commit_folds: {_ag}/{len(fns)} folds agreed, probs sum 1.0")
+    # both classify paths must report MASS, or the out-of-topic gate is bypassable on
+    # whichever path forgot it — and the early-commit path is the FAST one.
+    assert 0.0 <= _ms <= 1.0 + 1e-6, f"mass out of range: {_ms}"
+    assert len(classify_segment(fns[:1], _seg)) == 2, \
+        "classify_segment must return (probs, mass) — the preview feeds the early commit"
+    print(f"[ok] classify_commit_folds: {_ag}/{len(fns)} folds agreed, probs sum 1.0, "
+          f"mass {_ms:.3f}")
     assert abs(probs.sum() - 1.0) < 1e-3, f"softmax doesn't sum to 1: {probs.sum()}"
     top = probs.argsort()[::-1][:3]
     print(f"[ok] output shape ({n},), sums to {probs.sum():.4f}")
@@ -1007,11 +1087,19 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         # failure that made a 43-word clinical mask look broken on 2026-08-25.
         mask_i = 1
         if DEMO_WORDS_PATH is None:
-            mask_i = next((i for i, (n, _m) in enumerate(MASKS) if n == DEFAULT_TOPIC), 1)
+            mask_i = next((i for i, (n, _m, _x) in enumerate(MASKS)
+                           if n == DEFAULT_TOPIC), 1)
     else:
         mask_i = 0
     print(f"[cfg] {len(MASKS)} masks loaded — press T to cycle: "
-          + " / ".join(f"{n}({'all' if m is None else len(m)})" for n, m in MASKS))
+          + " / ".join(f"{n}({'all' if m is None else len(m)})" for n, m, _ in MASKS))
+    # Every topic that covers the vocabulary carries its own measured threshold. Name the
+    # ones that do NOT, because those fall back to the global value and their off-topic
+    # behaviour is therefore unmeasured rather than merely different.
+    _no_mm = [n for n, m, mm in MASKS if m is not None and mm is None]
+    if _no_mm:
+        print(f"[cfg] {len(_no_mm)} topic(s) carry no measured mass_min and inherit "
+              f"{MASS_MIN}: {', '.join(_no_mm)}")
     if mask_i != 0 and DEMO_WORDS_PATH is None:
         print(f"[cfg] starting on topic '{MASKS[mask_i][0]}' ({len(MASKS[mask_i][1])} words), NOT "
               f"all {len(words)}.\n      All {len(words)} is reachable with T but commits ~12% of "
@@ -1020,26 +1108,39 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
     # An INDEX, not the tuple: MASKS.index(tuple_with_ndarray) compares arrays elementwise
     # and raises "truth value of an array is ambiguous".
     _active = [mask_i]
+    _GLOBAL_MASS = MASS_MIN                     # the --mass / --medical value, as a fallback
+
+    def _apply_mass(name, mm):
+        """Install the topic's OWN out-of-topic threshold. Per-topic because the trade
+        depends on width: 0.50 costs 0.045 of first-try on the 27-word intake mask and
+        0.21 on a 9-word half of `body`, since splitting confusable signs apart is what
+        moves an in-topic sign's mass outside its topic. A topic file with no `mass_min`
+        falls back to the global value rather than to zero — silently running with no
+        out-of-topic gate is the failure this whole mechanism exists to prevent."""
+        globals()["MASS_MIN"] = _GLOBAL_MASS if mm is None else float(mm)
+        return MASS_MIN
 
     def cycle_topic():
-        """Next mask. NOTE the gate is NOT rescaled: _mask_probs renormalizes, so a narrower
-        mask makes the same threshold looser (measured: 35% out-of-domain false accepts at
-        L2_CONF 0.40 on a 43-word mask vs 2% at 0.90). Switching to a much smaller topic
-        without raising --conf trades precision for throughput."""
+        """Next mask. The CONF gate is not rescaled — _mask_probs renormalizes, so a
+        narrower mask makes the same threshold looser (measured: 35% out-of-domain false
+        accepts at L2_CONF 0.40 on a 43-word mask vs 2% at 0.90). What IS rescaled is
+        MASS_MIN, which is the part that actually catches out-of-topic signs."""
         _active[0] = (_active[0] + 1) % len(MASKS)
-        name, m = MASKS[_active[0]]
+        name, m, mm = MASKS[_active[0]]
         globals()["ALLOWED_IDX"] = m            # what _mask_probs reads, at module scope
+        _apply_mass(name, mm)
         n = len(words) if m is None else len(m)
-        print(f"[topic] {name}  ({n} words)")
+        print(f"[topic] {name}  ({n} words, mass_min {MASS_MIN:.2f})")
         if m is not None:
             print("   " + ", ".join(words[i] for i in m))
         return name, n
 
     def active_topic():
-        name, m = MASKS[_active[0]]
+        name, m, _mm = MASKS[_active[0]]
         return name, (len(words) if m is None else len(m))
 
     ALLOWED_IDX = MASKS[mask_i][1]
+    _apply_mass(MASKS[mask_i][0], MASKS[mask_i][2])
     # How many words are ACTUALLY recognisable at boot. Not len(words): under --medical the
     # vocabulary is 123 but the boot mask is far smaller, and every UI decision that says
     # "is this vocabulary small enough to show?" means the mask, not the model's class count.
@@ -1207,7 +1308,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
             state["final"] = out; state["sentence"] = out; state["finalized"] = True
             speaker.say(out)
 
-    def commit_segment(pre_probs=None):
+    def commit_segment(pre_probs=None, pre_mass=1.0):
         """Classify the just-finished sign (resampled to 64 frames + mirror TTA)
         and, if confident, add the word to the sentence + speak it live.
         pre_probs: if given (early commit), TRUST the preview's probs instead of
@@ -1241,9 +1342,9 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         # The early path trusts the fold-0 preview, so there is no agreement to measure
         # and `agree` stays None (LEVEL 1a unreachable there — deliberately).
         if pre_probs is not None:
-            probs, n_agree = pre_probs, None
+            probs, n_agree, n_mass = pre_probs, None, pre_mass
         else:
-            probs, n_agree = classify_commit_folds(fns, sig)
+            probs, n_agree, n_mass = classify_commit_folds(fns, sig)
         order = probs.argsort()[::-1]
         idx = int(order[0]); conf = float(probs[idx]); word = words[idx]
         second = float(probs[order[1]]) if len(order) > 1 else 0.0
@@ -1260,6 +1361,31 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 now_line = f"didn't see your hands ({hp * 100:.0f}%) - more light / hands in frame"
                 state["candidates"] = []; state["cand_committed"] = False
                 return
+        # OUT-OF-TOPIC GATE. `conf` above is a MASKED probability, so it says nothing about
+        # whether the sign is in this topic at all — renormalising guarantees some allowed
+        # word scores high. `n_mass` is the unmasked probability on the topic, and rejecting
+        # below MASS_MIN is the only thing standing between a narrow mask and speaking a
+        # clinical word the signer never signed (see mask_mass: 13.6% of out-of-topic signs
+        # on intake27 without it). Show the top-K anyway — the right word may be in this
+        # topic even when the mass is low, and the tap is the escape hatch. Placed AFTER the
+        # quality gate so a dark clip is still reported as a capture problem, not a topic one.
+        if MASS_MIN > 0.0 and n_mass < MASS_MIN and ALLOWED_IDX is not None:
+            # active_topic(), NOT MASKS[mask_i] — mask_i is the BOOT index and never moves,
+            # so naming it here would report the wrong topic after the first press of T,
+            # on the one message whose whole job is to tell you which topic you are in.
+            _tn, _twn = active_topic()
+            now_line = (f"not in '{_tn}' ({n_mass * 100:.0f}%) - "
+                        f"press T for another topic, or tap 1-5")
+            print(f"[topic] REJECTED '{word}' conf {conf:.2f}: only {n_mass:.2f} of the "
+                  f"model's probability is on the {_twn}-word topic "
+                  f"'{_tn}' (need {MASS_MIN:.2f})")
+            k_oot = min(SHOW_TOPK, len(order)) if SHOW_TOPK else 0
+            state["candidates"] = [(words[int(order[j])], float(probs[int(order[j])]))
+                                   for j in range(k_oot)]
+            state["cand_committed"] = False
+            dbg.update(word=word, conf=conf, decision="OFF-TOPIC", level="m",
+                       reason=f"mass {n_mass:.2f} < {MASS_MIN:.2f}")
+            return
         # top-K candidates for the pick-to-fix UI (only for clips we might commit).
         k = min(SHOW_TOPK, len(order)) if SHOW_TOPK else 0
         state["candidates"] = [(words[int(order[j])], float(probs[int(order[j])]))
@@ -1610,7 +1736,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
             # STABLE; LEVEL 3 (weak) waits. Adaptive waiting falls straight out of this:
             # easy signs are instant, ambiguous ones need a couple of agreeing previews.
             sig_prev = trim_preroll(seg, preroll_n, lead_fr)   # same motion-dominated clip as commit
-            p = classify_segment(fns[:1], sig_prev)
+            p, p_mass = classify_segment(fns[:1], sig_prev)
             order = p.argsort()[::-1]
             pi = int(order[0]); pc = float(p[pi]); pw = words[pi]
             p2 = float(p[order[1]]) if len(order) > 1 else 0.0
@@ -1629,7 +1755,10 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                        quality=q_prev, frames=len(seg), decision=action.upper(),
                        level=level, reason=reason)
             if action == "commit":
-                commit_segment(pre_probs=p)          # trust the preview that just approved
+                # carry the preview's MASS too: the early path skips the 4-fold re-score,
+                # so without it an off-topic sign would bypass the out-of-topic gate on
+                # exactly the path that fires FASTEST.
+                commit_segment(pre_probs=p, pre_mass=p_mass)
         if (not WINDOW_MODE) and seg_active and seg_moved and still_count >= still_fr \
                 and (len(seg) - preroll_n) >= min_seg_fr:
             commit_segment()                         # real motion + THEN hold still -> word
@@ -1963,6 +2092,15 @@ if __name__ == "__main__":
                          "NOT the default: the test concatenates isolated clips, which have "
                          "no co-articulated transition frames, so it needs one camera "
                          "session to confirm. Try it — this is the fluent-signing fix.")
+    ap.add_argument("--mass", type=float, default=None, metavar="M",
+                    help="out-of-topic rejection: refuse a sign unless at least M of the "
+                         "model's UNMASKED probability lands on the active topic. Masking "
+                         "renormalises, so without this a topic mask MUST name one of its "
+                         "own words and 13.6%% of out-of-topic signs get spoken as a wrong "
+                         "word (20.3%% on ship55). MEASURED on intake27: 0.20 is free "
+                         "(first-try 0.9572 either way, false speech 13.6%%->7.5%%); 0.50 "
+                         "gives 0.9125 / 2.5%%; 0.60 gives 0.8794 / 1.0%%. --medical "
+                         "defaults to 0.50. Pass 0 to disable.")
     args = ap.parse_args()
     if args.window:
         WINDOW_MODE = True
@@ -2205,6 +2343,16 @@ if __name__ == "__main__":
         # empirically suppressed every enumerated dangerous confusion in the test split.
         # 0 of 53 bounds the true rate at ~5.7% (rule of three), not at zero.
         L1_CONF, L2_CONF = 0.80, 0.70
+        # OUT-OF-TOPIC rejection. Every topic here is narrow, and a narrow mask cannot say
+        # "not in this topic" — see mask_mass(). Without this, 13.6% of out-of-topic signs
+        # are SPOKEN as a wrong clinical word on intake27 (20.3% on ship55). 0.50 costs
+        # 0.045 of in-topic first-try and cuts that to 2.5%.
+        MASS_MIN = 0.50
+        print(f"[cfg] out-of-topic gate MASS_MIN {MASS_MIN}: a sign whose unmasked "
+              f"probability on the\n      active topic is below this is REFUSED rather than "
+              f"renamed to an in-topic word.\n      Measured on intake27: off-topic false "
+              f"speech 13.6% -> 2.5%, in-topic first-try\n      0.9572 -> 0.9125. Override "
+              f"with --mass (0.20 is free; 0.0 disables).")
         print("[cfg] commit gates MEASURED on the held-out test split: "
               f"L1_CONF {L1_CONF} (precision 0.987), L2_CONF {L2_CONF} (0.979)")
         print("      0 of 53 dangerous-confusion clips reached 0.80 — the highest was 0.746. "
@@ -2221,6 +2369,13 @@ if __name__ == "__main__":
         print("[cfg] CANONICAL weights: segments mirrored so the signing arm reads as right "
               "(hand -> 54-74),\n      mirror TTA uses the pose-only map. Do NOT use this with "
               "the legacy artifacts_250.")
+    if args.mass is not None:
+        # AFTER the model branches, so an explicit --mass beats --medical's 0.50 default
+        # rather than being silently overwritten by it (the trap --conf fell into).
+        MASS_MIN = max(0.0, min(1.0, args.mass))
+        print(f"[cfg] out-of-topic gate MASS_MIN = {MASS_MIN}"
+              + ("  (DISABLED — a narrow topic can now speak words you did not sign; "
+                 "measured 13.6% of off-topic signs on intake27)" if MASS_MIN == 0.0 else ""))
     if args.conf is not None:
         # THE FIX. This used to set CONF_GATE alone — which the comment at the top of the
         # --vocab250 branch above already calls dead, because decide_commit() reads L1_CONF /
