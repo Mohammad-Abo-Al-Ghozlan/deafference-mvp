@@ -811,6 +811,35 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         return name, (len(words) if m is None else len(m))
 
     ALLOWED_IDX = MASKS[mask_i][1]
+    # How many words are ACTUALLY recognisable at boot. Not len(words): under --medical the
+    # vocabulary is 123 but the boot mask is far smaller, and every UI decision that says
+    # "is this vocabulary small enough to show?" means the mask, not the model's class count.
+    _boot_vocab_n = len(words) if ALLOWED_IDX is None else len(ALLOWED_IDX)
+
+    # The startup banner quotes the UNMASKED accuracy, then boots into a mask. Say what the
+    # configuration the demo is about to run in actually measures, if the topic file records
+    # it — otherwise the headline number describes a state the demo never enters.
+    if ALLOWED_IDX is not None:
+        _tp = HERE / f"topic_{MASKS[mask_i][0]}.json"
+        if _tp.exists():
+            try:
+                _m = (json.loads(_tp.read_text(encoding="utf-8")) or {})
+                _m = next((v for k, v in _m.items()
+                           if k.startswith("measured") and isinstance(v, dict)), None)
+                if _m and "masked_accuracy" in _m:
+                    print(f"[cfg] THIS configuration measures {_m['masked_accuracy']:.4f} on "
+                          f"{_m.get('answerable_clips', '?')} held-out clips — not the "
+                          f"unmasked number above.")
+                    _t80 = _m.get("at_tau_0.80") or {}
+                    if _t80:
+                        print(f"      at the shipped gate: precision "
+                              f"{_t80.get('precision')}, {_t80.get('wrong_spoken')} wrong "
+                              f"words in {_t80.get('spoken')} spoken, coverage "
+                              f"{_t80.get('coverage')} (so ~"
+                              f"{round(100*(1-_t80.get('coverage', 0)))}% of signs need a "
+                              f"repeat).")
+            except Exception as e:
+                print(f"[warn] could not read {_tp.name} metadata ({type(e).__name__})")
 
     rules = load_grammar()
     word_acc = {}
@@ -868,7 +897,11 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
     # refreshed each frame. finalized = a sentence has been committed via DONE.
     state = {"speak": False, "sentence": "", "final": "", "finalized": False,
              "thinking": False, "clear_req": False, "done_req": False,
-             "undo_req": False, "show_words": len(words) <= 40,  # word list ON for small vocab
+             # Word list ON for a small ACTIVE vocabulary. This used to read len(words),
+             # i.e. 123 under --medical, so it booted OFF — while the renderer below gates on
+             # len(shown), the MASK size, which is 27. A first-time signer therefore saw no
+             # vocabulary at all and had to guess, and `w` was missing from the key hint too.
+             "undo_req": False, "show_words": _boot_vocab_n <= 40,
              "done_box": (0, 0, 0, 0), "undo_box": (0, 0, 0, 0),
              "clear_box": (0, 0, 0, 0), "speak_box": (0, 0, 0, 0),
              "words_box": (0, 0, 0, 0),
@@ -1101,6 +1134,27 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
     cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     cv2.setMouseCallback(WINDOW, on_mouse)
 
+    # A fullscreen window paints BLACK until the first imshow, and the camera warm-up branch
+    # in the loop below `continue`s WITHOUT one — so every demo opened with ~2 s of blank
+    # fullscreen and no sign that anything was happening. Paint a boot card instead, and
+    # re-show it while the camera warms.
+    #
+    # It also carries the one instruction that existed nowhere on screen: fluent signing does
+    # not segment (the still-run inside an utterance is 10 frames against the 12 needed), so
+    # the signer must pause. That was in a terminal print nobody reads with a camera in front
+    # of them.
+    _boot = np.full((SCREEN_H, SCREEN_W, 3), (28, 24, 22), np.uint8)
+    for _i, (_txt, _sc, _col) in enumerate((
+            ("Deafference", 1.7, (0, 220, 255)),
+            ("starting camera...", 0.9, (200, 200, 200)),
+            ("Sign ONE word, then HOLD STILL for about half a second.", 0.85, (0, 215, 255)),
+            ("Signing continuously will not segment — pause between signs.", 0.7, (160, 160, 160)),
+            ("w = show words    t = change topic    q = quit", 0.7, (140, 140, 140)))):
+        cv2.putText(_boot, _txt, (90, 240 + _i * 78), cv2.FONT_HERSHEY_SIMPLEX, _sc, _col, 2,
+                    cv2.LINE_AA)
+    cv2.imshow(WINDOW, _boot)
+    cv2.waitKey(1)
+
     camera = Camera(0)                               # threaded capture (fresh frames)
     if not camera.opened:
         sys.exit("[err] no webcam found (VideoCapture(0) failed)")
@@ -1127,6 +1181,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
     while True:
         image = camera.read()
         if image is None:                            # camera warming up
+            cv2.imshow(WINDOW, _boot)                # or the window stays black — see above
             if (cv2.waitKey(20) & 0xFF) == ord("q"):
                 break
             continue
@@ -1413,7 +1468,10 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         bar_col = (0, 200, 0) if last_conf >= CONF_GATE else (0, 165, 255)
         cv2.rectangle(image, (770, H - 30), (770 + int(300 * last_conf), H - 16), bar_col, -1)
         aa(image, f"{last_conf:.2f}", (770 + 310, H - 18), 0.5, (200, 200, 200), 1)
-        aa(image, f"{fps_ema:.0f} fps   1-5=fix  Enter=say  bksp=undo  q=quit", (W - 620, H - 20), 0.55, (170, 170, 170), 1)
+        # `w` and `t` were BOTH missing from the only key hint on screen, so the two keys that
+        # fix "I can't see the vocabulary" and "wrong subject" were undiscoverable.
+        aa(image, f"{fps_ema:.0f} fps  1-5=fix  Enter=say  bksp=undo  w=words  t=topic  q=quit",
+           (W - 760, H - 20), 0.55, (170, 170, 170), 1)
 
         # ── developer dashboard (Part 13): live decision internals, for tuning ──
         if debug:
@@ -1706,7 +1764,16 @@ if __name__ == "__main__":
         # colors, food). Under the clinical vocabulary they resolve to accidental part-masks
         # — topic_everyday would become 18 unrelated words — so offer the clinical ones only.
         TOPIC_GLOB = "topic_medical_*.json"
-        DEFAULT_TOPIC = "medical_ship55"
+        # Boot into the 27-word INTAKE mask, not the 55-word ship list. MEASURED 2026-09-08 on
+        # the same 1,373-clip held-out split, same 4-fold ensemble, masking bit-identical to
+        # _mask_probs:
+        #     ALL 123   0.8383   precision 0.9872 @0.80, 6 wrong words spoken
+        #     ship55    0.9619   precision 0.9966 @0.80, 2 wrong (dentist->who, open->finish)
+        #     intake27  0.9850   precision 1.0000 @0.80, 0 wrong in 473 spoken
+        # ship55 stays one T away. The cost of intake27 is coverage 0.711 — about 29% of signs
+        # need a repeat — which is the right trade for a demo that must not say a wrong
+        # clinical word in front of an audience.
+        DEFAULT_TOPIC = "medical_intake27"
         # THE check that stops the whole class of label-shift bugs. vocab_medical.json
         # (128 words, a pre-training wish list) still sits in this repo next to
         # vocab_medical_123.json, and pointing the demo at it would not raise: words[i]
@@ -1770,8 +1837,14 @@ if __name__ == "__main__":
             print("[cfg] AI sentence-building is OFF (unlike --vocab250). An LLM "
                   "rephrasing clinical\n      glosses can change meaning; pass --ai "
                   "explicitly if you accept that.")
-        print(f"[cfg] 123-class MEDICAL model from {ARTIFACTS} — test 0.8383 "
-              f"(top-5 0.9512), 9 held-out signers")
+        # ⚠️ 0.8383 is the UNMASKED 123-way number, and the demo does not run unmasked — it
+        # boots into a topic mask (DEFAULT_TOPIC above). Quoting it alone undersold the demo
+        # by 12 accuracy points for weeks. The masked figure is printed by main() once the
+        # boot mask is resolved; this line now says which number it is.
+        print(f"[cfg] 123-class MEDICAL model from {ARTIFACTS} — 0.8383 UNMASKED across all "
+              f"123 classes (top-5 0.9512), 9 held-out signers.")
+        print(f"      That is NOT the configuration this demo runs in — see the masked figure "
+              f"below.")
         # MEASURED 2026-09-04 by measure_medical_gate.py on the 1,373-clip held-out test
         # split (9 unseen signers), after reproducing the published 0.8383 exactly. These
         # replace the values inherited from the 250-word model, which were never measured

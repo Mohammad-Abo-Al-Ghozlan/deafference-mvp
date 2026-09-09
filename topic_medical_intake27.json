@@ -1,0 +1,51 @@
+{
+ "note": "Clinical INTAKE mask for live_demo.py --medical (27 words). Selected mechanically, not by taste: every word had >=8 announcements at the gate AND precision 1.000 on the held-out test split. It reads as a clinic intake -- who is with me, what hurts, how bad, how long, what I need. Press T to cycle topics at runtime.",
+ "measured_2026_09_08": {
+  "how": "4-fold ensemble (artifacts_medical/savedmodel_fold{0..3}) over the 1,373-clip held-out test split, 9 unseen signers. Masking replicates live_demo._mask_probs exactly -- verified bit-identical (0.00e+00 over 200 rows). The same pipeline reproduces the published unmasked 0.8383, so these numbers sit on a replicated baseline.",
+  "answerable_clips": 665,
+  "masked_accuracy": 0.985,
+  "at_tau_0.80": {"spoken": 473, "coverage": 0.711, "precision": 1.0, "wrong_spoken": 0},
+  "at_tau_0.85": {"spoken": 459, "coverage": 0.69, "precision": 1.0, "wrong_spoken": 0},
+  "at_tau_0.90": {"spoken": 434, "coverage": 0.653, "precision": 1.0, "wrong_spoken": 0},
+  "spoken_excludes_held_words": "A word on never_auto_commit is NOT an utterance -- it is a prompt for a tap. These coverage figures already exclude them, unlike a naive count that treats a safety hold as speech.",
+  "cannot_express_reachable": "none -- all 16 of safety_gates_medical.json's cannot_express words are outside this mask, so the policy's claim is structurally true here rather than merely printed",
+  "why_27_and_not_29": "A 29-word version scored 0.9801 with ONE error at tau=0.80: tired spoken as want, conf 0.813. want and tired were confusing EACH OTHER, so dropping both removes the error entirely and RAISES accuracy to 0.9850. Precision becomes 1.000 at the shipped tau=0.80 rather than needing 0.85."
+ },
+ "never_auto_commit_in_this_topic": [
+  "bad",
+  "big",
+  "help",
+  "pain",
+  "sick"
+ ],
+ "caveat": "Precision 1.000 means zero wrong words in 473 spoken clips, NOT a guarantee. By the rule of three, 0 errors in 473 bounds the true rate at roughly 0.6%, not at zero. Coverage 0.711 is the real cost: about 29% of signs need repeating.",
+ "words": [
+  "baby",
+  "bad",
+  "big",
+  "cold",
+  "day",
+  "dentist",
+  "drink",
+  "family",
+  "father",
+  "feel",
+  "help",
+  "hospital",
+  "medicine",
+  "morning",
+  "move",
+  "night",
+  "open",
+  "pain",
+  "show",
+  "sick",
+  "sit",
+  "sleep",
+  "test",
+  "understand",
+  "wait",
+  "water",
+  "week"
+ ]
+}
