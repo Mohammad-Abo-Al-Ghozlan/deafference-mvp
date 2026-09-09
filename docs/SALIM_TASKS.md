@@ -256,7 +256,14 @@ That role change opens one gap, which is now task 2A below. It does **not** bloc
 
 ## NOW — today
 
-### ☐ 2. Rebuild the avatar handoff — and it now goes to the DESIGNER, not Ghozlan · ~15 min
+### ☐ 2. Rebuild the avatar handoff — **REBUILT 2026-09-07. Only the SENDING is left.**
+
+> ✅ **The zip exists**: `deafference_handoff_2026-09-07.zip` — 261 entries, 8.20 MB, gitignored,
+> sitting in the repo root. Rebuilding it also turned up that the shipped clips were an
+> **undocumented third gate configuration**, with 56 words needlessly in tier C.
+>
+> ☐ **What is still open is a human action, not a build**: send it, together with the drafted
+> note in `Fix/MESSAGES-2026-09-07.md`. Nothing in the repo can do that step.
 
 **Changed 2026-09-01.** With Ghozlan off the avatar, this package's recipient is the designer — at
 **P1-M2**, per the brief §11, not immediately. So the urgency is gone, but the *rebuild* still
@@ -467,7 +474,20 @@ If you did **not**, these are the ones that cause arguments later, in order of h
 The last row is the one I would not skip. Everything else is money; that one is whether the work is
 usable at all.
 
-### ☐ 4. Fingerspelling `--report` on one real shard · ~15 min, mostly waiting
+### ✅ 4. Fingerspelling `--report` on one real shard — **SUPERSEDED 2026-09-08. Do not do this.**
+
+> You went far past it. The **full 68-shard corpus** is built (67,208 sequences, 10,731,754
+> frames) and **trained to a converged CER of 0.29177**. The gap statistics this task existed
+> to produce were printed by that run: dominant-hand presence mean 0.559, 44% of frames with no
+> tracked spelling hand, median interior gap 15, 63% of sequences with a gap >10 frames.
+>
+> 🔴 **The shard lever is now exhausted — 68 of 68 files.** The next rung is the **52,958
+> supplemental sequences**, which needs loader work first, not another `--limit-files`.
+> See `docs/FINGERSPELLING_CTC_RESULT.md` (run 4) and `RUNBOOK_FINGERSPELLING.md` Part 5c.
+>
+> *The steps below are kept only as a record of how the track was bootstrapped.*
+
+### ~~☐ 4. Fingerspelling `--report` on one real shard~~ · ~15 min, mostly waiting
 
 Unblocks **the only licence-clean track that can carry a clinical vocabulary.** Fifteen minutes of
 your time buys days of mine.
