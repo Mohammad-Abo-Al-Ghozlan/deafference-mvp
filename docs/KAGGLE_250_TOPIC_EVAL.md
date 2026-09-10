@@ -117,17 +117,30 @@ def fingerprint(root, n_words=30, per_word=4):
                 dead.append(float(np.isnan(a[:, 33:54, 0]).all(axis=1).mean()))
     return (len(fs), float(np.mean(dead)) if dead else float("nan"))
 
-for p in sorted(glob.glob("/kaggle/input/*")):
-    fp = fingerprint(p)
-    if fp is None:
-        sub = [d for d in glob.glob(p + "/*") if os.path.isdir(d)]
-        fp = next((f for f in (fingerprint(d) for d in sub) if f), None)
+# LAYOUT-AGNOSTIC, and this is not optional. Kaggle mounts inputs NAMESPACED:
+#     /kaggle/input/competitions/<slug>/
+#     /kaggle/input/datasets/<user>/<slug>/
+# so `/kaggle/input/*` returns TWO CONTAINER DIRS, not datasets. The first version of this
+# cell walked one level down from there and printed "competitions: no by_word/ | datasets:
+# no by_word/" on a session that had the corpus attached three levels deeper. Never walk
+# levels against this mount -- glob for the thing itself, recursively. Same rule as
+# RUNBOOK_FINGERSPELLING.md Part 5: "a one-level glob finds nothing."
+print("=== the real tree ===")
+for d in sorted(glob.glob("/kaggle/input/*/*/*")) or sorted(glob.glob("/kaggle/input/*/*")):
+    n = len(glob.glob(d + "/*")) if os.path.isdir(d) else 0
+    print(f"  {d}   ({n} entries)")
+
+BW = glob.glob("/kaggle/input/**/by_word", recursive=True)
+print(f"\n=== {len(BW)} by_word dir(s) found anywhere ===")
+if not BW:
+    print("  NO extracted corpus attached -> PATH B")
+for b in BW:
+    root = os.path.dirname(b)
+    fp = fingerprint(root)
     if fp:
         n, dead = fp
         kind = "CANONICAL" if dead > 0.90 else ("LEGACY" if dead < 0.75 else "UNCLEAR")
-        print(f"  {os.path.basename(p):<34s} {n:4d} word dirs  L-block dead {dead:.3f}  {kind}")
-    else:
-        print(f"  {os.path.basename(p):<34s} no by_word/")
+        print(f"  {root}\n      {n} word dirs, L-block dead {dead:.3f}  -> {kind}")
 ```
 
 **Take the one printing `CANONICAL` with ~250 word dirs** and skip Cell 3. If nothing prints
@@ -183,10 +196,14 @@ a directory.
 
 ```python
 import glob, os, json
-for a in sorted(glob.glob("/kaggle/input/*")):
-    print(a)
-    for b in sorted(glob.glob(a + "/*"))[:14]:
-        print("   ", os.path.basename(b))
+# Print THREE levels. Under Kaggle's namespaced mount the dataset slug is the third
+# component (/kaggle/input/datasets/<user>/<slug>/), so a two-level listing stops at the
+# username and never shows you what is actually attached.
+for d in sorted(glob.glob("/kaggle/input/*/*/*")) or sorted(glob.glob("/kaggle/input/*/*")):
+    kids = sorted(os.path.basename(x) for x in glob.glob(d + "/*"))[:8]
+    print(f"{d}   ({len(glob.glob(d + '/*'))} entries)")
+    if kids:
+        print("     ", ", ".join(kids))
 
 CODE   = glob.glob("/kaggle/input/**/measure_topic_gates.py", recursive=True)
 ALLMOD = sorted(glob.glob("/kaggle/input/**/savedmodel_fold*", recursive=True))
