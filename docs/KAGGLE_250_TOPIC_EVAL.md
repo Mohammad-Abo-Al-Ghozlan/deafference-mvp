@@ -251,10 +251,17 @@ ALLCORP = [os.path.dirname(p) for p in
 # `asl250-mask-ab-v1/data` -- the LEGACY corpus -- under CANONICAL weights, because that path
 # sorts first. It returned 0.7471 and a full, plausible-looking topic table. Fingerprint, keep
 # only the extraction the weights were trained on, and reject the dead `ffill` arm by name.
-CORPUS = [d for d in ALLCORP
-          if (fingerprint(d) or (0, 0))[1] > 0.90        # CANONICAL: L-block dead ~1.00
-          and "ffill" not in d                           # the gap-filled arm, measured dead
-          and len(glob.glob(d + "/by_word/*")) >= 250]    # the full 250, not the medical set
+ELIGIBLE = [d for d in ALLCORP
+            if (fingerprint(d) or (0, 0))[1] > 0.90      # CANONICAL: L-block dead ~1.00
+            and "ffill" not in d                         # the gap-filled arm, measured dead
+            and len(glob.glob(d + "/by_word/*")) >= 250]  # the full 250, not the medical set
+# TWO datasets pass that filter -- `asl250-canon-v1` and `asl250-canon-v11pm138`, both
+# canon/none. They are not distinguishable by fingerprint, so choose by NAME and say so out
+# loud rather than letting sort order decide again. asl250-canon-v1 is the lineage the
+# artifacts_250_canonical weights were trained from; the other is a re-upload of unknown
+# completeness. Set PIN by hand to override.
+PIN    = "asl250-canon-v1/canon/none"
+CORPUS = ([d for d in ELIGIBLE if d.endswith(PIN)] or ELIGIBLE)[:1]
 MAN    = glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
 RAW    = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/train.csv", recursive=True)
           if os.path.isdir(os.path.join(os.path.dirname(p), "train_landmark_files"))]
@@ -269,17 +276,21 @@ if len(ALLMOD) > 4:
           f"ones. Do NOT average across corpora.")
 print("vocab   =", VOCAB or "*** missing ***")
 print("topics  =", len(TOPICS), "(expect 12)")
+print()
 for d in ALLCORP:
     fp = fingerprint(d)
     n, dead = fp if fp else (0, float("nan"))
     tag = "CANONICAL" if dead > 0.90 else ("LEGACY" if dead < 0.75 else "UNCLEAR")
-    print(f"  {'USE ->' if d in CORPUS else '      '} {d}\n"
-          f"           {n} word dirs, L-block dead {dead:.3f}  -> {tag}")
-print("corpus  =", CORPUS or "none -> PATH B, extract first")
+    mark = "USE ->" if d in CORPUS else ("  ok  " if d in ELIGIBLE else "REJECT")
+    print(f"  {mark} {d}\n           {n} word dirs, L-block dead {dead:.3f}  -> {tag}")
+if len(ELIGIBLE) > 1:
+    print(f"\n  {len(ELIGIBLE)} corpora were eligible; picked by PIN={PIN!r}. The others are "
+          f"NOT averaged in and NOT scored.")
+print("\ncorpus  =", CORPUS or "none -> PATH B, extract first")
 print("manifest=", MAN or "*** attach asl250-mask-ab-v1 ***")
 print("raw     =", RAW or "none (fine on PATH A)")
 assert CODE and len(MODELS) == 4 and VOCAB and len(TOPICS) == 12
-assert len(CORPUS) <= 1, f"more than one canonical 250 corpus survived: {CORPUS}"
+assert len(CORPUS) == 1, f"no canonical 250-word corpus attached; eligible={ELIGIBLE}"
 ```
 
 `topics = 12`, not 11. `topic_everyday.json` was restored in `0f41fd2` — it is `--vocab250`'s boot
