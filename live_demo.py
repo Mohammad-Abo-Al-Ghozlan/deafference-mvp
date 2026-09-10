@@ -137,6 +137,11 @@ WORD_ACC_PATH = None        # optional {word: test_acc} JSON (set for --vocab250
 # and the model ships `no` (0.909) while `yes` (0.714) is below the ship gate, so
 # it can render a refusal but not a consent. See docs/MEDICAL_SAFETY_GATES.md.
 TOPIC_GLOB = "topic_*.json"       # which topic masks the T key offers; narrowed by --medical
+# A discovered topic file is only offered if it was written for THIS vocabulary. See the
+# FOREIGN-TOPIC GUARD in build_masks._of: without it, --vocab250 was offered the medical
+# topics cut down to the 42 shared words, one of them a single-word mask.
+MIN_TOPIC_WORDS  = 6              # a mask narrower than this is a renormalization trap
+TOPIC_KEEP_RATIO = 0.60           # fraction of a topic's own words this vocabulary must have
 SAFETY_NEVER_AUTO = frozenset()   # word -> requires an explicit tap to commit
 SAFETY_CANNOT_SAY = {}            # word -> {reason, test_acc} for words we cannot express
 SAFETY_GATES_PATH = None          # set by --medical
@@ -579,7 +584,15 @@ def build_masks(words, demo_path=None, demo_idx=None) -> list:
         # bury the one case that matters. A mask the user NAMED is different — main() warns
         # about its unknown words before this runs (see the DEMO_WORDS_PATH block).
         idx = sorted({words.index(w) for w in allow if w in words})
-        return (np.array(idx, dtype=np.int64), mm) if idx else (None, None)
+        # FOREIGN-TOPIC GUARD. `topic_*.json` is the default glob and it matches the medical
+        # topic files too, so a --vocab250 run used to be offered all 15 of them, each
+        # filtered down to the handful of words the two vocabularies share (42 of 331).
+        # topic_medical_care_a survived as ONE word — and a one-word mask renormalizes to
+        # confidence 1.000 for whatever you sign, which is the worst failure this file has.
+        # A topic written FOR this vocabulary keeps nearly all its words; a foreign one does
+        # not, so the survival ratio separates them without hard-coding either name.
+        keep = len(idx) >= MIN_TOPIC_WORDS and len(idx) >= TOPIC_KEEP_RATIO * len(allow)
+        return (np.array(idx, dtype=np.int64), mm) if keep else (None, None)
 
     out = [(f"ALL {len(words)}", None, 0.0)]   # nothing is out-of-topic on the full vocab
     if demo_path is not None and demo_idx is not None:
@@ -1010,9 +1023,31 @@ def selftest(single: bool):
     print(f"[ok] mask_mass: reads the unmasked distribution (MASS_MIN={MASS_MIN}); "
           f"a 0.1-mass topic still renormalises to conf 1.00")
 
+    # FOREIGN-TOPIC GUARD, part 1: a vocabulary sharing NO words with any topic file must
+    # be offered nothing but ALL. Needs no model, so it runs here.
+    _fake = [f"zzz_not_a_sign_{i}" for i in range(20)]
+    assert len(build_masks(_fake)) == 1, \
+        f"a foreign vocabulary was offered {len(build_masks(_fake)) - 1} topic mask(s)"
+    print("[ok] topics: a vocabulary matching no topic file gets only the ALL mask")
+
     words = load_vocab()
     n = len(words)
     print(f"[ok] vocab: {n} words ({VOCAB_PATH.name})")
+
+    # FOREIGN-TOPIC GUARD, part 2: on the REAL vocabulary, no offered mask may be narrower
+    # than MIN_TOPIC_WORDS. This is the assertion that would have caught the --vocab250
+    # leak, where topic_medical_care_a survived as ONE word and would have renormalized to
+    # confidence 1.000 for every sign made at it.
+    _tm = build_masks(words)
+    for _nm, _ix, _mm in _tm:
+        if _ix is not None:
+            assert len(_ix) >= MIN_TOPIC_WORDS, \
+                (f"topic '{_nm}' resolves to only {len(_ix)} of this vocabulary's words — "
+                 f"below MIN_TOPIC_WORDS {MIN_TOPIC_WORDS}. A mask that narrow renormalizes "
+                 f"to ~1.0 on ANY sign. It is a topic file for a different vocabulary.")
+    _mms = sorted({_mm for _, _ix, _mm in _tm if _ix is not None and _mm is not None})
+    print(f"[ok] topics: {len(_tm) - 1} offered, all >={MIN_TOPIC_WORDS} words; "
+          f"per-topic mass_min {_mms if _mms else 'none set -> global ' + str(MASS_MIN)}")
     _, fns = load_models(SINGLE_MODELS if single else ENSEMBLE_MODELS)
 
     rng = np.random.default_rng(0)
@@ -2120,22 +2155,17 @@ if __name__ == "__main__":
                          "(first-try 0.9572 either way, false speech 13.6%%->7.5%%); 0.50 "
                          "gives 0.9125 / 2.5%%; 0.60 gives 0.8794 / 1.0%%. --medical "
                          "defaults to 0.50. Pass 0 to disable.")
+    ap.add_argument("--window-peak", type=float, default=None, metavar="P",
+                    help="--window only: the masked-prob floor a window must reach to join "
+                         "an agreement run. Defaults to 0.50 (medical) or 0.30 "
+                         "(--vocab250, scaled by that model's lower gates). If --window "
+                         "commits NOTHING, this is the first thing to lower; if it commits "
+                         "the same word repeatedly, raise it.")
     args = ap.parse_args()
     if args.window:
-        WINDOW_MODE = True
-        print("[cfg] --window: segmenting by CONFIDENCE PEAK, not stillness. The motion "
-              "state machine\n"
-              f"      (STILL_SEC / END_SEC / MAX_SEG_SEC) is OFF. Windows "
-              f"{WINDOW_SEC} s, peak {WINDOW_PEAK},\n"
-              f"      then {WINDOW_COOL_SEC} s silence and {WINDOW_REFRAC_SEC} s before "
-              f"the SAME word may repeat.\n"
-              "      MEASURED offline on 3-sign utterances: 4/62 -> 36/62 delivered exactly "
-              "right with\n"
-              "      NO pause, precision 0.63 -> 0.98. But the test concatenates isolated "
-              "clips, which\n"
-              "      have no co-articulated transitions — so YOU are the confirmation. "
-              "Sign three\n"
-              "      words fluently and compare against a run without --window.")
+        WINDOW_MODE = True      # the banner is printed AFTER the model branches, below,
+                                # because --vocab250 changes WINDOW_PEAK and a banner
+                                # printed here reported the default it was about to replace
     if args.words:
         DEMO_WORDS_PATH = Path(args.words)
     if args.vocab250:                      # switch to the 250-word ensemble (folds 0-3)
@@ -2233,6 +2263,16 @@ if __name__ == "__main__":
         # puts ~25/250 on a 25-word topic against ~25/123 for the medical one, so the same
         # threshold is materially stricter here. docs/KAGGLE_250_TOPIC_EVAL.md measures it.
         MASS_MIN  = 0.10
+        # --window's burst floor must move with the model's confidence scale, or the
+        # segmenter silently stops working. WINDOW_PEAK is the masked-prob a window needs
+        # to JOIN an agreement run, and it was set at 0.50 against medical's L2_CONF 0.70
+        # (a ratio of 0.71). At 250 classes a correct sign often scores ~0.45 and L2_CONF
+        # is 0.40, so 0.50 would reject nearly every window, no burst would ever form and
+        # --window would commit NOTHING — a failure that looks like a dead camera, not a
+        # threshold. 0.71 x 0.40 = 0.29, rounded to 0.30. PROVISIONAL: derived from the
+        # gate ratio, not measured, because this model has no held-out test set. Tune it
+        # live with --window-peak.
+        WINDOW_PEAK   = 0.30
         USE_TTA       = False  # live PREVIEW stays single-pass; the COMMIT does its
                                #   own multi-view+mirror averaging (classify_commit)
         # The 30-word rule grammar can't cover 250 words, so the sentence on DONE is
@@ -2399,6 +2439,34 @@ if __name__ == "__main__":
         print("[cfg] CANONICAL weights: segments mirrored so the signing arm reads as right "
               "(hand -> 54-74),\n      mirror TTA uses the pose-only map. Do NOT use this with "
               "the legacy artifacts_250.")
+    if args.window_peak is not None:
+        # AFTER the model branches, same reason as --mass: --vocab250 sets 0.30 and an
+        # explicit flag has to win rather than be overwritten by it.
+        WINDOW_PEAK = max(0.0, min(1.0, args.window_peak))
+        print(f"[cfg] --window burst floor WINDOW_PEAK = {WINDOW_PEAK} (explicit)")
+    if WINDOW_MODE:
+        # Printed here, not at --window, so every number in it is the SETTLED one: the
+        # model branches and --window-peak have all run by now.
+        print("[cfg] --window: segmenting by CONFIDENCE PEAK, not stillness. The motion "
+              "state machine\n"
+              f"      (STILL_SEC / END_SEC / MAX_SEG_SEC) is OFF. Windows "
+              f"{WINDOW_SEC} s, peak {WINDOW_PEAK},\n"
+              f"      then {WINDOW_COOL_SEC} s silence and {WINDOW_REFRAC_SEC} s before "
+              f"the SAME word may repeat.\n"
+              "      MEASURED offline on 3-sign utterances of the MEDICAL model: 4/62 -> "
+              "36/62 delivered\n"
+              "      exactly right with NO pause, precision 0.63 -> 0.98. Two caveats: the "
+              "test\n"
+              "      concatenates isolated clips, which have no co-articulated transitions, "
+              "and it\n"
+              "      predates the out-of-topic gate, so --window x MASS_MIN is UNMEASURED. "
+              "YOU are\n"
+              "      the confirmation: sign three words fluently, with and without --window.")
+        if WINDOW_PEAK != 0.50:
+            print(f"      peak {WINDOW_PEAK} is scaled for this model's lower gates and is "
+                  f"PROVISIONAL.\n"
+                  f"      If nothing commits at all, lower it (--window-peak); if one word "
+                  f"repeats, raise it.")
     if args.mass is not None:
         # AFTER the model branches, so an explicit --mass beats --medical's 0.50 default
         # rather than being silently overwritten by it (the trap --conf fell into).
