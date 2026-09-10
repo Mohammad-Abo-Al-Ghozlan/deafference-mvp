@@ -2275,16 +2275,18 @@ if __name__ == "__main__":
         L2_STABLE = 2          # two agreeing previews. Was 1 because a 4-frame window at
                                #   ~7fps had no room for a second; EARLY_MIN_SEC 0.80 with
                                #   PREVIEW_SEC 0.20 leaves room for four.
-        # PROVISIONAL out-of-topic threshold — the only number here not measured on this
-        # model. --vocab250 boots into a ~20-word topic, and a narrow mask cannot say
-        # "not in this topic": on the 123-class medical model that meant 13.6-20.3% of
-        # out-of-topic signs were SPOKEN as a wrong word. This repo has no held-out test
-        # SET for the 250 model (sign_clips_250.npz is the exemplar clips = TRAINING data,
-        # which report precision 1.000 at every threshold), so the value is the
-        # class-count-scaled equivalent of the 0.20 that measured free on medical: mass is
-        # the probability landing on the topic, and a diffuse prediction over 250 classes
-        # puts ~25/250 on a 25-word topic against ~25/123 for the medical one, so the same
-        # threshold is materially stricter here. docs/KAGGLE_250_TOPIC_EVAL.md measures it.
+        # FALLBACK ONLY — every one of the 12 topic files now carries its own MEASURED
+        # mass_min and _apply_mm prefers it. This value is what a topic file WITHOUT one
+        # would inherit.
+        #
+        # MEASURED 2026-09-10 on the 13,998-clip held-out test split of canon/none, 3 unseen
+        # signers (docs/KAGGLE_250_TOPIC_EVAL.md; ensemble 0.7813, above every fold): the
+        # safety-first threshold is 0.05 for nine topics and 0.10 for the three widest
+        # (actions 24w, everyday 34w, time_question 32w). The earlier provisional 0.10
+        # across all twelve was over-gating nine of them. Kept at 0.10 here because an
+        # unmeasured topic should inherit the STRICTER end of the measured range, not the
+        # looser one. Out-of-topic false speech still runs 3.7-9.6% against roughly 1% on
+        # medical -- at 250 classes mass_min cannot go higher without costing first-try.
         MASS_MIN  = 0.10
         # --window's burst floor must move with the model's confidence scale, or the
         # segmenter silently stops working. WINDOW_PEAK is the masked-prob a window needs

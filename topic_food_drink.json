@@ -1,8 +1,7 @@
 {
- "note": "Topic mask for live_demo --vocab250 (press T to cycle). One of 11 topics whose union covers all 206 of the 250 classes scoring at or above 0.6 on the held-out test -- the same floor topic_everyday.json used, because a topic full of broken words helps nobody. 44 words fall below it and are deliberately unreachable.",
- "mass_min": 0.1,
- "mass_min_provisional": true,
- "mass_min_why": "PROVISIONAL, not measured. Out-of-topic rejection: refuse a sign unless at least this much of the model's UNMASKED probability lands on these words. Without it a narrow mask MUST name one of its own words, and on the 123-class medical model that meant 13.6-20.3% of out-of-topic signs were SPOKEN as a wrong word. 0.1 is set to the class-count-scaled equivalent of the 0.20 that measured FREE on the medical model, not to a value measured here. Verify before relying on it.",
+ "note": "Topic mask for live_demo --vocab250 (press T to cycle). One of 12 topics whose union covers 206 of the 250 classes -- those scoring at or above 0.6 on the held-out test, the same floor topic_everyday.json used, because a topic full of broken words helps nobody. 44 words fall below it and are deliberately unreachable. MEASURED 2026-09-10: pooled first-try 0.9202 at precision 0.9768 across the 12, against 0.6347/0.9321 for one open 250-word mask -- topics are worth +0.2855 first-try, 291 wrong words spoken instead of 603. That lands the 250-word model on the 123-word medical model's 0.9223, so the vocabulary is no longer what limits first-try recognition; confusability inside a topic is.",
+ "mass_min": 0.05,
+ "mass_min_why": "MEASURED, not transferred. Out-of-topic rejection for THIS topic: refuse unless at least this much of the model's UNMASKED probability lands on these words. Chosen SAFETY-FIRST -- the threshold with the best first-try among those holding out-of-topic false speech at or under 10% for this topic, ties going to the HIGHER threshold. 0.05 for most topics and 0.10 for the three widest (actions 24, everyday 34, time_question 32): a diffuse prediction over 250 classes puts less mass on any one topic than over the medical model's 123, so the same numeric threshold is materially stricter here. The earlier provisional 0.10 across all twelve was therefore OVER-gating nine of them. Without any threshold a narrow mask MUST name one of its own words, so an out-of-topic sign is spoken as a wrong one.",
  "measured_per_word": {
   "source": "word_acc_250.json — per-word held-out test accuracy",
   "words": 15,
@@ -11,7 +10,29 @@
   "worst_word": "thirsty",
   "words_below_0_80": []
  },
- "caveat": "UNMEASURED GATE NUMBERS. mean/min_test_acc below are real (word_acc_250.json, macro mean 0.7571 against the known 0.7755 micro figure). first_try, precision, off-topic false speech and mass_min are NOT measured for this model, because the repo has no held-out test SET for it -- sign_clips_250.npz is the per-word exemplar clips, which are TRAINING data and report precision 1.000 at every threshold. The equivalent medical numbers must NOT be transferred: mass is the probability landing on the topic, so a diffuse prediction over 250 classes puts ~25/250 = 0.10 on a 25-word topic against ~25/123 = 0.20 for the 123-class model, which makes the same threshold materially STRICTER here. docs/KAGGLE_250_TOPIC_EVAL.md is the run that fills these in. Until then mass_min is provisional.",
+ "caveat": "first_try is the fraction of in-topic signs spoken on the FIRST attempt. precision is over the spoken words only -- it is the number that matters for a device that speaks aloud, and it is NOT the same as the accuracy in measured_per_word. off_topic_false_speech is the fraction of signs from OUTSIDE this topic that were nonetheless spoken as one of its words; it is 3.7-9.6% here against roughly 1% on the medical model, because mass_min can only be 0.05-0.10 before it costs first-try. A topic whose min_per_word_test_clips is small is weakly measured. wrong_pairs are not yet transcribed -- they are in topic_250_measured.json from the same run.",
+ "measured_2026_09_10": {
+  "how": "4-fold ensemble (artifacts_250_canonical/savedmodel_fold{0..3}) over the 13,998-clip held-out test split of asl250-canon-v1/canon/none, 3 unseen signers, all 250 classes present. Gate is LEVEL 1a as live_demo applies it: 3 of 4 folds must independently agree AND the ensemble mean masked probability must clear 0.60, then mass_min. Masking replicates live_demo._mask_probs. Controls in the run log: per-fold 0.7598/0.7616/0.7647/0.7651 against PROVENANCE's recorded 0.7579/0.7608/0.7626/0.7636, and ensemble 0.7813 -- above every individual fold, which is what a corpus/weights mismatch cannot produce. scorer 2026-09-10c.",
+  "words": 15,
+  "first_try": 0.9824,
+  "precision": 0.9964,
+  "spoken": 836,
+  "wrong_spoken": 3,
+  "off_topic_false_speech": 0.06,
+  "min_per_word_test_clips": 49,
+  "pooled_across_all_12": {
+   "words": 206,
+   "first_try": 0.9202,
+   "precision": 0.9768,
+   "spoken": 12519,
+   "wrong": 291
+  },
+  "reference_one_open_250_word_mask": {
+   "first_try": 0.6347,
+   "precision": 0.9321,
+   "wrong": 603
+  }
+ },
  "words": [
   "apple",
   "chocolate",
