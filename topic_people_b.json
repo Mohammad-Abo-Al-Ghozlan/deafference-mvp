@@ -1,25 +1,24 @@
 {
  "note": "Topic mask for live_demo --vocab250. T cycles the 12 PARENT topics; Y flips between an _a/_b pair. Semantic categories are SPLIT into halves so that signs the model confuses land in DIFFERENT halves -- `hear`/`listen` carried the single largest confusion in the whole set (affinity 0.56) and are one such pair. Measured on held-out clips, with the colouring designed on clips it was not scored on, the split took the set from 144 wrong words spoken to 25 and precision from 0.9770 to 0.9961. 9 of 12 topics are split; animals, clothes and food_drink are kept WHOLE because they already spoke 0-2 wrong words and a second panel to read buys nothing there. The on-screen word panel is the real navigation aid: with it visible the half you are in is readable, so the _a/_b labels do not have to carry the meaning alone.",
- "parent": "food_drink",
+ "parent": "people",
  "mass_min": 0.05,
  "mass_min_why": "MEASURED, not transferred. Out-of-topic rejection for THIS topic: refuse unless at least this much of the model's UNMASKED probability lands on these words. Chosen SAFETY-FIRST -- the threshold with the best first-try among those holding out-of-topic false speech at or under 10% for this topic, ties going to the HIGHER threshold. 0.05 for most topics and 0.10 for the three widest (actions 24, everyday 34, time_question 32): a diffuse prediction over 250 classes puts less mass on any one topic than over the medical model's 123, so the same numeric threshold is materially stricter here. The earlier provisional 0.10 across all twelve was therefore OVER-gating nine of them. Without any threshold a narrow mask MUST name one of its own words, so an out-of-topic sign is spoken as a wrong one.",
  "measured_2026_09_10_split": {
   "how": "4-fold ensemble (artifacts_250_canonical/savedmodel_fold{0..3}) over the 13,998-clip held-out test split of asl250-canon-v1/canon/none, 3 unseen signers. Gate is LEVEL 1a as live_demo applies it: 3 of 4 folds agree AND ensemble mean masked prob >= 0.60, then mass_min. Run controls: per-fold 0.7598/0.7616/0.7647/0.7651 against PROVENANCE's 0.7579/0.7608/0.7626/0.7636, ensemble 0.7813 -- above every fold, which a corpus/weights mismatch cannot produce. scorer 2026-09-10c.",
-  "in_sample": false,
-  "words": 15,
-  "first_try": 0.9824,
-  "precision": 0.9964,
-  "spoken": 836,
-  "wrong_spoken": 3,
+  "in_sample": true,
+  "words": 10,
+  "first_try": 0.9593,
+  "precision": 0.9963,
+  "spoken": 542,
+  "wrong_spoken": 2,
   "wrong_pairs": [
-   "gum -> milk",
-   "icecream -> nuts",
-   "milk -> orange"
+   "child -> aunt",
+   "cowboy -> child"
   ],
-  "answerable_clips": 851,
-  "off_topic_clips": 13147,
-  "off_topic_false_speech": 0.0596,
-  "min_per_word_test_clips": 49,
+  "answerable_clips": 565,
+  "off_topic_clips": 13433,
+  "off_topic_false_speech": 0.0507,
+  "min_per_word_test_clips": 52,
   "held_out_pooled_estimate": {
    "note": "colouring designed on clips it was NOT scored on -- quote THIS",
    "split": {
@@ -36,20 +35,15 @@
  },
  "caveat": "🔴 THESE PER-TOPIC ROWS ARE IN-SAMPLE. The halves were coloured using the same 13,998 clips they are scored on, so first_try and precision here are optimistic. The honest estimate is the HELD-OUT run, where the colouring was designed on a random half of the clips and measured on the other: pooled first-try 0.9481, precision 0.9961, 25 wrong words -- against 0.9193/0.9770/144 for the same topics unsplit. Quote those. Also: off_topic_false_speech is the fraction of signs from OUTSIDE this topic spoken as one of its words, 1.6-9.7% across the set against roughly 1% on the 123-word medical model, because at 250 classes mass_min cannot go higher without costing first-try. That is the real remaining safety gap.",
  "words": [
-  "apple",
-  "chocolate",
-  "drink",
-  "food",
-  "frenchfries",
-  "gum",
-  "hungry",
-  "icecream",
-  "milk",
-  "nuts",
-  "orange",
-  "potty",
-  "taste",
-  "thirsty",
-  "water"
+  "aunt",
+  "child",
+  "cowboy",
+  "grandpa",
+  "hello",
+  "man",
+  "minemy",
+  "mom",
+  "weus",
+  "yourself"
  ]
 }

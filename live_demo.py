@@ -137,6 +137,7 @@ WORD_ACC_PATH = None        # optional {word: test_acc} JSON (set for --vocab250
 # and the model ships `no` (0.909) while `yes` (0.714) is below the ship gate, so
 # it can render a refusal but not a consent. See docs/MEDICAL_SAFETY_GATES.md.
 TOPIC_GLOB = "topic_*.json"       # which topic masks the T key offers; narrowed by --medical
+TOPIC_EXCLUDE = None              # substring to drop from that glob; --vocab250 sets "medical"
 # A discovered topic file is only offered if it was written for THIS vocabulary. See the
 # FOREIGN-TOPIC GUARD in build_masks._of: without it, --vocab250 was offered the medical
 # topics cut down to the 42 shared words, one of them a single-word mask.
@@ -561,6 +562,26 @@ def mask_mass(probs: np.ndarray) -> float:
     return float(np.sum(probs[ALLOWED_IDX]))
 
 
+def _parent_of(name: str) -> str:
+    """'body_face_a' -> 'body_face'. A topic split for confusability keeps its parent's name
+    plus a half suffix, and navigation groups by parent so T stays 12 presses wide however
+    many halves exist. Names without a suffix are their own parent."""
+    return name[:-2] if name.endswith(("_a", "_b")) else name
+
+
+def _group_by_parent(masks) -> tuple:
+    """(ordered parent names, {parent: [mask indices]}). Order follows MASKS, so ALL-n stays
+    first and the alphabetical topic order is preserved."""
+    parents, sibs = [], {}
+    for i, (name, _m, _mm) in enumerate(masks):
+        p = _parent_of(name)
+        if p not in sibs:
+            parents.append(p)
+            sibs[p] = []
+        sibs[p].append(i)
+    return parents, sibs
+
+
 def build_masks(words, demo_path=None, demo_idx=None) -> list:
     """[(name, idx|None, mass_min|None)] — the vocabulary masks the T key cycles through.
 
@@ -605,7 +626,17 @@ def build_masks(words, demo_path=None, demo_idx=None) -> list:
     # TOPIC_GLOB is narrowed by --medical: the shipped topic_*.json are the 250-word demo's
     # topics (animals, colors, food), so under the clinical vocabulary they would offer the
     # T key a set of accidental part-masks that mean nothing clinically.
+    #
+    # TOPIC_EXCLUDE is the other direction, and the survival-ratio guard below is NOT enough
+    # on its own. Under --vocab250 the default glob also matches topic_medical_*.json, and
+    # `medical_request_b` cleared the guard on merit: 7 of its 7 words are in the 250
+    # vocabulary. So a clinical mask appeared as a 14th topic on the T key carrying a
+    # mass_min measured on the 123-class model -- and mass scales with competitor count, so
+    # that threshold is wrong here by construction. Exclude by NAME, the same way
+    # measure_topic_gates.py does with --exclude-topics.
     for p in sorted(HERE.glob(TOPIC_GLOB)):
+        if TOPIC_EXCLUDE and TOPIC_EXCLUDE in p.name:
+            continue
         if demo_path is None or p.name != demo_path.name:
             m, mm = _of(p)
             if m is not None:
@@ -1048,16 +1079,29 @@ def selftest(single: bool):
     _mms = sorted({_mm for _, _ix, _mm in _tm if _ix is not None and _mm is not None})
     print(f"[ok] topics: {len(_tm) - 1} offered, all >={MIN_TOPIC_WORDS} words; "
           f"per-topic mass_min {_mms if _mms else 'none set -> global ' + str(MASS_MIN)}")
-    # The BOOT topic must exist. Deleting a topic file without updating DEFAULT_TOPIC sent
-    # --vocab250 into an arbitrary 24-word mask with no error of any kind; a signer just found
-    # that ordinary words did not work. Cheap assertion, whole class of bug.
+    # The BOOT topic must RESOLVE -- under its own name or as the parent of a split pair.
+    # Deleting a topic file without updating DEFAULT_TOPIC sent --vocab250 into an arbitrary
+    # 24-word mask with no error of any kind; a signer just found that ordinary words did not
+    # work. Splitting a topic retires the parent file and would do the same, so the assertion
+    # has to match the resolution rule in the boot path exactly, or it green-lights a boot it
+    # does not actually test. Cheap assertion, whole class of bug.
     if len(words) > 40:
-        assert any(n == DEFAULT_TOPIC for n, _m, _x in _tm), (
-            f"DEFAULT_TOPIC '{DEFAULT_TOPIC}' has no topic file — the demo would boot into "
-            f"'{_tm[1][0]}' instead, which likely lacks the words a signer will try. "
-            f"Create topic_{DEFAULT_TOPIC}.json or change DEFAULT_TOPIC.")
-        print(f"[ok] boot topic '{DEFAULT_TOPIC}' resolves "
-              f"({len(next(m for n, m, _x in _tm if n == DEFAULT_TOPIC))} words)")
+        _boot = next((i for i, (n, _m, _x) in enumerate(_tm) if n == DEFAULT_TOPIC), None)
+        _via = "own name"
+        if _boot is None:
+            _boot = next((i for i, (n, _m, _x) in enumerate(_tm)
+                          if _parent_of(n) == DEFAULT_TOPIC), None)
+            _via = "parent of a split pair"
+        assert _boot is not None, (
+            f"DEFAULT_TOPIC '{DEFAULT_TOPIC}' resolves to no topic file, under its own name "
+            f"or as a parent — the demo would boot into '{_tm[1][0]}' instead, which likely "
+            f"lacks the words a signer will try. Create topic_{DEFAULT_TOPIC}.json (or "
+            f"topic_{DEFAULT_TOPIC}_a.json) or change DEFAULT_TOPIC.")
+        print(f"[ok] boot topic '{DEFAULT_TOPIC}' resolves via {_via} -> "
+              f"'{_tm[_boot][0]}' ({len(_tm[_boot][1])} words)")
+        _p, _s = _group_by_parent(_tm)
+        print(f"[ok] navigation: {len(_tm)} masks in {len(_p)} topics "
+              f"(T cycles {len(_p)}, Y flips {sum(1 for k in _s if len(_s[k]) > 1)} pairs)")
     _, fns = load_models(SINGLE_MODELS if single else ENSEMBLE_MODELS)
 
     rng = np.random.default_rng(0)
@@ -1151,25 +1195,41 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         # failure that made a 43-word clinical mask look broken on 2026-08-25.
         mask_i = 1
         if DEMO_WORDS_PATH is None:
+            # Accept the PARENT name too. DEFAULT_TOPIC names a topic, and a topic that gets
+            # split for confusability stops existing under its own name -- 'everyday' became
+            # everyday_a/everyday_b -- so an exact-match-only lookup silently falls back the
+            # moment a topic is split. That has now happened TWICE to this same constant: once
+            # when the coverage commit deleted topic_everyday.json outright (boot landed on
+            # topic_actions, 24 action words, and a signer trying `hello` or `water` got
+            # nothing), and once when the confusability split retired the parent. Matching the
+            # parent makes 'everyday' keep meaning 'everyday' across both.
             mask_i = next((i for i, (n, _m, _x) in enumerate(MASKS)
-                           if n == DEFAULT_TOPIC), 1)
-            # SAY SO when the named boot topic is not on disk. This fell back SILENTLY once:
-            # the commit that added the 11 coverage topics deleted topic_everyday.json as
-            # "superseded" and left DEFAULT_TOPIC = "everyday" pointing at it, so --vocab250
-            # opened on topic_actions -- 24 action words -- and a signer trying `hello` or
-            # `water` got nothing. That is precisely the failure the comment above describes,
-            # reintroduced by the commit that wrote the comment. A fallback is fine; a
-            # fallback nobody can see is not.
-            if not any(n == DEFAULT_TOPIC for n, _m, _x in MASKS):
+                           if n == DEFAULT_TOPIC), None)
+            if mask_i is None:
+                mask_i = next((i for i, (n, _m, _x) in enumerate(MASKS)
+                               if _parent_of(n) == DEFAULT_TOPIC), None)
+                if mask_i is not None:
+                    print(f"[cfg] DEFAULT_TOPIC '{DEFAULT_TOPIC}' is split; booting into "
+                          f"'{MASKS[mask_i][0]}' (Y for the other half).")
+            # SAY SO when the named boot topic is on disk under no name at all. A fallback is
+            # fine; a fallback nobody can see is not.
+            if mask_i is None:
+                mask_i = 1
                 print(f"[warn] DEFAULT_TOPIC '{DEFAULT_TOPIC}' is not among the topic files "
-                      f"on disk.\n       Falling back to '{MASKS[mask_i][0]}' "
-                      f"({len(MASKS[mask_i][1])} words) — which may not contain the words you "
-                      f"are about to sign.\n       Expected topic_{DEFAULT_TOPIC}.json in "
-                      f"{HERE}.")
+                      f"on disk, under its own name or as a parent.\n       Falling back to "
+                      f"'{MASKS[mask_i][0]}' ({len(MASKS[mask_i][1])} words) — which may not "
+                      f"contain the words you are about to sign.\n       Expected "
+                      f"topic_{DEFAULT_TOPIC}.json in {HERE}.")
     else:
         mask_i = 0
-    print(f"[cfg] {len(MASKS)} masks loaded — press T to cycle: "
-          + " / ".join(f"{n}({'all' if m is None else len(m)})" for n, m, _ in MASKS))
+    _PARENTS, _SIBS = _group_by_parent(MASKS)
+    print(f"[cfg] {len(MASKS)} masks in {len(_PARENTS)} topics — T for the next topic"
+          + (", Y for the other half" if len(MASKS) > len(_PARENTS) else "") + ":")
+    for p in _PARENTS:
+        halves = " / ".join(
+            f"{MASKS[i][0]}({'all' if MASKS[i][1] is None else len(MASKS[i][1])})"
+            for i in _SIBS[p])
+        print(f"        {halves}")
     # Every topic that covers the vocabulary carries its own measured threshold. Name the
     # ones that do NOT, because those fall back to the global value and their off-topic
     # behaviour is therefore unmeasured rather than merely different.
@@ -1197,20 +1257,47 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         globals()["MASS_MIN"] = _GLOBAL_MASS if mm is None else float(mm)
         return MASS_MIN
 
-    def cycle_topic():
-        """Next mask. The CONF gate is not rescaled — _mask_probs renormalizes, so a
-        narrower mask makes the same threshold looser (measured: 35% out-of-domain false
-        accepts at L2_CONF 0.40 on a 43-word mask vs 2% at 0.90). What IS rescaled is
-        MASS_MIN, which is the part that actually catches out-of-topic signs."""
-        _active[0] = (_active[0] + 1) % len(MASKS)
-        name, m, mm = MASKS[_active[0]]
+    def _install(i):
+        """Point the mask machinery at MASKS[i] and report it."""
+        _active[0] = i
+        name, m, mm = MASKS[i]
         globals()["ALLOWED_IDX"] = m            # what _mask_probs reads, at module scope
         _apply_mass(name, mm)
         n = len(words) if m is None else len(m)
-        print(f"[topic] {name}  ({n} words, mass_min {MASS_MIN:.2f})")
+        sibs = _SIBS[_parent_of(name)]
+        half = f"  [{sibs.index(i) + 1} of {len(sibs)} — press Y for the other]" \
+            if len(sibs) > 1 else ""
+        print(f"[topic] {name}  ({n} words, mass_min {MASS_MIN:.2f}){half}")
         if m is not None:
-            print("   " + ", ".join(words[i] for i in m))
+            print("   " + ", ".join(words[j] for j in m))
         return name, n
+
+    def cycle_topic():
+        """Next PARENT topic, landing on its first half.
+
+        T cycles parents rather than masks because the confusability split doubled the mask
+        count: 9 of the 12 topics are now _a/_b pairs, so 21 masks. Cycling all 21 would put
+        a topic up to 21 presses away, and the split exists to make the demo better, not to
+        make it harder to steer. Y moves between halves of the parent you are already in --
+        which is also the semantically right move, since the signer knows the word is a body
+        part and only needs to find which half holds it.
+
+        The CONF gate is not rescaled — _mask_probs renormalizes, so a narrower mask makes
+        the same threshold looser (measured: 35% out-of-domain false accepts at L2_CONF 0.40
+        on a 43-word mask vs 2% at 0.90). What IS rescaled is MASS_MIN, which is the part
+        that actually catches out-of-topic signs, and it is re-picked per half because
+        splitting a topic is what pushes an in-topic sign's mass outside it."""
+        here = _PARENTS.index(_parent_of(MASKS[_active[0]][0]))
+        return _install(_SIBS[_PARENTS[(here + 1) % len(_PARENTS)]][0])
+
+    def flip_half():
+        """Other half of the current parent, or say plainly that there isn't one."""
+        sibs = _SIBS[_parent_of(MASKS[_active[0]][0])]
+        if len(sibs) == 1:
+            name, m, _mm = MASKS[_active[0]]
+            print(f"[topic] {name} is not split — no other half. T for the next topic.")
+            return name, (len(words) if m is None else len(m))
+        return _install(sibs[(sibs.index(_active[0]) + 1) % len(sibs)])
 
     def active_topic():
         name, m, _mm = MASKS[_active[0]]
@@ -1993,7 +2080,8 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         aa(image, f"{last_conf:.2f}", (770 + 310, H - 18), 0.5, (200, 200, 200), 1)
         # `w` and `t` were BOTH missing from the only key hint on screen, so the two keys that
         # fix "I can't see the vocabulary" and "wrong subject" were undiscoverable.
-        aa(image, f"{fps_ema:.0f} fps  1-5=fix  Enter=say  bksp=undo  w=words  t=topic  q=quit",
+        aa(image, f"{fps_ema:.0f} fps  1-5=fix  Enter=say  bksp=undo  w=words  t=topic"
+                  + ("  y=half" if len(MASKS) > len(_PARENTS) else "") + "  q=quit",
            (W - 760, H - 20), 0.55, (170, 170, 170), 1)
 
         # ── developer dashboard (Part 13): live decision internals, for tuning ──
@@ -2013,7 +2101,8 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 (f"frames  : {dbg['frames']}", (200, 200, 200)),
                 (f"decision: {dbg['decision']}  (LEVEL {dbg['level']})", lvl_col),
                 (f"reason  : {dbg['reason']}", (170, 210, 170)),
-                (f"topic   : {active_topic()[0]}  ({active_topic()[1]} words)  [T]",
+                (f"topic   : {active_topic()[0]}  ({active_topic()[1]} words)  "
+                 f"[T{'/Y' if len(_SIBS[_parent_of(active_topic()[0])]) > 1 else ''}]",
                  (0, 200, 255)),
             ]
             for i, (txt, col) in enumerate(lines):
@@ -2021,7 +2110,7 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
 
         cv2.imshow(WINDOW, image)
         key = cv2.waitKey(1) & 0xFF
-        # Fold A-Z onto a-z. Every handler below compares against ord("q") / ord("t") / ord("w")
+        # Fold A-Z onto a-z. Every handler below compares against ord("q") / ord("t") / ord("y") / ord("w")
         # etc., so with CAPS LOCK ON — or Shift held — not one of them fires: T silently does
         # nothing, W does nothing, and even q stops quitting, so the only way out is Ctrl+C in
         # the terminal. Reported 2026-08-27 as "T didn't change the section"; the session had
@@ -2049,6 +2138,10 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
                 state["candidates"] = []; state["cand_committed"] = False
         if key == ord("t"):
             tname, tn = cycle_topic()
+            now_line = f"topic: {tname} ({tn} words)"
+            state["candidates"] = []                     # stale: scored under the old mask
+        if key == ord("y"):
+            tname, tn = flip_half()
             now_line = f"topic: {tname} ({tn} words)"
             state["candidates"] = []                     # stale: scored under the old mask
         if key == ord("s"):
@@ -2288,6 +2381,11 @@ if __name__ == "__main__":
         # looser one. Out-of-topic false speech still runs 3.7-9.6% against roughly 1% on
         # medical -- at 250 classes mass_min cannot go higher without costing first-try.
         MASS_MIN  = 0.10
+        # Keep the clinical topics off the T key here. The survival-ratio guard is generic
+        # and `medical_request_b` passes it honestly (7 of 7 words are in this vocabulary),
+        # so without this the 250-word demo offers a clinical mask whose mass_min was
+        # measured against 123 competitors, not 250.
+        TOPIC_EXCLUDE = "medical"
         # --window's burst floor must move with the model's confidence scale, or the
         # segmenter silently stops working. WINDOW_PEAK is the masked-prob a window needs
         # to JOIN an agreement run, and it was set at 0.50 against medical's L2_CONF 0.70
