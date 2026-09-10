@@ -183,8 +183,14 @@ with zipfile.ZipFile(OUT) as z:
 PY
 ```
 
-Expect **18.6 MB, 35 entries, 11 topics, 4 savedmodels.** Then Kaggle → Datasets → New Dataset
+Expect **~18.6 MB, 36 entries, 12 topics, 4 savedmodels.** Then Kaggle → Datasets → New Dataset
 → drag that **one zip** → title **`deafference-250-topic-gates-code`** → **Private** → Create.
+
+> 🔴 **Rebuild and re-upload the zip whenever the scorer or a topic file changes** — Kaggle →
+> that dataset → **New Version**. The 2026-09-10 run used a copy from before the corpus guard and
+> before `topic_everyday.json` existed, so the guard that would have stopped it never ran and the
+> set was measured 11 topics wide. The scorer prints its own build stamp; check it against
+> `git log -1 --format=%h training/measure_topic_gates.py`.
 Kaggle expands the archive on upload, so `artifacts_250_canonical/savedmodel_fold0/` survives as
 a directory.
 
@@ -195,7 +201,30 @@ a directory.
 ### Cell 1 — find everything, never hand-write a path
 
 ```python
-import glob, os, json
+import glob, os, json, random
+import numpy as np
+
+def fingerprint(root, n_words=30, per_word=4):
+    """left_dead ~1.00 = CANONICAL | ~0.56 = LEGACY. The L block (rows 33:54) is empty in a
+    canonical corpus because the dominant hand is always moved to 54-74. Defined here too,
+    so this cell stands alone -- the run that scored the wrong corpus used a condensed
+    version of this cell that had dropped it."""
+    fs = sorted(glob.glob(os.path.join(root, "by_word", "*", "sequences.npz")))
+    if not fs:
+        return None
+    random.seed(0); random.shuffle(fs)
+    dead = []
+    for f in fs[:n_words]:
+        try:
+            z = np.load(f, allow_pickle=False)
+        except Exception:
+            continue
+        for k in list(z.files)[:per_word]:
+            a = z[k]
+            if a.ndim == 3 and a.shape[1] >= 75:
+                dead.append(float(np.isnan(a[:, 33:54, 0]).all(axis=1).mean()))
+    return (len(fs), float(np.mean(dead)) if dead else float("nan"))
+
 # Print THREE levels. Under Kaggle's namespaced mount the dataset slug is the third
 # component (/kaggle/input/datasets/<user>/<slug>/), so a two-level listing stops at the
 # username and never shows you what is actually attached.
@@ -215,9 +244,17 @@ MODELS = CANON or ALLMOD
 VOCAB  = glob.glob("/kaggle/input/**/vocab_250.json", recursive=True)
 TOPICS = [p for p in glob.glob("/kaggle/input/**/topic_*.json", recursive=True)
           if "medical" not in os.path.basename(p)]
-CORPUS = [os.path.dirname(p) for p in
-          glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
-          if os.path.isdir(os.path.join(os.path.dirname(p), "by_word"))]
+ALLCORP = [os.path.dirname(p) for p in
+           glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
+           if os.path.isdir(os.path.join(os.path.dirname(p), "by_word"))]
+# 🔴 CORPUS MUST NOT BE GLOB-ORDERED. The 2026-09-10 run used CORPUS[0] and got
+# `asl250-mask-ab-v1/data` -- the LEGACY corpus -- under CANONICAL weights, because that path
+# sorts first. It returned 0.7471 and a full, plausible-looking topic table. Fingerprint, keep
+# only the extraction the weights were trained on, and reject the dead `ffill` arm by name.
+CORPUS = [d for d in ALLCORP
+          if (fingerprint(d) or (0, 0))[1] > 0.90        # CANONICAL: L-block dead ~1.00
+          and "ffill" not in d                           # the gap-filled arm, measured dead
+          and len(glob.glob(d + "/by_word/*")) >= 250]    # the full 250, not the medical set
 MAN    = glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
 RAW    = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/train.csv", recursive=True)
           if os.path.isdir(os.path.join(os.path.dirname(p), "train_landmark_files"))]
@@ -231,12 +268,24 @@ if len(ALLMOD) > 4:
     print(f"        NOTE {len(ALLMOD)} fold dirs attached; using the {len(MODELS)} canonical "
           f"ones. Do NOT average across corpora.")
 print("vocab   =", VOCAB or "*** missing ***")
-print("topics  =", len(TOPICS), "(expect 11)")
+print("topics  =", len(TOPICS), "(expect 12)")
+for d in ALLCORP:
+    fp = fingerprint(d)
+    n, dead = fp if fp else (0, float("nan"))
+    tag = "CANONICAL" if dead > 0.90 else ("LEGACY" if dead < 0.75 else "UNCLEAR")
+    print(f"  {'USE ->' if d in CORPUS else '      '} {d}\n"
+          f"           {n} word dirs, L-block dead {dead:.3f}  -> {tag}")
 print("corpus  =", CORPUS or "none -> PATH B, extract first")
 print("manifest=", MAN or "*** attach asl250-mask-ab-v1 ***")
 print("raw     =", RAW or "none (fine on PATH A)")
-assert CODE and len(MODELS) == 4 and VOCAB and len(TOPICS) == 11
+assert CODE and len(MODELS) == 4 and VOCAB and len(TOPICS) == 12
+assert len(CORPUS) <= 1, f"more than one canonical 250 corpus survived: {CORPUS}"
 ```
+
+`topics = 12`, not 11. `topic_everyday.json` was restored in `0f41fd2` — it is `--vocab250`'s boot
+topic, and a stale upload that omits it both under-measures the set and leaves the demo booting
+into whatever mask happens to be at index 1. If you see 11, **your code dataset is out of date**:
+rebuild the zip and push a new version before spending GPU.
 
 ### Cell 2 — stage the code, and prove the scorer works before spending GPU
 

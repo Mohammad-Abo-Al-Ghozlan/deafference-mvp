@@ -55,6 +55,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 
+# Bump on any change that alters what a run MEANS. This file is uploaded to Kaggle as a dataset
+# and diverges silently: the 2026-09-10 run executed a copy from before the corpus guard, so the
+# check built to catch exactly that run's mistake was not in the copy that ran. Printed on every
+# invocation so a stale upload is visible in the first line of the log rather than never.
+SCORER_VERSION = "2026-09-10c"
+
 # The gate live_demo actually applies. LEVEL 1a: k folds must independently agree AND the
 # ensemble mean must clear CONF. Keep these in sync with live_demo.AGREE_K / AGREE_CONF.
 AGREE_K = 3
@@ -196,6 +202,28 @@ def load_split(data_dir, vocab, split):
     return man, arrays
 
 
+def corpus_kind(arrays, n=200):
+    """Which extraction produced this corpus: L-block dead ~1.00 CANONICAL, ~0.56 LEGACY.
+
+    Rows 33:54 are the left-hand block. A canonical extraction always moves the DOMINANT
+    hand to 54:74, so the L block is left empty; a legacy one keeps the signer's actual
+    left hand there. Same fingerprint the runbook's inventory cell prints, computed here
+    on the clips already in memory.
+
+    This exists because the 2026-09-10 run was wasted without noticing: the inventory cell
+    built CORPUS by glob and `asl250-mask-ab-v1/data` (LEGACY) sorted first, so canonical
+    weights were scored against legacy features. It returned 0.7471 -- below every recorded
+    per-fold number, but close enough to read as a result rather than a mistake. A name
+    check would not have caught it either; only the features can say.
+    """
+    dead = [float(np.isnan(a[:, 33:54, 0]).all(axis=1).mean())
+            for a in list(arrays.values())[:n] if a.ndim == 3 and a.shape[1] >= 75]
+    if not dead:
+        return "UNKNOWN", float("nan")
+    d = float(np.mean(dead))
+    return ("CANONICAL" if d > 0.90 else "LEGACY" if d < 0.75 else "UNCLEAR"), d
+
+
 def compute_probs(data_dir, models, vocab_path, split):
     """Reuse train.py's pipeline through eval_savedmodel_250 so inputs are byte-identical
     to training. Imported lazily: the --probs and --selftest paths need no TF at all."""
@@ -224,6 +252,24 @@ def compute_probs(data_dir, models, vocab_path, split):
     parts = sorted(str(p) for p in ev["participant_id"].unique())
     print(f"[cfg] split='{split}': {len(ev)} clips, {len(parts)} signers, "
           f"{ev['word'].nunique()} of {len(words)} classes present")
+
+    # Do the weights and the features come from the SAME extraction? Nothing downstream can
+    # tell, and a mismatch does not error -- it silently returns a lower number for every
+    # topic. PROVENANCE.json is authoritative about what the weights were trained on.
+    prov_p = Path(models) / "PROVENANCE.json"
+    prov = json.loads(prov_p.read_text(encoding="utf-8")) if prov_p.exists() else {}
+    kind, dead = corpus_kind(arrays)
+    print(f"[cfg] corpus  {data_dir}\n       L-block dead {dead:.3f} -> {kind}")
+    if "canonical" in (prov.get("corpus", "") + " " + str(models)).lower():
+        if kind != "CANONICAL":
+            raise SystemExit(
+                f"[err] STOP -- the weights under {Path(models).name} are CANONICAL "
+                f"(PROVENANCE corpus={prov.get('corpus', 'unstated')!r}) but --data-dir "
+                f"{data_dir} fingerprints {kind} (L-block dead {dead:.3f}).\n"
+                f"       Point --data-dir at the canon/none corpus. Scoring one extraction's "
+                f"weights on another's features does not fail loudly; it just makes every "
+                f"number below wrong.")
+        print(f"       [ok] matches PROVENANCE corpus={prov.get('corpus', '?')!r}")
     if ev["word"].nunique() < len(words):
         print(f"[warn] {len(words) - ev['word'].nunique()} classes have NO test clip. A "
               f"topic containing one gets a rate computed over nothing — the same thin-class "
@@ -246,8 +292,14 @@ def compute_probs(data_dir, models, vocab_path, split):
         print(f"       {d.name:24s} acc {float((p.argmax(1) == y).mean()):.4f}")
     acc = float((P4.mean(0).argmax(1) == y).mean())
     print(f"[cfg] {len(md)} folds, ensemble acc {acc:.4f} on split '{split}'")
-    print("       control: artifacts_250_canonical PROVENANCE per_fold_30fps = "
-          "0.7579 / 0.7608 / 0.7626 / 0.7636")
+    ref = prov.get("per_fold_30fps")
+    if ref:
+        print("       control: PROVENANCE per_fold_30fps = "
+              + " / ".join(f"{r:.4f}" for r in ref))
+        if acc < min(ref):
+            print(f"[warn] the ENSEMBLE ({acc:.4f}) scores below the WORST single fold "
+                  f"({min(ref):.4f}). Averaging four folds should beat any one of them, so "
+                  f"treat every number below as suspect until that is explained.")
     return P4, y, words, acc
 
 
@@ -345,6 +397,7 @@ def main():
     ap.add_argument("--out", default=None, help="write the measurement json here")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
+    print(f"[cfg] scorer {SCORER_VERSION}")
 
     if a.selftest:
         selftest()
