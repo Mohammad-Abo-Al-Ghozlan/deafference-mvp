@@ -47,17 +47,38 @@ starting point, not a measurement. Every topic file says so in `mass_min_provisi
 
 ## The run
 
-**Accelerator: GPU** (inference over ~4k clips × 4 folds). **Internet: off.** Expect **15–25
-min**, which is inside a single interactive session — no Save & Run All needed, because nothing
-needs to be persisted except the JSON you paste back.
+> ### ⚠️ CORRECTED 2026-09-10 — the first draft of this section was wrong three ways
+>
+> It told you to attach `extract_landmarks.py`, which **only exists under `training/medical/`
+> and is the Sem-Lex extractor** — nothing to do with GISLR. The GISLR → 75-point code is
+> **`training/extract_canonical.py`**.
+>
+> It also had you invent a fresh signer-disjoint split in cell 2. **Do not.** The 250 model's
+> own split already exists — `split_manifest.parquet`, 94,198 rows, 250 words, in the Kaggle
+> dataset `asl250-mask-ab-v1` (see `KAGGLE_CANONICAL_REBUILD.md` cell 3, which asserts both
+> figures). `word_acc_250.json` came from that split, so reusing it is the only way the new
+> numbers are comparable to the per-word accuracy already in the topic files. A different
+> split silently changes what "held-out" means.
+>
+> And it claimed 15–25 min. **That is only true if an extracted corpus already exists.**
+> Extraction from raw parquet is ~1 h.
 
-### Inputs to attach
+**Accelerator: GPU.** **Internet: off.** Two paths — check for path A first, it saves an hour.
+
+### Path A (~20 min) — an extracted corpus dataset already exists
+
+Look in **Add Input → Your Datasets / notebook outputs** for anything holding `by_word/`
+alongside `split_manifest.parquet` — the output of the canonical rebuild. If it's there,
+attach it and skip straight to "Cell 2".
+
+### Path B (~1 h 20) — extract first
 
 | kind | what | why |
 |---|---|---|
-| **Competition** | **Google - Isolated Sign Language Recognition** (`asl-signs`) | the held-out clips. **This is GISLR, not the fingerspelling competition** — accept its rules once. |
-| **Dataset** | the notebook output holding `artifacts_250/savedmodel_fold{0..3}` | the four folds |
-| **Dataset** | a new private dataset with `vocab_250.json` + the 11 `topic_*.json` files | the masks to score |
+| **Competition** | **Google - Isolated Sign Language Recognition** (`asl-signs`) | the raw landmark parquet. **This is GISLR, not the fingerspelling competition** — accept its rules once. |
+| **Dataset** | `asl250-mask-ab-v1` (holds `data/split_manifest.parquet`) | 🔴 **the original split.** Do not generate a new one. |
+| **Dataset** | the output holding `artifacts_250/savedmodel_fold{0..3}` | the four folds |
+| **Dataset** | a new private dataset: `vocab_250.json`, the 11 `topic_*.json` files, `training/measure_topic_gates.py`, `training/eval_savedmodel_250.py`, `training/train.py`, `training/extract_canonical.py`, `sign_landmarks.py` | the scorer and the masks |
 
 > 🔴 Drag **the individual files**, never the repo folder — it contains `.env`. Visibility
 > **Private**: the competition licence forbids redistribution.
@@ -71,123 +92,86 @@ for a in sorted(glob.glob("/kaggle/input/*")):
     for b in sorted(glob.glob(a + "/*"))[:14]:
         print("   ", os.path.basename(b))
 
+CODE   = glob.glob("/kaggle/input/**/measure_topic_gates.py", recursive=True)
 MODELS = sorted(glob.glob("/kaggle/input/**/savedmodel_fold*", recursive=True))
 VOCAB  = glob.glob("/kaggle/input/**/vocab_250.json", recursive=True)
 TOPICS = [p for p in glob.glob("/kaggle/input/**/topic_*.json", recursive=True)
           if "medical" not in os.path.basename(p)]
-TRAIN  = glob.glob("/kaggle/input/**/train.csv", recursive=True)
+CORPUS = [os.path.dirname(p) for p in
+          glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
+          if os.path.isdir(os.path.join(os.path.dirname(p), "by_word"))]
+MAN    = glob.glob("/kaggle/input/**/split_manifest.parquet", recursive=True)
+RAW    = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/train.csv", recursive=True)
+          if os.path.isdir(os.path.join(os.path.dirname(p), "train_landmark_files"))]
 
-print("\nmodels =", len(MODELS), "(expect 4)")
-print("vocab  =", VOCAB or "*** attach the code dataset ***")
-print("topics =", len(TOPICS), "(expect 11)")
-print("train  =", TRAIN or "*** competition not attached: accept the rules FIRST ***")
-assert len(MODELS) == 4 and VOCAB and TOPICS and TRAIN, "fix the inputs before continuing"
+print()
+print("scorer  =", CODE or "*** attach the code dataset ***")
+print("models  =", len(MODELS), "(expect 4)")
+print("vocab   =", VOCAB or "*** missing ***")
+print("topics  =", len(TOPICS), "(expect 11)")
+print("corpus  =", CORPUS or "none -> PATH B, extract first")
+print("manifest=", MAN or "*** attach asl250-mask-ab-v1 ***")
+print("raw     =", RAW or "none (fine on PATH A)")
+assert CODE and len(MODELS) == 4 and VOCAB and len(TOPICS) == 11
 ```
 
-### Cell 2 — the split must be SIGNER-DISJOINT, and prove it
+### Cell 2 — stage the code, and prove the scorer works before spending GPU
 
-This is the cell that decides whether the whole run means anything. `word_acc_250.json` came
-from a signer-disjoint split; if this one is not, the numbers are inflated and not comparable.
+`--selftest` needs no data and no model. It asserts the thing the whole run is about: that a
+2-word mask renormalises an out-of-topic clip to confidence **1.00**, so confidence alone
+cannot detect it and `mass_min` is the only signal that can. If this fails, nothing below
+means anything.
 
 ```python
-import pandas as pd, numpy as np
-BASE = os.path.dirname(TRAIN[0])
-df = pd.read_csv(TRAIN[0])
-print(df.columns.tolist(), len(df), "rows,", df.participant_id.nunique(), "signers")
-
-# hold out whole signers, the largest few, deterministically
-sig = sorted(df.participant_id.unique())
-rng = np.random.default_rng(42)
-HOLD = set(rng.permutation(sig)[:max(3, len(sig)//5)].tolist())
-te = df[df.participant_id.isin(HOLD)]
-tr = df[~df.participant_id.isin(HOLD)]
-assert not (set(te.participant_id) & set(tr.participant_id)), "SIGNER LEAK — stop"
-print(f"held-out {len(HOLD)} signers, {len(te)} clips; NO signer appears in both")
-print("classes present in test:", te.sign.nunique(), "of 250")
+import shutil
+NEED = ["measure_topic_gates.py", "eval_savedmodel_250.py", "train.py",
+        "extract_canonical.py", "sign_landmarks.py"]
+for nm in NEED:
+    hits = glob.glob(f"/kaggle/input/**/{nm}", recursive=True)
+    assert hits, f"*** {nm} not in any attached dataset — add it and re-run ***"
+    shutil.copy(hits[0], nm)
+    print("staged", nm)
+shutil.copy(VOCAB[0], "vocab_250.json")
+for t in TOPICS:
+    shutil.copy(t, os.path.basename(t))
+print(f"staged vocab + {len(TOPICS)} topic files")
 ```
-
-⚠️ **If `classes present in test` is well under 250, say so when you paste the output.** A topic
-containing a class with no test clips gets a first-try rate computed over nothing, which is the
-same thin-class trap that made an earlier medical selection pick `choke` — a word with **one**
-test clip and a 1.000 score.
-
-### Cell 3 — landmarks → the model's input, using the shipped code path
 
 ```python
-# 250-word extraction is the repo's own; reuse it rather than re-deriving the 75-point layout.
-# If extract_landmarks.py is in the code dataset, prefer it:
-EX = glob.glob("/kaggle/input/**/extract_landmarks.py", recursive=True)
-print("extractor:", EX or "NOT FOUND — attach it, do not reimplement the point layout")
-assert EX, "the 75-point slot order is not something to guess; attach extract_landmarks.py"
-!cp {EX[0]} .
+!python measure_topic_gates.py --selftest
 ```
 
-### Cell 4 — score every topic
+Must end **`ALL CHECKS PASSED`**.
+
+### Cell 3 — PATH B ONLY: extract (~1 h). Skip on path A.
+
+Reuses the ORIGINAL manifest, so the test signers are the same ones `word_acc_250.json` was
+measured on.
 
 ```python
-import tensorflow as tf, numpy as np, json
+import pandas as pd
+_m = pd.read_parquet(MAN[0])
+assert _m["word"].nunique() == 250, f"{_m['word'].nunique()} words, expected 250"
+assert len(_m) == 94198, f"{len(_m)} rows, expected 94198 — that is a DIFFERENT split"
+print("splits:", dict(_m["split"].value_counts()))
 
-words = json.load(open(VOCAB[0]))
-words = words["words"] if isinstance(words, dict) else words
-
-def masked_probs(raw, idx):
-    m = raw[:, idx]
-    return m / np.clip(m.sum(1, keepdims=True), 1e-12, None), raw[:, idx].sum(1)
-
-fns = []
-for d in MODELS:
-    o = tf.saved_model.load(d); s = o.signatures
-    fns.append((o, s["serving_default" if "serving_default" in s else list(s)[0]]))
-
-def per_fold(X):                     # (4, N, 250)
-    out = []
-    for _keep, fn in fns:
-        acc = []
-        for i in range(0, len(X), 128):
-            b = tf.constant(X[i:i+128])
-            try:    r = fn(landmarks=b)
-            except TypeError: r = fn(b)
-            lg = r["output_0"] if "output_0" in r else list(r.values())[0]
-            acc.append(tf.nn.softmax(lg, axis=1).numpy())
-        out.append(np.concatenate(acc, 0))
-    return np.stack(out, 0)
-
-P4 = per_fold(X_test)               # X_test / y_test from cell 3
-rows = {}
-for tp in sorted(TOPICS):
-    name = os.path.basename(tp)[len("topic_"):-len(".json")]
-    tw = json.load(open(tp))["words"]
-    idx = np.array(sorted(words.index(w) for w in tw if w in words))
-    inn = np.isin(y_test, idx)
-    best = None
-    for mass_min in (0.0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40):
-        def gate(rows_):
-            m4 = P4[:, rows_, :][:, :, idx]
-            mass = P4[:, rows_, :].mean(0)[:, idx].sum(1)
-            m4 = m4 / np.clip(m4.sum(-1, keepdims=True), 1e-12, None)
-            Pm = m4.mean(0); t1, cf = Pm.argmax(1), Pm.max(1)
-            ag = (m4.argmax(2) == t1[None, :]).sum(0)
-            return t1, (cf >= 0.60) & (ag >= 3) & (mass >= mass_min)
-        t1, sp = gate(np.where(inn)[0])
-        ok = t1 == np.searchsorted(idx, y_test[inn])
-        _t, spo = gate(np.where(~inn)[0])
-        r = dict(mass_min=mass_min,
-                 first_try=round(float(sp.mean()), 4),
-                 precision=round(float(ok[sp].mean()), 4) if sp.any() else None,
-                 wrong=int((sp & ~ok).sum()),
-                 off_topic_false=round(float(spo.mean()), 4))
-        # SAFETY FIRST, and break ties toward the HIGHER threshold — the medical build
-        # picked 0.00 over an equally-scoring 0.10 by tie-breaking on grid order, giving
-        # that topic no out-of-topic gate at all.
-        if r["off_topic_false"] <= 0.10:
-            if best is None or (r["first_try"], mass_min) > (best["first_try"], best["mass_min"]):
-                best = r
-    rows[name] = best or r
-    print(f"{name:<16s} n={len(idx):3d} {json.dumps(best)}")
-
-json.dump(rows, open("/kaggle/working/topic_250_measured.json", "w"), indent=1)
-print("\nPASTE topic_250_measured.json BACK")
+!rm -rf /kaggle/working/canon
+!python extract_canonical.py --raw {RAW[0]} --manifest {MAN[0]}     --out /kaggle/working/canon --variants none --dominance geometric     --unaligned moving --workers 8
+CORPUS = ["/kaggle/working/canon"]
 ```
+
+Watch the report card: **`aligned` should land near 55%.** Far from it means the geometry is
+not resolving and the corpus should not be scored.
+
+### Cell 4 — the measurement (~15 min)
+
+```python
+!python measure_topic_gates.py     --data-dir {CORPUS[0]} --models $(dirname {MODELS[0]})     --vocab vocab_250.json --topics . --exclude-topics medical     --split test     --save-probs /kaggle/working/probs_250_test.npz     --out /kaggle/working/topic_250_measured.json
+```
+
+It prints a row per topic, a POOLED line, and the comparison that decides whether topics are
+worth anything: **one open 250-word mask vs the topic set.** `--save-probs` means re-scoring
+with a different threshold grid later costs seconds instead of GPU minutes — keep that file.
 
 ### What to send back
 
