@@ -65,11 +65,73 @@ starting point, not a measurement. Every topic file says so in `mass_min_provisi
 
 **Accelerator: GPU.** **Internet: off.** Two paths — check for path A first, it saves an hour.
 
-### Path A (~20 min) — an extracted corpus dataset already exists
+### 🔴 WHICH WEIGHTS — read this before attaching anything
 
-Look in **Add Input → Your Datasets / notebook outputs** for anything holding `by_word/`
-alongside `split_manifest.parquet` — the output of the canonical rebuild. If it's there,
-attach it and skip straight to "Cell 2".
+There are **two** 250-word ensembles and the repo default is the weaker one:
+
+| | corpus | 30 fps | **7 fps (what the demo runs at)** | needs |
+|---|---|---|---|---|
+| `artifacts_250/` (the `--vocab250` default) | legacy | 0.7755 | **never measured** | must run WITHOUT `--canonical` |
+| **`artifacts_250_canonical/`** | canonical + `--decimate 0.5` | **0.7787** | **0.7628** | **REQUIRES `--canonical`** |
+
+`artifacts_250_canonical/PROVENANCE.json`, 2026-08-27: *"supersedes: legacy 4-fold ensemble
+0.7755 (30 fps only)"*. All four folds beat their legacy counterparts and the paired fold-0 A/B
+measured **+0.0218 at 7 fps**, cutting the frame-rate penalty from 5.13 to 2.64 points.
+
+**Score the canonical ensemble.** Which fixes the corpus question too: those weights *never saw
+a hand in the L block*, so they need the **canonical** corpus — exactly what
+`extract_canonical.py --dominance geometric` produces. Mixing the two silently destroys
+left-dominant signers (17.8% of this corpus), which is why `live_demo` warns on the pairing.
+
+> ⚠️ `word_acc_250.json` is **fold-0 of the LEGACY model** (per-word mean 0.7571 against
+> fold-0's 0.7576). So the `mean_test_acc` in every topic file, and the ≥0.60 floor that chose
+> which 206 words to include, both describe the legacy model. The canonical one is better, so a
+> word above the floor there is very likely still above it — but the floor was not re-derived.
+
+### Path A (~20 min) — an extracted CANONICAL corpus already exists
+
+**Do not hunt through your datasets by name.** Attach every plausible candidate at once and let
+this cell identify them by content. Names are unreliable here — `asl250-canon-v1-REFUTED` was
+named for a verdict that `SESSION_HANDOFF.md` later overturned (*"Canonicalization was never
+refuted... that comparison was blind by construction"*), so its name is actively misleading.
+
+```python
+import glob, os, numpy as np, random
+
+def fingerprint(root, n_words=30, per_word=4):
+    """left_dead ~1.00 = CANONICAL | ~0.56 = LEGACY. The L block is empty in a canonical
+    corpus because the dominant hand is always moved to 54-74."""
+    fs = sorted(glob.glob(os.path.join(root, "by_word", "*", "sequences.npz")))
+    if not fs:
+        return None
+    random.seed(0); random.shuffle(fs)
+    dead = []
+    for f in fs[:n_words]:
+        try:
+            z = np.load(f, allow_pickle=False)
+        except Exception:
+            continue
+        for k in list(z.files)[:per_word]:
+            a = z[k]
+            if a.ndim == 3 and a.shape[1] >= 75:
+                dead.append(float(np.isnan(a[:, 33:54, 0]).all(axis=1).mean()))
+    return (len(fs), float(np.mean(dead)) if dead else float("nan"))
+
+for p in sorted(glob.glob("/kaggle/input/*")):
+    fp = fingerprint(p)
+    if fp is None:
+        sub = [d for d in glob.glob(p + "/*") if os.path.isdir(d)]
+        fp = next((f for f in (fingerprint(d) for d in sub) if f), None)
+    if fp:
+        n, dead = fp
+        kind = "CANONICAL" if dead > 0.90 else ("LEGACY" if dead < 0.75 else "UNCLEAR")
+        print(f"  {os.path.basename(p):<34s} {n:4d} word dirs  L-block dead {dead:.3f}  {kind}")
+    else:
+        print(f"  {os.path.basename(p):<34s} no by_word/")
+```
+
+**Take the one printing `CANONICAL` with ~250 word dirs** and skip Cell 3. If nothing prints
+`CANONICAL`, you are on Path B.
 
 ### Path B (~1 h 20) — extract first
 
@@ -77,11 +139,45 @@ attach it and skip straight to "Cell 2".
 |---|---|---|
 | **Competition** | **Google - Isolated Sign Language Recognition** (`asl-signs`) | the raw landmark parquet. **This is GISLR, not the fingerspelling competition** — accept its rules once. |
 | **Dataset** | `asl250-mask-ab-v1` (holds `data/split_manifest.parquet`) | 🔴 **the original split.** Do not generate a new one. |
-| **Dataset** | the output holding `artifacts_250/savedmodel_fold{0..3}` | the four folds |
-| **Dataset** | a new private dataset: `vocab_250.json`, the 11 `topic_*.json` files, `training/measure_topic_gates.py`, `training/eval_savedmodel_250.py`, `training/train.py`, `training/extract_canonical.py`, `sign_landmarks.py` | the scorer and the masks |
+| **Dataset** | **one new private dataset from `kaggle_250_topic_gates.zip`** | 🔴 weights + scorer + masks in a single upload. Build it with the snippet below; Kaggle unzips it for you. |
 
-> 🔴 Drag **the individual files**, never the repo folder — it contains `.env`. Visibility
-> **Private**: the competition licence forbids redistribution.
+**Build the upload, locally, in the repo root:**
+
+```bash
+python - <<'PY'
+import zipfile, glob, os
+OUT = "kaggle_250_topic_gates.zip"
+members  = [(f, f) for f in sorted(glob.glob("artifacts_250_canonical/**/*", recursive=True))
+            if os.path.isfile(f)]
+members += [(f, os.path.basename(f)) for f in
+            ["training/measure_topic_gates.py", "training/eval_savedmodel_250.py",
+             "training/train.py", "training/extract_canonical.py",
+             "sign_landmarks.py", "vocab_250.json"]]
+members += [(f, os.path.basename(f)) for f in sorted(glob.glob("topic_*.json"))
+            if "medical" not in f]
+with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
+    for src, arc in members:
+        z.write(src, arc.replace("\\", "/"))     # the ZIP spec requires forward slashes;
+                                                 # PowerShell's Compress-Archive writes
+                                                 # BACKSLASHES, which Linux then treats as
+                                                 # part of the filename. Do not use it here.
+with zipfile.ZipFile(OUT) as z:
+    ns = z.namelist()
+    assert not any("\\" in n for n in ns) and not any(".env" in n for n in ns)
+    print(f"{OUT}: {os.path.getsize(OUT)/1e6:.1f} MB, {len(ns)} entries, "
+          f"{sum(n.startswith('topic_') for n in ns)} topics, "
+          f"{sum('saved_model.pb' in n for n in ns)} savedmodels")
+PY
+```
+
+Expect **18.6 MB, 35 entries, 11 topics, 4 savedmodels.** Then Kaggle → Datasets → New Dataset
+→ drag that **one zip** → title **`deafference-250-topic-gates-code`** → **Private** → Create.
+Kaggle expands the archive on upload, so `artifacts_250_canonical/savedmodel_fold0/` survives as
+a directory.
+
+> 🔴 **Never drag the repo folder** — it contains `.env`. The zip above is built from an explicit
+> file list for that reason, and asserts no `.env` entry before you upload it. **Private** is
+> also required: the competition licence forbids redistribution.
 
 ### Cell 1 — find everything, never hand-write a path
 
@@ -93,7 +189,12 @@ for a in sorted(glob.glob("/kaggle/input/*")):
         print("   ", os.path.basename(b))
 
 CODE   = glob.glob("/kaggle/input/**/measure_topic_gates.py", recursive=True)
-MODELS = sorted(glob.glob("/kaggle/input/**/savedmodel_fold*", recursive=True))
+ALLMOD = sorted(glob.glob("/kaggle/input/**/savedmodel_fold*", recursive=True))
+# Prefer the CANONICAL folds and never mix the two ensembles. If asl250-weights is also
+# attached, ALLMOD holds 8 dirs from two different corpora; averaging across them would be
+# meaningless and nothing would raise. Selecting by path keeps that impossible.
+CANON  = [d for d in ALLMOD if "canonical" in d.lower()]
+MODELS = CANON or ALLMOD
 VOCAB  = glob.glob("/kaggle/input/**/vocab_250.json", recursive=True)
 TOPICS = [p for p in glob.glob("/kaggle/input/**/topic_*.json", recursive=True)
           if "medical" not in os.path.basename(p)]
@@ -106,7 +207,12 @@ RAW    = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/train.csv", re
 
 print()
 print("scorer  =", CODE or "*** attach the code dataset ***")
-print("models  =", len(MODELS), "(expect 4)")
+print("models  =", len(MODELS), "(expect 4)",
+      "CANONICAL" if CANON else "*** LEGACY — these have no 7fps number; "
+                                "attach artifacts_250_canonical ***")
+if len(ALLMOD) > 4:
+    print(f"        NOTE {len(ALLMOD)} fold dirs attached; using the {len(MODELS)} canonical "
+          f"ones. Do NOT average across corpora.")
 print("vocab   =", VOCAB or "*** missing ***")
 print("topics  =", len(TOPICS), "(expect 11)")
 print("corpus  =", CORPUS or "none -> PATH B, extract first")
