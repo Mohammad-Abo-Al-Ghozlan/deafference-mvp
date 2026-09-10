@@ -266,7 +266,34 @@ print(f"staged vocab + {len(TOPICS)} topic files")
 
 Must end **`ALL CHECKS PASSED`**.
 
-### Cell 3 — PATH B ONLY: extract (~1 h). Skip on path A.
+### ⏱️ Timing, and the Save & Run All trap
+
+| | interactive | **Save & Run All** |
+|---|---|---|
+| Path A | ~10-20 min | same — **but you must DELETE cells 3a/3b/3c, not skip them** |
+| Path B | ~1 h 20 | ~1 h 20 |
+
+🔴 **"Skip" only exists interactively.** A commit run executes every cell top to bottom, so
+leaving the Path B cells in place on Path A spends an hour re-extracting a corpus you already
+have — and cell 3c then *overwrites* `CORPUS` with the fresh one. Delete them, or replace the
+three with the one-line pin in "Path A — the Cell 3 replacement" below.
+
+Where Path A's 10-20 min goes: ~2 min of session startup and TF import, seconds for cells 1-2,
+and the rest in cell 4b — dominated by reading the corpus off the input mount, then ~1 min of
+GPU for 4 folds. `--save-probs` writes the probabilities so any re-score is seconds.
+
+### Path A — the Cell 3 replacement
+
+Pin the corpus explicitly. Do not let a glob choose: three of the attached datasets fingerprint
+as CANONICAL and one of them (`canon/ffill`) is the dead gap-filled arm.
+
+```python
+CORPUS = ["/kaggle/input/datasets/mohammedsalim1/asl250-canon-v1/canon/none"]
+assert os.path.isdir(CORPUS[0] + "/by_word"), "wrong path — re-run the fingerprint cell"
+print("word dirs:", len(glob.glob(CORPUS[0] + "/by_word/*")), "(expect 250)")
+```
+
+### Cell 3 — PATH B ONLY: extract (~1 h). DELETE these on path A.
 
 Reuses the ORIGINAL manifest, so the test signers are the same ones `word_acc_250.json` was
 measured on.

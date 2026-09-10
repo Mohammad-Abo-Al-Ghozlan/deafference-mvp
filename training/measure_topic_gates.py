@@ -148,6 +148,54 @@ def load_topics(topic_dir, vocab, exclude=None):
     return out
 
 
+def load_split(data_dir, vocab, split):
+    """train.load_dataset, but ONLY the requested split's clips.
+
+    load_dataset pulls every array of every word into a float32 dict — for the 250-word
+    corpus that is all 94,198 clips at 64x75x3, i.e. **5.4 GB**, to score a test split
+    that is a small fraction of it. On a ~13 GB Kaggle box with TensorFlow already
+    resident that is both slow and close to OOM, and a commit run that dies at the end of
+    a load is a wasted session.
+
+    Returns the same (manifest, arrays) shape, so make_tf_dataset is untouched and the
+    prep stays byte-identical: it only ever indexes arrays[key] for keys in the manifest
+    it is handed, and applies fit_to_maxlen itself."""
+    import pandas as pd
+    man = pd.read_parquet(Path(data_dir) / "split_manifest.parquet")
+    man = man[man["word"].isin(vocab["word_to_index"])].reset_index(drop=True)
+    man = man[man["split"] == split].reset_index(drop=True)
+    if "is_outlier" in man.columns:
+        man = man[~man["is_outlier"]].reset_index(drop=True)   # honest eval excludes outliers
+    man["key"] = (man["word"] + "/" + man["participant_id"].astype(str) + "_"
+                  + man["sequence_id"].astype(str))
+    man["y"] = man["word"].map(vocab["word_to_index"]).astype(np.int32)
+
+    want = set(man["key"])
+    arrays, missing_words = {}, []
+    for word in sorted(man["word"].unique()):
+        p = Path(data_dir) / "by_word" / word / "sequences.npz"
+        if not p.exists():
+            missing_words.append(word)
+            continue
+        with np.load(p) as npz:
+            for k in npz.files:
+                full = f"{word}/{k}"
+                if full in want:                 # <- the whole point: skip cv/train clips
+                    arrays[full] = npz[k].astype(np.float32)
+    if missing_words:
+        print(f"[warn] no npz for {len(missing_words)} words (e.g. {missing_words[:5]}) — "
+              f"those rows are dropped")
+        man = man[~man["word"].isin(missing_words)].reset_index(drop=True)
+    gone = ~man["key"].isin(arrays)
+    if gone.any():
+        print(f"[warn] {int(gone.sum())} manifest rows have no array — dropped")
+        man = man[~gone].reset_index(drop=True)
+    mb = sum(a.nbytes for a in arrays.values()) / 2**20
+    print(f"[data] loaded {len(arrays)} clips for split '{split}' ({mb:.0f} MiB) — "
+          f"not the whole corpus")
+    return man, arrays
+
+
 def compute_probs(data_dir, models, vocab_path, split):
     """Reuse train.py's pipeline through eval_savedmodel_250 so inputs are byte-identical
     to training. Imported lazily: the --probs and --selftest paths need no TF at all."""
@@ -156,7 +204,14 @@ def compute_probs(data_dir, models, vocab_path, split):
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
     import tensorflow as tf                                    # noqa: F401
     from eval_savedmodel_250 import _serving_fn, _fold_probs
-    from train import load_dataset, make_tf_dataset
+    from train import make_tf_dataset
+    import train as _train
+    # PROVENANCE.json for artifacts_250_canonical records `--mask-resting-hand off`, and
+    # train.py's module default is "off", so the generator applies no resting mask. Assert
+    # it rather than rely on it: masking inputs a model never saw masked would degrade the
+    # score silently, and nothing else here would notice.
+    assert _train._MASK_MODE == "off", \
+        f"train._MASK_MODE is {_train._MASK_MODE!r}; these weights were trained with it off"
 
     frozen = json.loads(Path(vocab_path).read_text(encoding="utf-8"))
     words = frozen["words"] if isinstance(frozen, dict) else frozen
@@ -165,11 +220,7 @@ def compute_probs(data_dir, models, vocab_path, split):
     md = sorted(d for d in Path(models).glob("savedmodel_fold*") if d.is_dir())
     if not md:
         raise SystemExit(f"[err] no savedmodel_fold* under {models}")
-    man, arrays = load_dataset(Path(data_dir), vocab)
-    ev = man[man["split"] == split]
-    if "is_outlier" in ev.columns:
-        ev = ev[~ev["is_outlier"]]
-    ev = ev.reset_index(drop=True)
+    ev, arrays = load_split(data_dir, vocab, split)
     parts = sorted(str(p) for p in ev["participant_id"].unique())
     print(f"[cfg] split='{split}': {len(ev)} clips, {len(parts)} signers, "
           f"{ev['word'].nunique()} of {len(words)} classes present")
@@ -186,8 +237,17 @@ def compute_probs(data_dir, models, vocab_path, split):
     P4 = np.stack([np.concatenate(c, 0) for c in chunks], 0)
     y = ev["y"].to_numpy()
     assert P4.shape[1] == len(y), f"{P4.shape[1]} probs vs {len(y)} labels"
+    # PER-FOLD accuracies are the CONTROL, and they are free. artifacts_250_canonical's
+    # PROVENANCE.json records per_fold_30fps [0.7579, 0.7608, 0.7626, 0.7636]. If these land
+    # far below that, the corpus and the weights do not match — most likely a legacy corpus
+    # under canonical weights, or canon/ffill instead of canon/none — and every topic number
+    # below would be wrong in a way no assertion here could catch.
+    for d, p in zip(md, P4):
+        print(f"       {d.name:24s} acc {float((p.argmax(1) == y).mean()):.4f}")
     acc = float((P4.mean(0).argmax(1) == y).mean())
     print(f"[cfg] {len(md)} folds, ensemble acc {acc:.4f} on split '{split}'")
+    print("       control: artifacts_250_canonical PROVENANCE per_fold_30fps = "
+          "0.7579 / 0.7608 / 0.7626 / 0.7636")
     return P4, y, words, acc
 
 
