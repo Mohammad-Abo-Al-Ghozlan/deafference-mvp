@@ -1048,6 +1048,16 @@ def selftest(single: bool):
     _mms = sorted({_mm for _, _ix, _mm in _tm if _ix is not None and _mm is not None})
     print(f"[ok] topics: {len(_tm) - 1} offered, all >={MIN_TOPIC_WORDS} words; "
           f"per-topic mass_min {_mms if _mms else 'none set -> global ' + str(MASS_MIN)}")
+    # The BOOT topic must exist. Deleting a topic file without updating DEFAULT_TOPIC sent
+    # --vocab250 into an arbitrary 24-word mask with no error of any kind; a signer just found
+    # that ordinary words did not work. Cheap assertion, whole class of bug.
+    if len(words) > 40:
+        assert any(n == DEFAULT_TOPIC for n, _m, _x in _tm), (
+            f"DEFAULT_TOPIC '{DEFAULT_TOPIC}' has no topic file — the demo would boot into "
+            f"'{_tm[1][0]}' instead, which likely lacks the words a signer will try. "
+            f"Create topic_{DEFAULT_TOPIC}.json or change DEFAULT_TOPIC.")
+        print(f"[ok] boot topic '{DEFAULT_TOPIC}' resolves "
+              f"({len(next(m for n, m, _x in _tm if n == DEFAULT_TOPIC))} words)")
     _, fns = load_models(SINGLE_MODELS if single else ENSEMBLE_MODELS)
 
     rng = np.random.default_rng(0)
@@ -1143,6 +1153,19 @@ def main(single: bool, ai_enabled: bool, fast: bool = False, debug: bool = False
         if DEMO_WORDS_PATH is None:
             mask_i = next((i for i, (n, _m, _x) in enumerate(MASKS)
                            if n == DEFAULT_TOPIC), 1)
+            # SAY SO when the named boot topic is not on disk. This fell back SILENTLY once:
+            # the commit that added the 11 coverage topics deleted topic_everyday.json as
+            # "superseded" and left DEFAULT_TOPIC = "everyday" pointing at it, so --vocab250
+            # opened on topic_actions -- 24 action words -- and a signer trying `hello` or
+            # `water` got nothing. That is precisely the failure the comment above describes,
+            # reintroduced by the commit that wrote the comment. A fallback is fine; a
+            # fallback nobody can see is not.
+            if not any(n == DEFAULT_TOPIC for n, _m, _x in MASKS):
+                print(f"[warn] DEFAULT_TOPIC '{DEFAULT_TOPIC}' is not among the topic files "
+                      f"on disk.\n       Falling back to '{MASKS[mask_i][0]}' "
+                      f"({len(MASKS[mask_i][1])} words) — which may not contain the words you "
+                      f"are about to sign.\n       Expected topic_{DEFAULT_TOPIC}.json in "
+                      f"{HERE}.")
     else:
         mask_i = 0
     print(f"[cfg] {len(MASKS)} masks loaded — press T to cycle: "
