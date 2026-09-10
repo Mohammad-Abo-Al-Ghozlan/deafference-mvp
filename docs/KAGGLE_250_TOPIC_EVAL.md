@@ -150,14 +150,32 @@ measured on.
 
 ```python
 import pandas as pd
-_m = pd.read_parquet(MAN[0])
-assert _m["word"].nunique() == 250, f"{_m['word'].nunique()} words, expected 250"
-assert len(_m) == 94198, f"{len(_m)} rows, expected 94198 — that is a DIFFERENT split"
-print("splits:", dict(_m["split"].value_counts()))
+# Pick the manifest BY ITS CONTENT, not by glob order. More than one may be attached and
+# MAN[0] is whichever sorted first — a different manifest is a different split, which
+# silently redefines "held-out" and makes these numbers incomparable to word_acc_250.json.
+USE_MAN = None
+for c in MAN:
+    try:
+        _m = pd.read_parquet(c)
+    except Exception as e:
+        print(f"  {c}: unreadable ({type(e).__name__})"); continue
+    ok = _m["word"].nunique() == 250 and len(_m) == 94198
+    print(f"  {c}: {len(_m)} rows, {_m['word'].nunique()} words {'<- USE THIS' if ok else ''}")
+    if ok:
+        USE_MAN = c
+assert USE_MAN, "no manifest with 94,198 rows / 250 words — attach asl250-mask-ab-v1"
+print("splits:", dict(pd.read_parquet(USE_MAN)["split"].value_counts()))
+```
 
+```python
 !rm -rf /kaggle/working/canon
-!python extract_canonical.py --raw {RAW[0]} --manifest {MAN[0]}     --out /kaggle/working/canon --variants none --dominance geometric     --unaligned moving --workers 8
+!python extract_canonical.py --raw {RAW[0]} --manifest {USE_MAN} --out /kaggle/working/canon --variants none --dominance geometric --unaligned moving --workers 8
+```
+
+```python
 CORPUS = ["/kaggle/working/canon"]
+assert os.path.isdir(CORPUS[0] + "/by_word"), "extraction produced no by_word/ — read the log"
+print("corpus ready:", len(glob.glob(CORPUS[0] + "/by_word/*")), "word dirs (expect 250)")
 ```
 
 Watch the report card: **`aligned` should land near 55%.** Far from it means the geometry is
@@ -166,7 +184,16 @@ not resolving and the corpus should not be scored.
 ### Cell 4 — the measurement (~15 min)
 
 ```python
-!python measure_topic_gates.py     --data-dir {CORPUS[0]} --models $(dirname {MODELS[0]})     --vocab vocab_250.json --topics . --exclude-topics medical     --split test     --save-probs /kaggle/working/probs_250_test.npz     --out /kaggle/working/topic_250_measured.json
+# Resolve the models DIR in Python. `$(dirname ...)` inside an IPython ! line mixes shell
+# substitution with {} interpolation and breaks on any path containing a space.
+MODELS_DIR = os.path.dirname(MODELS[0])
+print("models dir:", MODELS_DIR, "->", sorted(os.path.basename(d) for d in MODELS))
+assert len(MODELS) == 4 and all(os.path.dirname(d) == MODELS_DIR for d in MODELS), \
+    "the four folds must live in ONE directory; two model datasets are attached"
+```
+
+```python
+!python measure_topic_gates.py --data-dir {CORPUS[0]} --models {MODELS_DIR} --vocab vocab_250.json --topics . --exclude-topics medical --split test --save-probs /kaggle/working/probs_250_test.npz --out /kaggle/working/topic_250_measured.json
 ```
 
 It prints a row per topic, a POOLED line, and the comparison that decides whether topics are
