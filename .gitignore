@@ -72,6 +72,25 @@ _send/
 demo/
 Fix/avatar-player.html
 
+# Avatar deliverables from the contracted rigger (2026-09-12). Two reasons, and the second is
+# the load-bearing one:
+#   1. Size. `3D Char deaf.glb` is 29.2 MB, of which 28.4 MB is a single diffuse texture
+#      embedded TWICE (7.8 MB WebP + 20.7 MB JPEG fallback). Geometry is 760 KB.
+#   2. 🔴 LICENCE. That file is built on `rp_claudia_rigged_002` — a Renderpeople scanned
+#      asset — and the rigger has not yet declared it or its licence (§16 of
+#      docs/AVATAR_BRIEF_COMPLETE.md; we asked as Q5 on 2026-09-07). Renderpeople's standard
+#      licence does not permit redistributing the model inside an application, which is
+#      exactly what we would be doing. Committing it puts an asset we may have no right to
+#      redistribute into git history PERMANENTLY, on a repo that pushes to GitHub — a rewrite
+#      is the only way back out. Keep it local until the licence is answered in writing.
+# The derived, licence-free artefacts under avatar/ (the bone map and the measured length
+# table) ARE tracked: they are our own measurements, not his geometry.
+*.glb
+*.gltf
+*.fbx
+*.blend
+*.blend1
+
 # Local-only task-tracking / oversight docs — never pushed
 PROJECT_CONTEXT.md
 FRONTEND_TASKS.md
