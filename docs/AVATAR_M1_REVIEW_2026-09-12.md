@@ -138,20 +138,35 @@ yes/no question in ASL. Today our system emits identical hand motion for *"you h
 decoration. We only want the one crude shape now, to prove the head topology can support the
 full set later.
 
-> ### 💡 And a question back to you, because you may have already solved this better
+> ### 💡 And a question back to you — because you may have already solved this better
 >
-> Your file has a **working bone-based face rig** — `eyebrow_l`, `eyebrow_r`, `eyelid_l/r`,
-> `jaw`, `mouth_l/r`, all properly weighted and deforming the mesh. We did not ask for that.
+> Your file has a **working bone-based face rig** we did not ask for. We measured it:
+>
+> | bone | weighted verts | centroid height | |
+> |---|---|---|---|
+> | `eyebrow_l` / `eyebrow_r` | 64 / 61 | y = 1.732 / 1.731 | brow line on a 1.83 m figure ✓ |
+> | `eyelid_l` / `eyelid_r` | 64 / 71 | y = 1.711 | just below ✓ |
+> | `jaw` | 1,410 | y = 1.635 | a real jaw ✓ |
+> | `mouth_l` / `mouth_r` | 305 / 294 | y = 1.644 | ✓ |
+>
+> These are real, symmetric and anatomically placed — not leftovers.
 >
 > §6.9 assumed blendshapes, but its own reasoning was *"Bones survive a mesh change, so this
-> work is permanent even though the head geometry is not."* **Bone-driven brows may be strictly
-> better for us than blendshapes** — they survive the phase-2 head swap, they are cheaper at
-> runtime, and they are drivable by the same retarget path as everything else.
+> work is permanent even though the head geometry is not."* **By that argument bone-driven brows
+> are strictly better than the blendshape we specified**: they survive the phase-2 head swap,
+> they cost less at runtime, and they are driven by the same retarget path as everything else.
+> They also cover all four grammar markers in §6.9's table — `q` and `top` (brow raise), `wh`
+> (furrow + tilt) and `neg` (headshake) — not just the one.
 >
-> **Tell us what you intended here.** If those brow bones are deliberate and you would rather
-> drive the brow channel with them, we are open to changing §6.9 to match — that is a
-> conversation, not a defect. What we cannot do is guess, which is the point of §6.2's line
-> *"an undocumented extra bone is worse than no bone."*
+> **And the `browRaise` shape key was only ever a feasibility proof** — §6.9 asks for it "purely
+> to prove the topology supports it". A brow bone with 64 weighted vertices either side is a
+> stronger proof than a crude shape key would have been.
+>
+> **So tell us what you intended.** If those brow bones are deliberate, we would rather amend
+> §6.9 to drive the brow channel from bones and drop the shape-key requirement entirely than
+> have you build a shape we then do not use. That is a design conversation, not a defect. What
+> we cannot do is guess — which is the whole point of §6.2's line *"an undocumented extra bone
+> is worse than no bone."*
 
 ---
 
@@ -326,21 +341,45 @@ half this table from "unknown" to "measured".
 
 ---
 
+# 🛠 What we closed on our side, so you do not have to
+
+Between writing this review and sending it, we resolved everything that could be resolved from
+the exported file. **Do not redo any of it.** Listed so you know what we changed and can object
+if we got something wrong.
+
+| was | now | how |
+|---|---|---|
+| **29.2 MB** | **0.79 MB** — 37× smaller | `avatar/strip_textures.py` removes both embedded images and installs a flat grey material, per §12. Geometry, skin weights, bind pose, node hierarchy and all 7 accessors verified **byte-identical**; UVs kept so it can be re-textured. |
+| no bone map (test 2) | generated, 55/55 | `avatar/bone_map_renderpeople_to_mixamo.json` |
+| no length table (§12-3) | generated, 88 bones | `avatar/bone_lengths_measured.json` |
+| twist bones undocumented | **measured** | All four sit at **exactly 50.0%** along their parent, 0.0 mm off-axis — textbook twist distribution. |
+
+**So the only thing we still need from you on the twist question is a yes/no**, not a note: we
+intend to drive each twist bone at **half the roll of its child joint** (`lowerarm_twist_*` at
+half the wrist roll, `upperarm_twist_*` at half the elbow roll). Say if that is not what you
+built them for. Everything else about Q4 is answered by the geometry.
+
+---
+
 # ✅ The short list — what to send back
 
-In priority order. Items 1–3 are the ones that block.
+Shorter than it was, because of the table above. **Item 1 is the only one that blocks.**
 
-1. **The Renderpeople licence answer** (§1). Even a partial answer today is better than a
-   complete one next week.
+1. 🔴 **The Renderpeople licence answer** (§1). Even a partial answer today is better than a
+   complete one next week. **This is the one thing we genuinely cannot resolve ourselves.**
 2. **"Confirmed"** on `avatar/bone_map_renderpeople_to_mixamo.json` — one line, closes test 2.
-3. **The twist-solution note** (Q4, §12 item 8) — constraints or free bones, and which of the
-   four arm twists we should drive.
-4. **Re-export with `Material: No export`** — one checkbox, 29.2 MB → ~800 KB.
-5. **Re-export with `Shape Keys: ON`** plus one crude `browRaise` — closes test 9.
-6. **The `.blend` source and the seven handshape poses** — unblocks five acceptance tests.
-7. **A readme**, including what you intended with the face bones.
+   Please actually look at `thumb_01_*` before confirming.
+3. **A yes/no on driving the twists at half-roll** (see table above).
+4. **What you intended with the face bones** — and whether you would rather drive the brow
+   channel with them than with blendshapes (§3). This one is a design conversation, and your
+   answer may make the `browRaise` shape key unnecessary.
+5. **The `.blend` source and the seven handshape poses** (§12 items 2 and 5). These unblock
+   **five** acceptance tests we currently cannot run at all — the highest-value thing you can
+   send.
+6. **A readme** (§12 item 10).
 
-Items 4 and 5 are the same re-export. Nothing here asks you to re-rig.
+**Nothing here asks you to re-rig, and nothing asks you to re-export.** If the licence clears
+and you confirm items 2–4, M1 comes down to items 5 and 6.
 
 ---
 
