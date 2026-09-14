@@ -113,3 +113,7 @@ driving_video/
 # it is the AI pipeline only -- so a lockfile here is a stray, not a dependency record.
 package-lock.json
 node_modules/
+
+# Offline handshape renders from avatar/render_check.py — derived from the same
+# gitignored geometry, regenerate with `python avatar/render_check.py <word>`.
+avatar/_check_*.png
