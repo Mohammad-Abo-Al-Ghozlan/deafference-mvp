@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign Rig Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Palette inherited from Fix/avatar-player.html, the tool that already exists in this
+   project — so the two read as one toolchain. Deliberately single-theme: a 3D viewport is
+   dark by nature and a light ground would wash out an untextured grey mesh. Every colour is
+   stated explicitly so the page holds on either host ground. */
+:root{
+  --bg:#0d1218; --panel:#151d26; --panel2:#1d2733; --line:#26313b;
+  --txt:#dbe4ee; --dim:#7f8c98; --accent:#4fc3f7;
+  --ok:#3fb950; --warn:#d29922; --err:#f85149;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--txt);
+  font:14px/1.55 var(--sans)}
+#app{display:grid;grid-template-columns:296px 1fr;min-height:100vh}
+@media (max-width:860px){#app{grid-template-columns:1fr}}
+
+/* ── left rail ─────────────────────────────────────────────────────────── */
+#rail{background:var(--panel);border-right:1px solid var(--line);
+  padding:20px 18px;padding-block:20px;display:flex;flex-direction:column;gap:20px;
+  min-width:0}
+@media (max-width:860px){#rail{border-right:none;border-top:1px solid var(--line);order:2}}
+.brand{display:flex;flex-direction:column;gap:3px}
+.brand h1{margin:0;font:600 16px/1.2 var(--sans);letter-spacing:-.01em}
+.brand p{margin:0;color:var(--dim);font:400 12px/1.45 var(--mono)}
+h2{margin:0 0 9px;font:600 10px/1 var(--sans);letter-spacing:.11em;
+  text-transform:uppercase;color:var(--dim)}
+
+#words{display:flex;flex-wrap:wrap;gap:6px}
+.w{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:5px;padding:6px 11px;font:500 13px/1 var(--mono);cursor:pointer;
+  transition:border-color .12s,background .12s}
+.w:hover{border-color:var(--accent)}
+.w:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.w[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
+  color:#06121b;font-weight:600}
+
+/* The acceptance read-out. Not cards — this is one table of measurements, and giving each
+   row its own border would say "separate object" about numbers that belong together. */
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 12px;
+  font:400 12.5px/1.5 var(--mono);font-variant-numeric:tabular-nums}
+.kv dt{color:var(--dim);min-width:0}
+.kv dd{margin:0;text-align:right;white-space:nowrap}
+.pill{display:inline-block;padding:1px 7px;border-radius:999px;font:600 11px/1.5 var(--mono);
+  border:1px solid}
+.pill.ok{color:var(--ok);border-color:#1d4a2b;background:#10231700}
+.pill.warn{color:var(--warn);border-color:#4d3c12}
+.pill.err{color:var(--err);border-color:#5c2626}
+.note{color:var(--dim);font:400 11.5px/1.5 var(--sans);margin:0;
+  border-left:2px solid var(--line);padding-left:10px}
+
+/* ── viewport ──────────────────────────────────────────────────────────── */
+#view{position:relative;min-height:420px;background:var(--bg)}
+@media (max-width:860px){#view{order:1;height:56vh;min-height:340px}}
+canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;left:16px;top:14px;pointer-events:none;
+  font:400 11.5px/1.65 var(--mono);color:#a9c4d8;text-shadow:0 1px 4px #000a;
+  font-variant-numeric:tabular-nums}
+#hud b{color:var(--accent);font-weight:600}
+#boot{position:absolute;inset:0;display:grid;place-items:center;
+  font:400 13px/1.6 var(--mono);color:var(--dim);text-align:center;padding:24px}
+
+#transport{position:absolute;left:0;right:0;bottom:0;display:flex;gap:12px;
+  align-items:center;padding:12px 16px;padding-block:12px;
+  background:linear-gradient(transparent,#0d1218e6 38%);flex-wrap:wrap}
+button.b{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:5px;padding:7px 13px;cursor:pointer;font:500 12.5px/1 var(--mono)}
+button.b:hover{border-color:var(--accent)}
+button.b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;font-weight:600}
+#scrub{flex:1 1 160px;min-width:120px;accent-color:var(--accent)}
+#frame{font:400 12px/1 var(--mono);color:var(--dim);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head>
+<body>
+<div id="app">
+  <aside id="rail">
+    <div class="brand">
+      <h1>Sign Rig Check</h1>
+      <p>M1 delivery · acceptance tests 3 &amp; 7</p>
+    </div>
+
+    <section>
+      <h2>Sign</h2>
+      <div id="words" role="group" aria-label="Choose a sign"></div>
+    </section>
+
+    <section>
+      <h2>This sign</h2>
+      <dl class="kv" id="signstats"></dl>
+    </section>
+
+    <section>
+      <h2>Rig</h2>
+      <dl class="kv" id="rigstats"></dl>
+    </section>
+
+    <p class="note" id="footnote"></p>
+  </aside>
+
+  <main id="view">
+    <div id="boot">loading rig…</div>
+    <div id="hud"></div>
+    <div id="transport" hidden>
+      <button class="b pri" id="play" type="button">Pause</button>
+      <input id="scrub" type="range" min="0" max="1" value="0" step="1"
+             aria-label="Scrub frames">
+      <span id="frame"></span>
+      <button class="b" id="reset" type="button">Reset view</button>
+      <button class="b" id="rest" type="button">Rest pose</button>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+(function(){
+"use strict";
+const P = JSON.parse(document.getElementById("payload").textContent);
+const boot = document.getElementById("boot");
+if (typeof THREE === "undefined") {
+  boot.textContent = "three.js did not load — check the network, then reload.";
+  return;
+}
+
+/* ── unpack the quantised blob ───────────────────────────────────────────── */
+const bin = Uint8Array.from(atob(P.blob), c => c.charCodeAt(0)).buffer;
+const nv = P.nv, ni = P.ni, nb = P.nb;
+let o = 0;
+const posQ = new Uint16Array(bin, o, nv*3);        o += nv*3*2;
+const idx  = new Uint16Array(bin, o, ni);          o += ni*2;
+const sIdx = new Uint8Array (bin, o, nv*4);        o += nv*4;
+const sWgt = new Uint8Array (bin, o, nv*4);        o += nv*4;
+const ibm  = new Float32Array(bin.slice(o, o + nb*16*4));
+
+const pos = new Float32Array(nv*3);
+for (let i=0;i<nv;i++) for (let a=0;a<3;a++)
+  pos[i*3+a] = P.lo[a] + (posQ[i*3+a]/65535) * P.span[a];
+
+const skinIndex  = new Uint16Array(nv*4);
+const skinWeight = new Float32Array(nv*4);
+for (let i=0;i<nv*4;i+=4){
+  let s = 0;
+  for (let k=0;k<4;k++) s += sWgt[i+k];
+  if (s === 0) s = 1;
+  for (let k=0;k<4;k++){ skinIndex[i+k] = sIdx[i+k]; skinWeight[i+k] = sWgt[i+k]/s; }
+}
+
+/* ── scene ───────────────────────────────────────────────────────────────── */
+const view = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0d1218, 1);
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 40);
+
+scene.add(new THREE.HemisphereLight(0xbcd6ea, 0x1a232c, 1.05));
+const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(1.2, 2.2, 2.4);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x4fc3f7, 0.5); rim.position.set(-1.8, 1.4, -1.6);
+scene.add(rim);
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute("position",  new THREE.BufferAttribute(pos, 3));
+geo.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+geo.setAttribute("skinWeight",new THREE.BufferAttribute(skinWeight, 4));
+geo.setIndex(new THREE.BufferAttribute(idx, 1));
+geo.computeVertexNormals();
+
+const bones = P.bones.map(b => {
+  const bone = new THREE.Bone();
+  bone.name = b.n;
+  bone.position.set(b.t[0], b.t[1], b.t[2]);
+  bone.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
+  return bone;
+});
+const rest = bones.map(b => b.quaternion.clone());
+const byName = {};
+bones.forEach(b => byName[b.name] = b);
+const roots = [];
+P.bones.forEach((b,i) => { if (b.p >= 0) bones[b.p].add(bones[i]); else roots.push(bones[i]); });
+
+const inverses = [];
+for (let i=0;i<nb;i++) inverses.push(new THREE.Matrix4().fromArray(ibm, i*16));
+
+const mat = new THREE.MeshStandardMaterial({
+  color:0xb8bec6, roughness:0.78, metalness:0.0, skinning:true, side:THREE.DoubleSide });
+const mesh = new THREE.SkinnedMesh(geo, mat);
+mesh.normalizeSkinWeights();
+const rig = new THREE.Group();
+roots.forEach(r => rig.add(r));
+rig.add(mesh);
+scene.add(rig);
+mesh.bind(new THREE.Skeleton(bones, inverses));
+
+/* ── orbit, hand-rolled: 30 lines beats a CDN dependency that may not resolve ─ */
+const TARGET = new THREE.Vector3(0, 1.43, 0);
+let yaw = 0, pitch = 0.06, dist = 1.55, drag = null;
+function place(){
+  camera.position.set(
+    TARGET.x + dist*Math.cos(pitch)*Math.sin(yaw),
+    TARGET.y + dist*Math.sin(pitch),
+    TARGET.z + dist*Math.cos(pitch)*Math.cos(yaw));
+  camera.lookAt(TARGET);
+}
+renderer.domElement.style.touchAction = "none";
+renderer.domElement.addEventListener("pointerdown", e => {
+  drag = {x:e.clientX, y:e.clientY}; renderer.domElement.setPointerCapture(e.pointerId); });
+addEventListener("pointerup", () => drag = null);
+addEventListener("pointermove", e => {
+  if (!drag) return;
+  yaw -= (e.clientX - drag.x) * 0.006;
+  pitch = Math.max(-0.85, Math.min(0.95, pitch + (e.clientY - drag.y) * 0.005));
+  drag = {x:e.clientX, y:e.clientY}; place();
+});
+renderer.domElement.addEventListener("wheel", e => {
+  e.preventDefault();
+  dist = Math.max(0.5, Math.min(4.2, dist * (1 + Math.sign(e.deltaY)*0.09))); place();
+}, {passive:false});
+
+function resize(){
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(h,1); camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+/* ── playback ────────────────────────────────────────────────────────────── */
+const SIGNS = P.signs;
+const names = Object.keys(SIGNS);
+let cur = names[0], frame = 0, playing = true, last = performance.now(), acc = 0;
+const q = new THREE.Quaternion();
+
+function applyFrame(i){
+  bones.forEach((b,k) => b.quaternion.copy(rest[k]));   // anything undriven holds REST
+  const f = SIGNS[cur].frames[i];
+  if (!f) return;
+  for (const nm in f){
+    const b = byName[nm];
+    if (b){ const v = f[nm]; q.set(v[0],v[1],v[2],v[3]); b.quaternion.copy(q); }
+  }
+}
+
+const hud = document.getElementById("hud");
+const frameLbl = document.getElementById("frame");
+function hudText(){
+  const s = SIGNS[cur];
+  hud.innerHTML =
+    `<b>${s.gloss}</b> &nbsp; ${s.frames.length} frames @ ${s.fps} fps<br>` +
+    `${s.hands === "both" ? "two-handed" : s.hands + " hand only"} · ` +
+    `passive hand holds rest<br>` +
+    `drag to orbit · scroll to zoom`;
+  frameLbl.textContent = `${String(frame+1).padStart(3," ")} / ${s.frames.length}`;
+}
+
+/* per-sign acceptance numbers — the reason this page exists */
+const STATS = __STATS__;
+function renderStats(){
+  const st = STATS[cur] || {};
+  const cls = st.err == null ? "warn" : (st.err < 5 ? "ok" : "err");
+  const verdict = st.err == null ? "not measured" : (st.err < 5 ? "pass" : "over");
+  document.getElementById("signstats").innerHTML =
+    `<dt>wrist error, mean</dt><dd>${st.err == null ? "—" : st.err.toFixed(1) + "%"}</dd>` +
+    `<dt>wrist error, p95</dt><dd>${st.p95 == null ? "—" : st.p95.toFixed(1) + "%"}</dd>` +
+    `<dt>test 7 (&lt;5%)</dt><dd><span class="pill ${cls}">${verdict}</span></dd>` +
+    `<dt>depth clamped</dt><dd>${st.clamp == null ? "—" : st.clamp.toFixed(0) + "%"}</dd>` +
+    `<dt>hands recorded</dt><dd>${SIGNS[cur].hands}</dd>`;
+}
+
+function select(w){
+  cur = w; frame = 0;
+  document.querySelectorAll("#words .w").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.w === w)));
+  document.getElementById("scrub").max = SIGNS[w].frames.length - 1;
+  document.getElementById("scrub").value = 0;
+  applyFrame(0); renderStats(); hudText();
+}
+
+const wrap = document.getElementById("words");
+names.forEach(w => {
+  const b = document.createElement("button");
+  b.className = "w"; b.type = "button"; b.dataset.w = w;
+  b.textContent = w; b.setAttribute("aria-pressed","false");
+  b.addEventListener("click", () => select(w));
+  wrap.appendChild(b);
+});
+
+document.getElementById("rigstats").innerHTML =
+  `<dt>joints</dt><dd>${nb}</dd>` +
+  `<dt>driven by motion</dt><dd>36</dd>` +
+  `<dt>triangles</dt><dd>${(ni/3).toLocaleString()}</dd>` +
+  `<dt>vertices</dt><dd>${nv.toLocaleString()}</dd>` +
+  `<dt>signs loaded</dt><dd>${names.length}</dd>`;
+document.getElementById("footnote").textContent =
+  "Depth is solved from bone length, not read from the data — the capture's z is noise. " +
+  "A clamped frame is one where the limb was foreshortened past what the rig can reach.";
+
+const playBtn = document.getElementById("play");
+playBtn.addEventListener("click", () => {
+  playing = !playing; playBtn.textContent = playing ? "Pause" : "Play"; });
+document.getElementById("reset").addEventListener("click", () => {
+  yaw = 0; pitch = 0.06; dist = 1.55; place(); });
+document.getElementById("rest").addEventListener("click", () => {
+  playing = false; playBtn.textContent = "Play";
+  bones.forEach((b,k) => b.quaternion.copy(rest[k])); });
+const scrub = document.getElementById("scrub");
+scrub.addEventListener("input", () => {
+  playing = false; playBtn.textContent = "Play";
+  frame = +scrub.value; applyFrame(frame); hudText(); });
+
+function tick(now){
+  const s = SIGNS[cur];
+  const dt = Math.min(now - last, 200); last = now;
+  if (playing){
+    acc += dt;
+    const step = 1000 / s.fps;
+    while (acc >= step){ acc -= step; frame = (frame + 1) % s.frames.length; }
+    applyFrame(frame); scrub.value = frame; hudText();
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+resize(); place(); select(names[0]);
+boot.remove();
+document.getElementById("transport").hidden = false;
+requestAnimationFrame(tick);
+})();
+</script>
+</body></html>

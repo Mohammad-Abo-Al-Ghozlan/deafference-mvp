@@ -90,6 +90,11 @@ Fix/avatar-player.html
 *.fbx
 *.blend
 *.blend1
+# Anything that EMBEDS that geometry is the same asset in another wrapper, so it inherits the
+# same restriction. Both are rebuilt in seconds:
+#   python avatar/export_viewer_payload.py && python avatar/build_viewer.py
+avatar/viewer_payload.json
+avatar/sign_viewer.html
 
 # Local-only task-tracking / oversight docs — never pushed
 PROJECT_CONTEXT.md
