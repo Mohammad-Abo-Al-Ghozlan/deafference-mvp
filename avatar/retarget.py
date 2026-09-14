@@ -47,6 +47,14 @@ _FLIP_Z = True
 # as a bobblehead; a third is enough to make the motion come from the body.
 NECK_SHARE = 0.35
 
+# One-Euro parameters for the rotation-space filter. Measured, see smooth_quats().
+Q_MIN_CUTOFF = 3.0
+Q_BETA = 0.02
+
+# the landmarks the metrics need, kept per frame so scoring happens AFTER filtering
+_METRIC_LM = ([L_WR, R_WR] + [HAND0[x] for x in ("l", "r")]
+              + [HAND0[x] + o + 3 for x in ("l", "r") for o in FINGER_OFF.values()])
+
 
 # ── GLB rest skeleton ────────────────────────────────────────────────────────────────────
 def load_skeleton(path):
@@ -512,6 +520,127 @@ def head_frames(F, rig):
     return out
 
 
+def slerp(q0, q1, t):
+    """Shortest-arc interpolation between two xyzw quaternions."""
+    d = float(np.dot(q0, q1))
+    if d < 0.0:                      # same rotation, opposite hemisphere
+        q1, d = -q1, -d
+    if d > 0.9995:                   # nearly identical: lerp is exact and numerically safer
+        q = q0 + t * (q1 - q0)
+        return q / (np.linalg.norm(q) + 1e-12)
+    th = np.arccos(np.clip(d, -1.0, 1.0))
+    return (np.sin((1 - t) * th) * q0 + np.sin(t * th) * q1) / np.sin(th)
+
+
+def smooth_quats(out_q, fps, min_cutoff=None, beta=None, bone_cut=None):
+    """One-Euro again, this time on the bone rotations rather than the landmarks.
+
+    §6.12 #9's filter is already on the input and it cannot reach this, because most of what
+    is left is not IN the landmarks -- it is MANUFACTURED by the solve. Recovering a rotation
+    from two nearby points is ill-conditioned exactly when a finger is curled, so noise well
+    inside the input filter's tolerance still comes out as a visible angle.
+
+    THE LARGE JUMPS ARE NOT THIS FILTER'S JOB and trying to make them so is a mistake worth
+    recording. One-Euro is BUILT to pass fast motion: its beta term widens the cutoff as speed
+    rises, so a discontinuity -- the exact thing you want removed -- is what it protects. Swept
+    over the 11 signs, no setting bought a smaller maximum without wrecking the handshapes:
+
+        setting            max step   over 30 deg   handshape
+        no filter           179.3d        2.5%        12.9%
+        mc 5.0 b 0.40       177.2d        2.4%        13.1%
+        mc 3.0 b 0.25       176.0d        2.3%        13.1%
+        mc 0.8 b 0.00       117.8d        0.9%        23.1%
+
+    The snaps had to be removed where they were made instead: the passive arm is no longer
+    driven, and an ill-conditioned palm frame now declines to answer.
+
+    BETA IS NEARLY ZERO HERE AND THAT IS THE POINT. One-Euro's speed term assumes fast means
+    INTENDED, and widens the cutoff to protect it. On this signal fast mostly means NOISE -- a
+    distal phalanx thrown 100 degrees by a landmark that moved two pixels -- so the speed term
+    was opening the filter exactly where it was needed and the default beta made the whole
+    thing inert. Re-swept with it small, per bone (see bone_cutoffs):
+
+        mc 3.0 b 0.25 floor 1.00    mean 4.7d   p95 19.0d   1.4%/30d   shape 13.1%
+        mc 3.0 b 0.02 floor 0.25    mean 3.8d   p95 14.8d   1.4%/30d   shape 14.5%  <- shipped
+        mc 3.0 b 0.00 floor 0.25    mean 2.4d   p95  6.8d   1.0%/30d   shape 21.6%
+
+    The last row is where quieting the fingers starts destroying the handshape they are there
+    to make, so the middle row is the knee.
+
+    slerp rather than lerp, hemisphere-aligned first: q and -q are the same rotation and
+    averaging them naively lands halfway to nowhere.
+    """
+    min_cutoff = Q_MIN_CUTOFF if min_cutoff is None else min_cutoff
+    beta = Q_BETA if beta is None else beta
+    if not out_q or min_cutoff <= 0:
+        return out_q
+    out = [dict(f) for f in out_q]
+    for nm in sorted({k for f in out for k in f}):
+        mc = (bone_cut or {}).get(nm, min_cutoff)
+        prev, prev_speed = None, 0.0
+        for f in out:
+            if nm not in f:
+                prev = None                 # a gap resets the filter, it never bridges one
+                continue
+            q = np.array(f[nm], dtype=float)
+            if prev is None:
+                prev, prev_speed = q, 0.0
+                continue
+            if float(np.dot(q, prev)) < 0.0:
+                q = -q
+            speed = np.degrees(2 * np.arccos(
+                min(1.0, abs(float(np.dot(q, prev)))))) * fps
+            a_d = 1.0 / (1.0 + fps / (2 * np.pi * 1.0))
+            prev_speed = a_d * speed + (1 - a_d) * prev_speed
+            cutoff = mc + beta * prev_speed
+            alpha = 1.0 / (1.0 + fps / (2 * np.pi * cutoff))
+            sm = slerp(prev, q, alpha)
+            prev = sm / (np.linalg.norm(sm) + 1e-12)
+            f[nm] = [round(float(x), 5) for x in prev]
+    return out
+
+
+def bone_cutoffs(rig, chains):
+    """Per-bone filter cutoff, scaled by bone length. Short bones get smoothed harder.
+
+    One global cutoff is the wrong shape for a hand. The angle a bone has to turn to absorb a
+    given positional error goes as error over LENGTH, so the same landmark noise that moves a
+    28 cm upper arm by a degree throws a 1.5 cm distal phalanx through twenty. Measured, the
+    noisiest bones in the set are exactly the shortest and most occluded ones -- on `yes`,
+    a fist, the five worst are pinky_03 (mean 23.5 deg/frame), ring_02, ring_03, pinky_02,
+    pinky_01, while the arm bones sit near two.
+
+    So the cutoff scales with rest length, floored so the longest bones are untouched and the
+    shortest get four times the smoothing. This buys quiet fingers without softening the arm
+    movement that carries the sign.
+    """
+    lens = {}
+    for bone, child, _a, _b in chains:
+        if bone in rig.by and child in rig.by:
+            lens[bone] = rig.bone_len(bone, child)
+    if not lens:
+        return {}
+    # Normalised by the LONGEST bone, not the median. Two thirds of these chains are finger
+    # segments, so the median IS a finger segment: every ratio came out at or above 1.0, the
+    # clip flattened them all to 1.0, and a whole parameter sweep moved nothing at all.
+    ref = max(lens.values())
+    return {b: Q_MIN_CUTOFF * float(np.clip(L / ref, 0.25, 1.0)) for b, L in lens.items()}
+
+
+def fk_world(rig, frame_q):
+    """World translation per node index from local quaternions; absent bones hold rest."""
+    W, T = {}, {}
+    for i in rig._order():
+        q = frame_q.get(rig.name[i])
+        lR = quat_to_mat(np.array(q, dtype=float)) if q is not None else rig.rest_R[i]
+        p = rig.parent.get(i)
+        if p is None:
+            T[i], W[i] = rig.rest_t[i].copy(), lR.copy()
+        else:
+            T[i], W[i] = T[p] + W[p] @ rig.rest_t[i], W[p] @ lR
+    return T
+
+
 def scale_rot(R, t):
     """The rotation R, scaled to a fraction t of its angle. t=0 is identity, t=1 is R."""
     q = mat_to_quat(R)
@@ -566,7 +695,15 @@ def frame_from(origin, fwd, across):
     x = fwd / (np.linalg.norm(fwd) + 1e-12)
     a = across - x * float(np.dot(across, x))          # Gram-Schmidt
     na = np.linalg.norm(a)
-    if na < 1e-9:
+    # ILL-CONDITIONED MEANS NO ANSWER, NOT A BAD ONE. When `across` lies nearly along `fwd`,
+    # what survives Gram-Schmidt is almost entirely noise, and its DIRECTION can reverse
+    # between consecutive frames -- which flips the whole frame by 180 degrees. That is the
+    # single worst artefact in the set: `drink`, hand_r, frame 33, a 179.3 degree step in one
+    # frame at 30 fps. The palm's across-vector is index MCP to pinky MCP, which collapses in
+    # projection exactly when the hand turns edge-on, so this is common rather than exotic.
+    # Returning None drops the caller back to the minimal-rotation path, which pins two axes
+    # from the parent and cannot flip.
+    if na < 0.15 * (np.linalg.norm(across) + 1e-12) or na < 1e-9:
         return None
     y = a / na
     return np.column_stack([x, y, np.cross(x, y)])
@@ -609,6 +746,22 @@ def retarget_word(rig, word, chains):
     def to_rig(p):
         return origin + np.array([p[0], -p[1], p[2]]) * scale
 
+    # DO NOT DRIVE THE PASSIVE ARM ON A ONE-HANDED SIGN. The corpus records one hand per
+    # participant, so on these clips the passive HAND is 100% absent and §6 already has that
+    # arm holding rest. Its pose landmarks still exist, though, so the passive upper arm and
+    # forearm were being driven from them -- and measured, they jump over 30 degrees in a
+    # single frame on 4.8% of frames against 1.5% for the signing arm, three times worse on
+    # the arm that carries no meaning at all. A nearly straight limb is ill-conditioned: with
+    # shoulder, elbow and wrist almost collinear, small landmark noise spins the arm about its
+    # own axis. There is nothing to preserve there, so it holds rest with the hand it carries.
+    two_handed = bool(d.get("segments", [{}])[0]
+                      .get("synthesis", {}).get("twoHanded", True))
+    dom = str(d.get("segments", [{}])[0]
+              .get("synthesis", {}).get("dominantHand", "R")).lower()
+    passive = "l" if dom == "r" else "r"
+    if not two_handed:
+        chains = [c for c in chains if not c[0].endswith(f"_{passive}")]
+
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
     AS = {s: arm_scale(F, s, rig) for s in ("l", "r")}
     HR = head_frames(F, rig)          # non-manual: head pose, one of the five ASL parameters
@@ -645,7 +798,8 @@ def retarget_word(rig, word, chains):
                 want_front[fi][lm] = bool(F[fi, lm, 2] > sh_z[fi])
 
     prev_sign = {}
-    out_q, err, shp, front, clamps, total = [], [], [], [], 0, 0
+    out_q, err, shp, front, keep, clamps, total = [], [], [], [], [], 0, 0
+    by_bone = {c[0]: c for c in chains}
     driven = [c[0] for c in chains] + ["neck", "head"]
     for fi in range(n):
         tgt = {}
@@ -711,7 +865,6 @@ def retarget_word(rig, word, chains):
         # Hierarchical direction match. Walk the rig's own node order so a parent's solved
         # world rotation is always available before its children are solved in it.
         world_R, world_T, local_q = {}, {}, {}
-        by_bone = {c[0]: c for c in chains}
         for bi in rig._order():
             nm = rig.name[bi]
             p = rig.parent.get(bi)
@@ -781,43 +934,35 @@ def retarget_word(rig, word, chains):
             local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
         out_q.append({k: [round(float(x), 5) for x in v] for k, v in local_q.items()})
 
-        # §14 test 7: where did the wrist land? Measured on the RIG, by forward kinematics
-        # through the quaternions we are about to ship -- world_T above is that FK.
-        #
-        # The previous version compared P[wr] to tgt[wr]. Those are solve_depth's output and
-        # its own input, and solve_depth copies x/y straight through, so the two are equal by
-        # construction: it reported 0.00% on six of eleven signs and never once looked at the
-        # skeleton. A metric that cannot fail is not a test, and this one certified a rig
-        # whose fingertips were a whole hand-length out of place. Anything scored here must
-        # come from world_T, never from P.
-        #
-        # Image plane only -- the target's own z is the noise this solver exists to discard,
-        # so scoring against it would be scoring against nothing.
+        # Metric targets are STORED here, not scored. Scoring happens after the rotation
+        # filter, because the filtered animation is what ships and a number describing the
+        # unfiltered one describes something nobody will ever see.
+        keep.append({lm: tgt[lm].copy() for lm in _METRIC_LM
+                     if lm in tgt and not np.any(np.isnan(tgt[lm]))})
+
+    out_q = smooth_quats(out_q, fps=float(d.get("fps", 30)),
+                         bone_cut=bone_cutoffs(rig, chains))
+
+    # SECOND PASS: score the animation exactly as it ships, filter included.
+    for fq, tg in zip(out_q, keep):
+        WT = fk_world(rig, fq)
         for side, wr in (("l", L_WR), ("r", R_WR)):
-            if np.any(np.isnan(tgt[wr])):
+            # only score an arm we actually drive; see the passive-arm note above
+            if f"hand_{side}" not in by_bone or wr not in tg:
                 continue
-            got = world_T[rig.by[f"hand_{side}"]]
-            err.append(float(np.linalg.norm(got[:2] - tgt[wr][:2])) / scale)
-            # IS THE HAND IN FRONT OF THE BODY? The two metrics above are image-plane only,
-            # so between them they cannot see the depth axis at all -- an avatar signing
-            # entirely behind its own back scores 0.0% wrist and a passing handshape. That is
-            # not hypothetical; it is what shipped, because the data's z and the rig's z run
-            # opposite ways. ASL happens in the signing space in FRONT of the signer, so this
-            # is close to a hard anatomical constraint rather than a preference, and it is
-            # cheap: the rig faces +z, so the wrist should sit at greater z than the shoulder.
+            got = WT[rig.by[f"hand_{side}"]]
+            err.append(float(np.linalg.norm(got[:2] - tg[wr][:2])) / scale)
             front.append(float(got[2] > rig.wp(f"upperarm_{side}")[2]))
-            # Handshape, scored separately so it cannot hide behind placement: each
-            # fingertip's offset FROM THE WRIST, against the same offset in the (shrunk,
-            # translated) target, in rig hand-lengths.
             h0 = HAND0[side]
+            if h0 not in tg:
+                continue
             hl = float(np.linalg.norm(rig.wp(f"middle_01_{side}") - rig.wp(f"hand_{side}")))
             for fname, off in FINGER_OFF.items():
                 tip = h0 + off + 3
-                if np.any(np.isnan(tgt[tip])):
-                    continue
-                g = world_T[rig.by[f"{fname}_end_{side}"]] - got
-                t_ = tgt[tip] - tgt[h0]
-                shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
+                if tip in tg:
+                    g = WT[rig.by[f"{fname}_end_{side}"]] - got
+                    t_ = tg[tip] - tg[h0]
+                    shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
     return d, out_q, np.array(err), np.array(shp), np.array(front), clamps, total, driven
 
 
@@ -853,10 +998,16 @@ def selftest(rig, chains):
     # elbow -- that is what lets the two numbers separate placement from shape instead of
     # masking each other. Which means the elbow break proves nothing about it, and it needs
     # its own break, at a knuckle.
-    assert abs(float(shp1.mean()) - float(shp0.mean())) < 1e-9, (
-        "[err] handshape moved when only the ELBOW changed. It is supposed to be "
-        "wrist-relative; if the elbow leaks into it, the two metrics are not independent "
-        "and neither one means what it says.")
+    # RELATIVE, not exact. Exact equality was right until the rotation filter went in, and is
+    # wrong now: a TEMPORAL filter's output at each frame depends on the whole preceding
+    # sequence, so perturbing the elbow leaks a rounding-sized amount everywhere. What matters
+    # is that the leak is negligible beside the signal, not that it is zero.
+    leak = abs(float(shp1.mean()) - float(shp0.mean()))
+    signal = abs(float(err1.mean()) - float(err0.mean()))
+    assert leak < 0.01 * signal, (
+        f"[err] handshape moved {leak*100:.3f} points when only the ELBOW changed, against "
+        f"{signal*100:.2f} points of wrist error. It is supposed to be wrist-relative; if the "
+        f"elbow leaks in, the two metrics are not independent and neither means what it says.")
     rest_f = rig.rest_R[rig.by["index_02_r"]].copy()
     rig.rest_R[rig.by["index_02_r"]] = rest_f @ np.array(
         [[np.cos(th), -np.sin(th), 0], [np.sin(th), np.cos(th), 0], [0, 0, 1.0]])
