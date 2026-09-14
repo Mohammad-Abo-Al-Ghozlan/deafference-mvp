@@ -163,7 +163,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setClearColor(0x0d1218, 1);
 view.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 40);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.02, 60);
 
 scene.add(new THREE.HemisphereLight(0xbcd6ea, 0x1a232c, 1.05));
 const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(1.2, 2.2, 2.4);
@@ -202,11 +202,28 @@ const rig = new THREE.Group();
 roots.forEach(r => rig.add(r));
 rig.add(mesh);
 scene.add(rig);
-mesh.bind(new THREE.Skeleton(bones, inverses));
 
-/* ── orbit, hand-rolled: 30 lines beats a CDN dependency that may not resolve ─ */
-const TARGET = new THREE.Vector3(0, 1.43, 0);
-let yaw = 0, pitch = 0.06, dist = 1.55, drag = null;
+/* Both arguments are load-bearing. bind(skeleton) with the bind matrix OMITTED calls
+   skeleton.calculateInverses() internally, which DISCARDS the inverse bind matrices read
+   from the .glb and recomputes them from the bones' current world matrices — and those are
+   stale, because bind()'s updateMatrixWorld runs on the mesh while the bones are its
+   SIBLINGS, not its children. The result is every vertex smeared to infinity. GLTFLoader
+   passes the matrix explicitly for this exact reason. */
+rig.updateMatrixWorld(true);
+mesh.bind(new THREE.Skeleton(bones, inverses), mesh.matrixWorld);
+
+/* ── framing, derived from the mesh rather than guessed ──────────────────── */
+geo.computeBoundingBox();
+const bb = geo.boundingBox;
+const top = bb.max.y, floor = bb.min.y, height = top - floor;
+// Signing happens from roughly the waist up, and the brief frames the product waist-up
+// (§8.4). Centre on the middle of that band and pull back far enough to hold it plus the
+// signing space either side, which §8.4/D.2 measured at up to ~1.1 shoulder-widths out.
+const BAND_LO = floor + height * 0.48, BAND_HI = top + height * 0.02;
+const TARGET = new THREE.Vector3(0, (BAND_LO + BAND_HI) / 2, 0);
+const FOV = 32;
+const DEFAULT_DIST = ((BAND_HI - BAND_LO) / 2) / Math.tan(FOV * Math.PI / 360) * 1.28;
+let yaw = 0, pitch = 0.04, dist = DEFAULT_DIST, drag = null;
 function place(){
   camera.position.set(
     TARGET.x + dist*Math.cos(pitch)*Math.sin(yaw),
@@ -226,7 +243,7 @@ addEventListener("pointermove", e => {
 });
 renderer.domElement.addEventListener("wheel", e => {
   e.preventDefault();
-  dist = Math.max(0.5, Math.min(4.2, dist * (1 + Math.sign(e.deltaY)*0.09))); place();
+  dist = Math.max(DEFAULT_DIST*0.28, Math.min(DEFAULT_DIST*4, dist * (1 + Math.sign(e.deltaY)*0.09))); place();
 }, {passive:false});
 
 function resize(){
@@ -310,7 +327,7 @@ const playBtn = document.getElementById("play");
 playBtn.addEventListener("click", () => {
   playing = !playing; playBtn.textContent = playing ? "Pause" : "Play"; });
 document.getElementById("reset").addEventListener("click", () => {
-  yaw = 0; pitch = 0.06; dist = 1.55; place(); });
+  yaw = 0; pitch = 0.04; dist = DEFAULT_DIST; place(); });
 document.getElementById("rest").addEventListener("click", () => {
   playing = false; playBtn.textContent = "Play";
   bones.forEach((b,k) => b.quaternion.copy(rest[k])); });
