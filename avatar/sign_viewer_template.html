@@ -339,8 +339,9 @@ document.getElementById("rigstats").innerHTML =
 document.getElementById("footnote").textContent =
   "Depth is solved from bone length, not read from the data — the capture's z is noise. " +
   "A clamped frame is one where the limb was foreshortened past what the rig can reach. " +
-  ""In front" is the share of frames with the wrist forward of the shoulder — ASL happens " +
-  "in the signing space in front of the body, so a low number means the depth solve went the wrong way.";
+  "“In front” is the share of frames with the wrist forward of the shoulder — " +
+  "ASL happens in the signing space in front of the body, so a low number means the depth " +
+  "solve went the wrong way.";
 
 const playBtn = document.getElementById("play");
 playBtn.addEventListener("click", () => {
