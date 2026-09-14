@@ -287,10 +287,17 @@ function renderStats(){
   const st = STATS[cur] || {};
   const cls = st.err == null ? "warn" : (st.err < 5 ? "ok" : "err");
   const verdict = st.err == null ? "not measured" : (st.err < 5 ? "pass" : "over");
+  const shpcls = st.shape == null ? "warn" : (st.shape < 15 ? "ok" : st.shape < 25 ? "warn"
+                                                                                   : "err");
   document.getElementById("signstats").innerHTML =
     `<dt>wrist error, mean</dt><dd>${st.err == null ? "—" : st.err.toFixed(1) + "%"}</dd>` +
     `<dt>wrist error, p95</dt><dd>${st.p95 == null ? "—" : st.p95.toFixed(1) + "%"}</dd>` +
     `<dt>test 7 (&lt;5%)</dt><dd><span class="pill ${cls}">${verdict}</span></dd>` +
+    // Wrist error says where the hand WENT; handshape says what it DID once it got there.
+    // Shown together because wrist error alone read 0.0% on six signs whose fingers were a
+    // whole hand-length out of place — a sign can be perfectly placed and still unreadable.
+    `<dt>handshape error</dt><dd><span class="pill ${shpcls}">` +
+      `${st.shape == null ? "—" : st.shape.toFixed(0) + "%"}</span></dd>` +
     `<dt>depth clamped</dt><dd>${st.clamp == null ? "—" : st.clamp.toFixed(0) + "%"}</dd>` +
     `<dt>hands recorded</dt><dd>${SIGNS[cur].hands}</dd>`;
 }

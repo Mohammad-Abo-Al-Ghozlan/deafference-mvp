@@ -15,7 +15,8 @@ HERE = Path(__file__).resolve().parent
 tpl = (HERE / "sign_viewer_template.html").read_text(encoding="utf-8")
 payload = json.loads((HERE / "viewer_payload.json").read_text(encoding="utf-8"))
 
-stats = {w: {"err": s.get("err"), "p95": s.get("p95"), "clamp": s.get("clamp")}
+stats = {w: {"err": s.get("err"), "p95": s.get("p95"), "shape": s.get("shape"),
+             "clamp": s.get("clamp")}
          for w, s in payload["signs"].items()}
 
 # The </script> sequence inside a JSON string would close the host <script> tag early. It

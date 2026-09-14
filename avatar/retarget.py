@@ -185,7 +185,15 @@ def build_tree(rig):
         h0 = HAND0[side]
         t.append((el, sh, rig.bone_len(f"upperarm_{side}", f"lowerarm_{side}")))
         t.append((wr, el, rig.bone_len(f"lowerarm_{side}", f"hand_{side}")))
-        t.append((h0, wr, 0.0))                       # same joint, two landmark blocks
+        # NOT the same joint, despite being the same anatomy. MediaPipe Pose's wrist and
+        # MediaPipe Hands' wrist are outputs of two SEPARATE models fused into one 75-point
+        # frame, and they disagree: measured over the 11 signs, the gap runs 19-66% of a palm
+        # length (worst on `dad`, best on `no`). Welding them with L = 0.0 was what destroyed
+        # the handshapes -- every finger was then aimed from an origin up to two-thirds of a
+        # palm away from the frame its own landmarks live in. retarget_word() now rigidly
+        # translates the whole hand block onto the pose wrist before this runs, so by the time
+        # we get here the two really are coincident and the zero length is honest.
+        t.append((h0, wr, 0.0))
         for f, o in FINGER_OFF.items():
             t.append((h0 + o, h0, rig.bone_len(f"hand_{side}", f"{f}_01_{side}")))
             for k in (1, 2, 3):
@@ -342,13 +350,56 @@ def hand_scale(F, side, rig):
     handshape is precisely backwards for a sign language, where handshape is the thing being
     communicated.
 
-    wrist-to-middle-MCP is the palm, which is rigid: §6.4 parents every MCP directly to the
-    hand, so the MCP row cannot move relative to the wrist no matter what the fingers do.
+    The rule that follows from this is not "use the palm", it is USE ONLY RIGID SEGMENTS --
+    and there are 20 of them, not one. Every phalanx (MCP->PIP->DIP->tip) is bone, so its
+    length is as handshape-invariant as the palm is; only distances that SPAN a joint, like
+    wrist-to-fingertip, collapse. So all 20 segments are measured, each gives its own estimate
+    of the shrink ratio, and the MEDIAN of those is taken.
 
-    The 90th percentile across the clip estimates the true 3D length, because projection can
-    only ever SHORTEN a bone -- so the longest projection observed is the closest look at the
-    real thing. The mean would systematically under-read it.
+    Measured against the previous palm-only version, over all 11 signs (mean handshape error,
+    which is what this is for -- clamping is only the mechanism):
+
+        palm only (1 segment)      18.8%      worst case `thankyou` 25.1%
+        all 20 segments, median    16.9%      worst case `thankyou`  9.2%
+
+    The win is concentrated exactly where a single measurement was thinnest: `thankyou` and
+    `water` hold the hand foreshortened through most of the clip, and `water` is only 22
+    frames long, so one distance's 90th percentile never saw the hand face-on and read it as
+    smaller than it is. Twenty segments and a median see it. `drink` is the one regression
+    (36.4% -> 43.6%) and it is also the sign whose forearm measures 1.24x the rig's, so its
+    hand is not the binding constraint.
+
+    The 90th percentile within each segment estimates that segment's true 3D length, because
+    projection can only ever SHORTEN a bone -- so the longest projection observed is the
+    closest look at the real thing. The mean would systematically under-read it. The median
+    ACROSS segments then absorbs the few segments whose p90 is still noise.
     """
+    h0 = HAND0[side]
+    sh = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    segs = [(h0, h0 + o, f"hand_{side}", f"{f}_01_{side}")
+            for f, o in FINGER_OFF.items()]
+    for f, o in FINGER_OFF.items():
+        for k in (1, 2, 3):
+            nxt = f"{f}_0{k+1}_{side}" if k < 3 else f"{f}_end_{side}"
+            segs.append((h0 + o + k - 1, h0 + o + k, f"{f}_0{k}_{side}", nxt))
+    ratios = []
+    for a, b, ra, rb in segs:
+        d = np.linalg.norm(F[:, b, :2] - F[:, a, :2], axis=1)
+        d = d[~np.isnan(d)]
+        if len(d) < 3:
+            continue
+        est = float(np.percentile(d, 90))
+        if est < 1e-6:
+            continue
+        ratios.append((rig.bone_len(ra, rb) / sh) / est)
+    if not ratios:
+        return 1.0
+    return float(np.median(ratios))
+
+
+def _unused_palm_scale(F, side, rig):
+    """The single-segment estimator this replaced. Kept only as the reference it was measured
+    against; nothing calls it."""
     h0 = HAND0[side]
     mcp = h0 + FINGER_OFF["middle"]
     ok = ~np.isnan(F[:, mcp, 0]) & ~np.isnan(F[:, h0, 0])
@@ -394,24 +445,41 @@ def retarget_word(rig, word, chains):
     ZS = smooth_z(F)
     tree = build_tree(rig)
     prev_sign = {}
-    out_q, err, clamps, total = [], [], 0, 0
+    out_q, err, shp, clamps, total = [], [], [], 0, 0
     driven = [c[0] for c in chains]
     for fi in range(n):
         tgt = {}
         for lm in range(75):
             tgt[lm] = to_rig(F[fi, lm]) if not np.any(np.isnan(F[fi, lm])) else \
                 np.array([np.nan] * 3)
-        # Shrink each hand about its own wrist to the rig's hand size. Done in rig space,
-        # after conversion, so the wrist itself does not move and the arm solution above is
-        # untouched -- only the fingers come back inside reach.
+        # Shrink each hand about its own wrist to the rig's hand size, THEN move the whole
+        # block onto the pose wrist. Both steps happen in rig space, after conversion.
+        #
+        # The translation is the load-bearing one and it was missing. The 21 hand landmarks
+        # come from MediaPipe Hands; the arm that carries them is solved from MediaPipe Pose;
+        # the two models put "the wrist" in measurably different places (19-66% of a palm
+        # apart across these 11 signs). Without this the finger targets were expressed
+        # relative to the hand model's wrist but reconstructed outward from the pose model's,
+        # so a rigid offset of up to two-thirds of a palm was silently baked into every
+        # fingertip -- which is what made the handshapes unreadable while wrist placement
+        # looked perfect.
+        #
+        # Rigid, not a re-fit: translating the block moves every finger by the same vector,
+        # so it cannot change the handshape, only where the hand is attached.
         for s in ("l", "r"):
-            h0 = HAND0[s]
-            if np.any(np.isnan(tgt[h0])) or abs(HS[s] - 1.0) < 1e-6:
+            h0, wr = HAND0[s], (L_WR if s == "l" else R_WR)
+            if np.any(np.isnan(tgt[h0])):
                 continue
             w0 = tgt[h0].copy()
-            for k in range(1, 21):
-                if not np.any(np.isnan(tgt[h0 + k])):
-                    tgt[h0 + k] = w0 + (tgt[h0 + k] - w0) * HS[s]
+            if abs(HS[s] - 1.0) > 1e-6:
+                for k in range(1, 21):
+                    if not np.any(np.isnan(tgt[h0 + k])):
+                        tgt[h0 + k] = w0 + (tgt[h0 + k] - w0) * HS[s]
+            if not np.any(np.isnan(tgt[wr])):
+                shift = tgt[wr] - tgt[h0]
+                for k in range(21):
+                    if not np.any(np.isnan(tgt[h0 + k])):
+                        tgt[h0 + k] = tgt[h0 + k] + shift
         P, cl, used = solve_depth(tgt, rig, F[fi], tree,
                                   zref=ZS[fi], prev_sign=prev_sign)
         prev_sign.update(used)
@@ -420,11 +488,13 @@ def retarget_word(rig, word, chains):
 
         # Hierarchical direction match. Walk the rig's own node order so a parent's solved
         # world rotation is always available before its children are solved in it.
-        world_R, local_q = {}, {}
+        world_R, world_T, local_q = {}, {}, {}
         by_bone = {c[0]: c for c in chains}
         for bi in rig._order():
             nm = rig.name[bi]
             p = rig.parent.get(bi)
+            world_T[bi] = (world_T[p] + world_R[p] @ rig.rest_t[bi]) if p is not None \
+                else rig.rest_t[bi].copy()
             pR = world_R.get(p) if p is not None else None
             if pR is None:
                 pR = rig.world_rest[p][1] if p is not None else np.eye(3)
@@ -479,13 +549,89 @@ def retarget_word(rig, word, chains):
             local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
         out_q.append({k: [round(float(x), 5) for x in v] for k, v in local_q.items()})
 
-        # §14 test 7: where did the wrist land? Measured in the IMAGE PLANE only -- the
-        # target's own z is the noise this solver exists to discard, so scoring against it
-        # would be scoring against nothing. x/y is what the data actually knows.
+        # §14 test 7: where did the wrist land? Measured on the RIG, by forward kinematics
+        # through the quaternions we are about to ship -- world_T above is that FK.
+        #
+        # The previous version compared P[wr] to tgt[wr]. Those are solve_depth's output and
+        # its own input, and solve_depth copies x/y straight through, so the two are equal by
+        # construction: it reported 0.00% on six of eleven signs and never once looked at the
+        # skeleton. A metric that cannot fail is not a test, and this one certified a rig
+        # whose fingertips were a whole hand-length out of place. Anything scored here must
+        # come from world_T, never from P.
+        #
+        # Image plane only -- the target's own z is the noise this solver exists to discard,
+        # so scoring against it would be scoring against nothing.
         for side, wr in (("l", L_WR), ("r", R_WR)):
-            if P.get(wr) is not None and not np.any(np.isnan(tgt[wr])):
-                err.append(float(np.linalg.norm(P[wr][:2] - tgt[wr][:2])) / scale)
-    return d, out_q, np.array(err), clamps, total, driven
+            if np.any(np.isnan(tgt[wr])):
+                continue
+            got = world_T[rig.by[f"hand_{side}"]]
+            err.append(float(np.linalg.norm(got[:2] - tgt[wr][:2])) / scale)
+            # Handshape, scored separately so it cannot hide behind placement: each
+            # fingertip's offset FROM THE WRIST, against the same offset in the (shrunk,
+            # translated) target, in rig hand-lengths.
+            h0 = HAND0[side]
+            hl = float(np.linalg.norm(rig.wp(f"middle_01_{side}") - rig.wp(f"hand_{side}")))
+            for fname, off in FINGER_OFF.items():
+                tip = h0 + off + 3
+                if np.any(np.isnan(tgt[tip])):
+                    continue
+                g = world_T[rig.by[f"{fname}_end_{side}"]] - got
+                t_ = tgt[tip] - tgt[h0]
+                shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
+    return d, out_q, np.array(err), np.array(shp), clamps, total, driven
+
+
+def selftest(rig, chains):
+    """Prove the reported error CAN fail. It could not, and that shipped a broken avatar.
+
+    The previous wrist metric compared solve_depth's output to solve_depth's own input. Those
+    agree in x/y by construction, so it printed 0.00% on six of eleven signs no matter what
+    the skeleton was doing -- while the fingertips sat a whole hand-length out of place. The
+    same self-referential trap had already been caught once, scoring fingertip error against
+    SMOOTHED data; catching it twice by eye is not a control.
+
+    So: break the rig on purpose and require the number to notice. Rotating the elbow by 30
+    degrees must move the reported wrist error. A metric that survives this unchanged is
+    measuring its own input again.
+    """
+    base, _, err0, shp0, *_ = retarget_word(rig, "hello", chains)
+    rest = rig.rest_R[rig.by["lowerarm_r"]].copy()
+    th = np.radians(30.0)
+    rig.rest_R[rig.by["lowerarm_r"]] = rest @ np.array(
+        [[np.cos(th), -np.sin(th), 0], [np.sin(th), np.cos(th), 0], [0, 0, 1.0]])
+    try:
+        _, _, err1, shp1, *_ = retarget_word(rig, "hello", chains)
+    finally:
+        rig.rest_R[rig.by["lowerarm_r"]] = rest
+    moved = abs(float(err1.mean()) - float(err0.mean()))
+    assert moved > 1e-4, (
+        f"[err] the wrist metric did not react to a 30-degree elbow break "
+        f"({err0.mean()*100:.4f}% -> {err1.mean()*100:.4f}%). It is measuring its own input, "
+        f"not the rig. Score it from world_T (forward kinematics), never from P.")
+
+    # Handshape is measured relative to the wrist ON PURPOSE, so it must NOT react to the
+    # elbow -- that is what lets the two numbers separate placement from shape instead of
+    # masking each other. Which means the elbow break proves nothing about it, and it needs
+    # its own break, at a knuckle.
+    assert abs(float(shp1.mean()) - float(shp0.mean())) < 1e-9, (
+        "[err] handshape moved when only the ELBOW changed. It is supposed to be "
+        "wrist-relative; if the elbow leaks into it, the two metrics are not independent "
+        "and neither one means what it says.")
+    rest_f = rig.rest_R[rig.by["index_02_r"]].copy()
+    rig.rest_R[rig.by["index_02_r"]] = rest_f @ np.array(
+        [[np.cos(th), -np.sin(th), 0], [np.sin(th), np.cos(th), 0], [0, 0, 1.0]])
+    try:
+        _, _, err2, shp2, *_ = retarget_word(rig, "hello", chains)
+    finally:
+        rig.rest_R[rig.by["index_02_r"]] = rest_f
+    assert abs(float(shp2.mean()) - float(shp0.mean())) > 1e-4, (
+        f"[err] the handshape metric did not react to a 30-degree knuckle break "
+        f"({shp0.mean()*100:.4f}% -> {shp2.mean()*100:.4f}%). Score it from world_T, never "
+        f"from the targets it was solved against.")
+    print(f"[selftest] break the elbow 30deg   -> wrist {err0.mean()*100:5.2f}% -> "
+          f"{err1.mean()*100:5.2f}%   handshape unchanged (wrist-relative, as intended)")
+    print(f"[selftest] break a knuckle 30deg   -> handshape {shp0.mean()*100:5.1f}% -> "
+          f"{shp2.mean()*100:5.1f}%   (both metrics can fail)")
 
 
 def main():
@@ -493,20 +639,21 @@ def main():
     words = args or ["hello", "mom", "water"]
     rig = Rig(GLB if GLB.exists() else REPO / "3D Char deaf.glb")
     chains = build_chains(rig)
+    selftest(rig, chains)
     missing = [c[0] for c in chains if c[0] not in rig.by] + \
               [c[1] for c in chains if c[1] not in rig.by]
     assert not missing, f"rig has no bone named {sorted(set(missing))}"
     print(f"rig    {len(rig.joints)} joints, {len(chains)} driven bones "
           f"(shoulder width {np.linalg.norm(rig.wp('upperarm_l')-rig.wp('upperarm_r')):.3f} m)")
     print(f"\n{'word':<12s} {'frames':>6s} {'hands':>12s} {'wrist err':>11s} "
-          f"{'p95':>7s} {'clamped':>8s}")
-    print("-" * 62)
+          f"{'p95':>7s} {'handshape':>10s} {'clamped':>8s}")
+    print("-" * 74)
     baked = {}
     for w in words:
         if not (WORDS / f"{w}.json").exists():
             print(f"{w:<12s}  no such word file")
             continue
-        d, q, err, cl, tot, driven = retarget_word(rig, w, chains)
+        d, q, err, shp, cl, tot, driven = retarget_word(rig, w, chains)
         F = np.array(d["frames"], dtype=float)
         lh = 1.0 - np.isnan(F[:, 33:54, 0]).mean()
         rh = 1.0 - np.isnan(F[:, 54:75, 0]).mean()
@@ -514,7 +661,9 @@ def main():
                  "left" if lh > .5 else "none")
         e = f"{err.mean()*100:.1f}%" if len(err) else "n/a"
         p95 = f"{np.percentile(err,95)*100:.1f}%" if len(err) else "n/a"
-        print(f"{w:<12s} {len(q):6d} {hands:>12s} {e:>11s} {p95:>7s} {cl*100.0/max(tot,1):7.1f}%")
+        hs = f"{shp.mean()*100:.1f}%" if len(shp) else "n/a"
+        print(f"{w:<12s} {len(q):6d} {hands:>12s} {e:>11s} {p95:>7s} {hs:>10s} "
+              f"{cl*100.0/max(tot,1):7.1f}%")
         baked[w] = {"fps": d["fps"], "frames": q,
                     "hands": hands, "gloss": d.get("glosses", [w])[0],
                     # §14 test 7 numbers travel WITH the animation, so a viewer showing the
@@ -522,6 +671,7 @@ def main():
                     # is exact.
                     "err": round(float(err.mean() * 100), 2) if len(err) else None,
                     "p95": round(float(np.percentile(err, 95) * 100), 2) if len(err) else None,
+                    "shape": round(float(shp.mean() * 100), 1) if len(shp) else None,
                     "clamp": round(cl * 100.0 / max(tot, 1), 1)}
     out = REPO / "avatar" / "baked_signs.json"
     out.write_text(json.dumps({
