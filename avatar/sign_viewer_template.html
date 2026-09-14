@@ -328,7 +328,11 @@ names.forEach(w => {
 
 document.getElementById("rigstats").innerHTML =
   `<dt>joints</dt><dd>${nb}</dd>` +
-  `<dt>driven by motion</dt><dd>36</dd>` +
+  `<dt>driven by motion</dt><dd>${(() => {
+      const seen = new Set();
+      for (const w in SIGNS) for (const f of SIGNS[w].frames) for (const k in f) seen.add(k);
+      return seen.size;
+    })()}</dd>` +
   `<dt>triangles</dt><dd>${(ni/3).toLocaleString()}</dd>` +
   `<dt>vertices</dt><dd>${nv.toLocaleString()}</dd>` +
   `<dt>signs loaded</dt><dd>${names.length}</dd>`;

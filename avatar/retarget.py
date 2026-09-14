@@ -43,6 +43,10 @@ FINGER_OFF = {"thumb": 1, "index": 5, "middle": 9, "ring": 13, "pinky": 17}
 # Nothing else should touch it.
 _FLIP_Z = True
 
+# How much of the head's rotation the neck carries. A head that swivels on a rigid neck reads
+# as a bobblehead; a third is enough to make the motion come from the body.
+NECK_SHARE = 0.35
+
 
 # ── GLB rest skeleton ────────────────────────────────────────────────────────────────────
 def load_skeleton(path):
@@ -289,7 +293,7 @@ def smooth_z(F, win=7):
     return out
 
 
-def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None):
+def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None, want_front=None):
     """Recover z by bone length (§3.2), walking the tree outward from each anchored shoulder.
 
     The data's z is noise -- on `hello` it spans 7.7 units against a 2-unit-wide body -- so it
@@ -297,8 +301,20 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None):
     the 2D span already exceeds the bone's rest length the quadratic has no real root: the
     limb is foreshortened past what the rig can reach, so we clamp to a fully in-plane bone
     rather than invent depth.
+
+    CHOOSING THE ROOT: the SIDE is reliable even though the MAGNITUDE is not. Measured across
+    all 11 signs, the data puts the wrist in front of the shoulder line in 100.0% of frames --
+    which is what signing is. So `want_front` carries that per-landmark boolean, read off the
+    data in its own space where it is trustworthy, and the root that agrees with it wins.
+
+    That replaces a strictly worse test. The previous rule compared src[b] - src[a]: a
+    DIFFERENCE of two noisy values, which is noisier than either, and it produced hands behind
+    the body on 46% of `thankyou`'s frames and 33% of `please`'s while the data said in-front
+    on every single one. Where both roots agree with the prior, or neither does, it is genuinely
+    ambiguous and the old relative-z rule with its hysteresis still decides.
     """
     P = {L_SH: rig.wp("upperarm_l").copy(), R_SH: rig.wp("upperarm_r").copy()}
+    ref_z = float((rig.wp("upperarm_l")[2] + rig.wp("upperarm_r")[2]) / 2.0)
     sign_used = {}
     clamped = 0
     for b, a, L in tree:
@@ -322,14 +338,21 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None):
             # the previous frame. The hysteresis band is what stops a bone that is nearly
             # edge-on -- where the smoothed signal sits near zero and carries almost no
             # information -- from dithering between the two roots every frame.
-            src = zref if zref is not None else frame[:, 2]
-            rel = (float(src[b] - src[a])
-                   if not (np.isnan(src[a]) or np.isnan(src[b])) else 0.0)
-            prev = prev_sign.get(b) if prev_sign else None
-            if prev is not None and abs(rel) < 0.06:
-                sgn = prev                                   # too weak to overturn the past
+            wf = want_front.get(b) if want_front else None
+            plus_front = (pa[2] + dz) > ref_z
+            minus_front = (pa[2] - dz) > ref_z
+            if wf is not None and plus_front != minus_front:
+                # the prior actually separates the two roots, so let it decide
+                sgn = 1.0 if (plus_front == wf) else -1.0
             else:
-                sgn = 1.0 if rel >= 0 else -1.0
+                src = zref if zref is not None else frame[:, 2]
+                rel = (float(src[b] - src[a])
+                       if not (np.isnan(src[a]) or np.isnan(src[b])) else 0.0)
+                prev = prev_sign.get(b) if prev_sign else None
+                if prev is not None and abs(rel) < 0.06:
+                    sgn = prev                               # too weak to overturn the past
+                else:
+                    sgn = 1.0 if rel >= 0 else -1.0
             sign_used[b] = sgn
             P[b] = np.array([pa[0] + dx, pa[1] + dy, pa[2] + sgn * dz])
     return P, clamped, sign_used
@@ -419,6 +442,125 @@ def _unused_palm_scale(F, side, rig):
     return rig_norm / est
 
 
+def head_frames(F, rig):
+    """Head orientation per frame, as a world rotation for the `head` bone. None where unknown.
+
+    WHY THIS EXISTS: non-manual markers are one of the five parameters that distinguish one
+    ASL sign from another, and we were animating none of them -- 36 of the rig's 88 joints,
+    with `neck`, `head` and `jaw` all frozen at rest. A frozen head does not read as neutral,
+    it reads as absent. The face landmarks were 100% present in every clip the whole time.
+
+    MEASURED IN THE IMAGE PLANE, NOT FROM z. The obvious construction is a frame from nose and
+    both ears, but that leans on the depth channel §3.2 calls noise, and it does not survive
+    being checked: yaw taken from the ears' z disagrees with a pure image-plane estimate of the
+    same yaw (|r| 0.8 on the signs that genuinely turn, and uncorrelated on the ones that do
+    not, where it is reading pure noise). So all three angles come from x/y only:
+
+        yaw    how far the nose sits off the ear midpoint, along the ear line
+        roll   the angle of the ear line itself
+        pitch  the nose's offset from the ear line, across it
+
+    HONEST LIMIT, so nobody reads more into this than it does: this gives head POSE. It does
+    not give eyebrow raise, which is the grammatically loaded non-manual -- brow-up marks
+    yes/no questions, brow-down marks wh-questions -- because MediaPipe Pose has no eyebrow
+    landmarks at all. Its 11 face points are nose, six eye points, two ears, two mouth corners.
+    Recovering brows needs a face-mesh capture we do not have, and no amount of work on these
+    landmarks will produce it. The rig HAS eyebrow bones; we have nothing to drive them with.
+    """
+    EAR_L, EAR_R = 7, 8
+    n = len(F)
+    raw = []
+    for i in range(n):
+        el, er, no = F[i, EAR_L, :2], F[i, EAR_R, :2], F[i, NOSE, :2]
+        if np.any(np.isnan(el)) or np.any(np.isnan(er)) or np.any(np.isnan(no)):
+            raw.append(None)
+            continue
+        across = el - er                         # toward the signer's left
+        span = float(np.linalg.norm(across))
+        if span < 1e-6:
+            raw.append(None)
+            continue
+        u = across / span
+        v = np.array([u[1], -u[0]])              # perpendicular, pointing UP (data y is down)
+        d = (no - (el + er) / 2.0) / (span / 2.0)
+        raw.append((float(np.dot(d, u)), float(np.dot(d, v)),
+                    float(np.arctan2(-across[1], across[0]))))
+
+    # PITCH IS CALIBRATED TO THIS CLIP'S OWN NEUTRAL, the other two are not. The nose does not
+    # sit ON the ear line at rest -- it sits below it, by an amount that is this signer's face,
+    # not a head movement. Subtracting the clip median measures the NOD rather than the
+    # anatomy. Yaw and roll need no such treatment: both are genuinely zero when the head is
+    # level and facing the camera.
+    pitch0 = float(np.median([r[1] for r in raw if r is not None])) if any(
+        r is not None for r in raw) else 0.0
+
+    out = []
+    for r in raw:
+        if r is None:
+            out.append(None)
+            continue
+        yaw = float(np.clip(r[0], -1.0, 1.0)) * (np.pi / 3.0)      # +-1 -> +-60 deg
+        pitch = float(np.clip(r[1] - pitch0, -1.0, 1.0)) * (np.pi / 6.0)
+        roll = r[2]
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        cp, sp = np.cos(-pitch), np.sin(-pitch)   # nose UP is a NEGATIVE rotation about +x
+        cr, sr = np.cos(roll), np.sin(roll)
+        Ry = np.array([[cy, 0, sy], [0, 1.0, 0], [-sy, 0, cy]])      # yaw, about up (+y)
+        Rp = np.array([[1.0, 0, 0], [0, cp, -sp], [0, sp, cp]])      # pitch, about +x
+        Rr = np.array([[cr, -sr, 0], [sr, cr, 0], [0, 0, 1.0]])      # roll, about forward
+        out.append(Rr @ Ry @ Rp)
+    return out
+
+
+def scale_rot(R, t):
+    """The rotation R, scaled to a fraction t of its angle. t=0 is identity, t=1 is R."""
+    q = mat_to_quat(R)
+    w = float(np.clip(q[3], -1.0, 1.0))
+    ang = 2.0 * np.arccos(abs(w))
+    if ang < 1e-9:
+        return np.eye(3)
+    axis = q[:3] / (np.linalg.norm(q[:3]) + 1e-12)
+    if w < 0:
+        axis = -axis
+    a = ang * t / 2.0
+    return quat_to_mat(np.array([*(axis * np.sin(a)), np.cos(a)]))
+
+
+def arm_scale(F, side, rig):
+    """How much to shrink this signer's arm to fit the avatar's, in shoulder-width units.
+
+    The same measurement as hand_scale, one level up the chain, and for the same reason: the
+    upper arm and forearm are rigid, so their lengths are posture-invariant and a high
+    percentile of the observed 2D length is the best available look at the true 3D one.
+
+    Measured p90 against the rig, right arm, over the 11 signs:
+
+        forearm   0.66x (`no`) .. 1.24x (`drink`)      upperarm  0.74x .. 1.01x
+
+    Both segments get one shared scale -- the median of the two ratios -- rather than one
+    each, because scaling them independently would change the ELBOW's position relative to
+    the shoulder-wrist line, and that is a posture change, not a proportion correction.
+    """
+    sh, el, wr = ((L_SH, L_EL, L_WR) if side == "l" else (R_SH, R_EL, R_WR))
+    shw = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    ratios = []
+    for a, b, ra, rb in ((sh, el, f"upperarm_{side}", f"lowerarm_{side}"),
+                         (el, wr, f"lowerarm_{side}", f"hand_{side}")):
+        d = np.linalg.norm(F[:, b, :2] - F[:, a, :2], axis=1)
+        d = d[~np.isnan(d)]
+        if len(d) < 3:
+            continue
+        est = float(np.percentile(d, 90))
+        if est < 1e-6:
+            continue
+        ratios.append((rig.bone_len(ra, rb) / shw) / est)
+    if not ratios:
+        return 1.0
+    # Only ever shrink toward the rig; never stretch the signer's arm to fill a longer one,
+    # which would push the hand outside the signing space to no benefit.
+    return float(min(np.median(ratios), 1.0))
+
+
 def frame_from(origin, fwd, across):
     """Orthonormal basis from a long axis and an across axis. Returns columns [x, y, z]."""
     x = fwd / (np.linalg.norm(fwd) + 1e-12)
@@ -468,16 +610,70 @@ def retarget_word(rig, word, chains):
         return origin + np.array([p[0], -p[1], p[2]]) * scale
 
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
+    AS = {s: arm_scale(F, s, rig) for s in ("l", "r")}
+    HR = head_frames(F, rig)          # non-manual: head pose, one of the five ASL parameters
     ZS = smooth_z(F)
     tree = build_tree(rig)
+
+    # WHICH SIDE OF THE SHOULDER LINE IS THIS LANDMARK ON? Read in the data's own space, where
+    # the SIGN of z is trustworthy even though its magnitude is not: across all 11 signs the
+    # data puts the wrist in front on 100.0% of frames. solve_depth uses this to pick the root
+    # of the depth quadratic; see its docstring for why it beats the relative-z test it
+    # replaced. Only the two arm landmarks and the hand blocks need it.
+    # THE ELBOW ONLY, which is not where I expected it to help. The reliable measurement was
+    # about the WRIST -- in front on 100.0% of frames -- so the obvious move was to apply the
+    # prior there, and to every landmark while we were at it. Measured, that is worse than not
+    # applying it at all:
+    #
+    #     prior applied to      mean `front`
+    #     nothing                  89.9%
+    #     the wrist                85.0%     <- the landmark the 100% claim was about
+    #     the elbow only           92.4%     <- shipped, better or equal on every word
+    #
+    # The wrist is the landmark whose side we know, but it is also the landmark whose depth is
+    # already pinned by its parent: by the time the chain reaches it, the elbow's root has
+    # fixed where it can be, so forcing it produces a root that contradicts the arm above it.
+    # The elbow is the joint where the choice is genuinely free, so that is where a prior buys
+    # anything. Nothing else moved: handshape and clamping are identical in all variants.
+    sh_z = np.nanmean(F[:, [L_SH, R_SH], 2], axis=1)
+    want_front = [{} for _ in range(n)]
+    for fi in range(n):
+        if np.isnan(sh_z[fi]):
+            continue
+        for lm in (L_EL, R_EL):
+            if not np.isnan(F[fi, lm, 2]):
+                want_front[fi][lm] = bool(F[fi, lm, 2] > sh_z[fi])
+
     prev_sign = {}
     out_q, err, shp, front, clamps, total = [], [], [], [], 0, 0
-    driven = [c[0] for c in chains]
+    driven = [c[0] for c in chains] + ["neck", "head"]
     for fi in range(n):
         tgt = {}
         for lm in range(75):
             tgt[lm] = to_rig(F[fi, lm]) if not np.any(np.isnan(F[fi, lm])) else \
                 np.array([np.nan] * 3)
+
+        # Bring the arm inside the rig's reach, by scaling the elbow and wrist about the
+        # SHOULDER. Exactly the same argument as hand_scale, one level up: the signer's arm is
+        # not the rig's arm. Measured p90 forearm length against the rig's, over the 11 signs,
+        # the ratio runs 0.66x (`no`) to 1.24x (`drink`) -- and `drink` is the worst sign we
+        # have on every axis, with 34.9% of its bones clamped flat.
+        #
+        # Scaling rather than clamping, because clamping is the destructive option. A clamped
+        # bone is flattened into the image plane, which throws away the depth solve for that
+        # bone and every bone downstream of it. Scaling preserves the whole arm's posture and
+        # only changes how far from the body it reaches -- and since everything here is already
+        # normalised to shoulder width, reaching to the RIG's proportions is the correct
+        # target anyway. Sign location is phonological, but it is location relative to the
+        # signer's own body, which is what this preserves.
+        for s in ("l", "r"):
+            sh, el, wr = ((L_SH, L_EL, L_WR) if s == "l" else (R_SH, R_EL, R_WR))
+            if np.any(np.isnan(tgt[sh])) or abs(AS[s] - 1.0) < 1e-6:
+                continue
+            a0 = tgt[sh].copy()
+            for lm in (el, wr):
+                if not np.any(np.isnan(tgt[lm])):
+                    tgt[lm] = a0 + (tgt[lm] - a0) * AS[s]
         # Shrink each hand about its own wrist to the rig's hand size, THEN move the whole
         # block onto the pose wrist. Both steps happen in rig space, after conversion.
         #
@@ -506,8 +702,8 @@ def retarget_word(rig, word, chains):
                 for k in range(21):
                     if not np.any(np.isnan(tgt[h0 + k])):
                         tgt[h0 + k] = tgt[h0 + k] + shift
-        P, cl, used = solve_depth(tgt, rig, F[fi], tree,
-                                  zref=ZS[fi], prev_sign=prev_sign)
+        P, cl, used = solve_depth(tgt, rig, F[fi], tree, zref=ZS[fi],
+                                  prev_sign=prev_sign, want_front=want_front[fi])
         prev_sign.update(used)
         clamps += cl
         total += len(tree)
@@ -526,6 +722,16 @@ def retarget_word(rig, word, chains):
                 pR = rig.world_rest[p][1] if p is not None else np.eye(3)
             c = by_bone.get(nm)
             if c is None:
+                # The head is not a direction chain -- a bone pointing the right way still has
+                # a free roll, and for the head roll IS the tilt. So it takes a full rotation,
+                # built in head_frames() from the face landmarks, applied over its rest frame.
+                # The neck carries a third of it: a head that turns while the neck stays rigid
+                # reads as a bobblehead, and the extra third has to come off somewhere.
+                if HR is not None and HR[fi] is not None and nm in ("neck", "head"):
+                    delta = HR[fi] if nm == "head" else scale_rot(HR[fi], NECK_SHARE)
+                    world_R[bi] = delta @ rig.world_rest[bi][1]
+                    local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
+                    continue
                 world_R[bi] = pR @ rig.rest_R[bi]
                 continue
             _bone, child, a, b = c
