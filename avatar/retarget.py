@@ -195,7 +195,89 @@ def build_tree(rig):
     return t
 
 
-def solve_depth(tgt, rig, frame, tree):
+def one_euro(F, fps=30.0, min_cutoff=2.0, beta=0.4):
+    """The filter §6.12 failure mode #9 prescribes, applied to every landmark channel.
+
+    §3.3: "Landmarks jitter... This is a property of the source recordings, not a bug awaiting
+    a fix." §6.12 lists "everything buzzes or shimmers, especially the fingers" as failure #9,
+    owns it on OUR side, and names the remedy: "One-Euro or moving-average filter at render
+    time". This is that filter, and not applying it was simply a step I skipped.
+
+    One-Euro rather than a moving average because its cutoff adapts to speed: it smooths hard
+    while a hand is nearly still, where jitter dominates, and barely at all through a fast
+    transition, where a fixed window would smear the handshape change that carries the
+    meaning. beta is the speed coupling; min_cutoff sets the floor.
+
+    NaN runs are left untouched -- a missing hand must stay missing so it holds rest (§6),
+    never be interpolated into existence here.
+
+    THE DEFAULTS ARE MEASURED, not guessed. Smoothing genuinely trades handshape fidelity for
+    stability, so one number cannot choose them; both failure modes were scored across a grid,
+    over all 11 signs, with fingertip error taken against the RAW landmarks rather than the
+    filtered ones (scoring a smoothed result against its own smoothed input is
+    self-referential -- more filtering would keep flattering itself while the avatar drifted
+    further from what the signer actually did):
+
+        setting                 popping frames    fingertip err vs raw
+        no filter                     70                14.7%
+        mc 4.5  beta 0.02             26                16.5%
+        mc 2.0  beta 0.40             15                19.2%   <- the knee, shipped
+        mc 1.2  beta 0.02              9                21.8%
+        mc 0.8  beta 0.00              6                24.6%
+
+    Note that the setting which minimises POPPING is the worst for handshape, and the one
+    that minimised WRIST error was worst of all -- which is why wrist error alone was never
+    enough to tell whether this was working.
+    """
+    out = F.copy()
+    n, m, _ = F.shape
+    prev_x = np.full((m, 3), np.nan)
+    prev_dx = np.zeros((m, 3))
+    for i in range(n):
+        x = F[i]
+        fresh = np.isnan(prev_x[:, 0]) & ~np.isnan(x[:, 0])
+        prev_x[fresh] = x[fresh]
+        ok = ~np.isnan(x[:, 0]) & ~np.isnan(prev_x[:, 0])
+        if ok.any():
+            dx = (x[ok] - prev_x[ok]) * fps
+            a_d = 1.0 / (1.0 + fps / (2 * np.pi * 1.0))
+            prev_dx[ok] = a_d * dx + (1 - a_d) * prev_dx[ok]
+            cutoff = min_cutoff + beta * np.abs(prev_dx[ok])
+            a = 1.0 / (1.0 + fps / (2 * np.pi * cutoff))
+            sm = a * x[ok] + (1 - a) * prev_x[ok]
+            out[i][ok] = sm
+            prev_x[ok] = sm
+        prev_x[np.isnan(x[:, 0])] = np.nan          # a gap resets the filter state
+    return out
+
+
+def smooth_z(F, win=7):
+    """Moving average of the z channel only, NaN-aware.
+
+    z is the noisy channel, and the depth solver has to make a BINARY choice from it: each
+    bone's quadratic has two roots, one in front of the image plane and one behind. Taking
+    that decision per frame from the raw z meant that every time the noise crossed zero the
+    bone snapped through the plane -- measured at 100-178 degrees of rotation in a single
+    30 fps frame, on up to 15 frames of a 21-frame clip. Nothing anatomical moves like that;
+    it reads as the hand tearing.
+
+    Smoothing first makes the decision follow the sustained trend instead of the noise, while
+    still allowing a genuine turn of the hand to flip it. Only the SIGN is taken from this --
+    the depth magnitude still comes from bone length (§3.2), never from z.
+    """
+    Z = F[:, :, 2].copy()
+    out = np.full_like(Z, np.nan)
+    n = len(Z)
+    for i in range(n):
+        lo, hi = max(0, i - win // 2), min(n, i + win // 2 + 1)
+        seg = Z[lo:hi]
+        with np.errstate(invalid="ignore"):
+            m = np.nanmean(np.where(np.isnan(seg), np.nan, seg), axis=0)
+        out[i] = m
+    return out
+
+
+def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None):
     """Recover z by bone length (§3.2), walking the tree outward from each anchored shoulder.
 
     The data's z is noise -- on `hello` it spans 7.7 units against a 2-unit-wide body -- so it
@@ -205,6 +287,7 @@ def solve_depth(tgt, rig, frame, tree):
     rather than invent depth.
     """
     P = {L_SH: rig.wp("upperarm_l").copy(), R_SH: rig.wp("upperarm_r").copy()}
+    sign_used = {}
     clamped = 0
     for b, a, L in tree:
         pa = P.get(a)
@@ -222,15 +305,80 @@ def solve_depth(tgt, rig, frame, tree):
             clamped += 1
         else:
             dz = np.sqrt(max(L * L - planar, 0.0))
-            meas = (frame[b][2] - frame[a][2]
-                    if not (np.any(np.isnan(frame[a])) or np.any(np.isnan(frame[b]))) else 0.0)
-            P[b] = np.array([pa[0] + dx, pa[1] + dy, pa[2] + (dz if meas >= 0 else -dz)])
-    return P, clamped
+            # Which root of the quadratic: in front of the image plane, or behind it.
+            # Taken from the SMOOTHED z, with hysteresis toward whatever this bone chose on
+            # the previous frame. The hysteresis band is what stops a bone that is nearly
+            # edge-on -- where the smoothed signal sits near zero and carries almost no
+            # information -- from dithering between the two roots every frame.
+            src = zref if zref is not None else frame[:, 2]
+            rel = (float(src[b] - src[a])
+                   if not (np.isnan(src[a]) or np.isnan(src[b])) else 0.0)
+            prev = prev_sign.get(b) if prev_sign else None
+            if prev is not None and abs(rel) < 0.06:
+                sgn = prev                                   # too weak to overturn the past
+            else:
+                sgn = 1.0 if rel >= 0 else -1.0
+            sign_used[b] = sgn
+            P[b] = np.array([pa[0] + dx, pa[1] + dy, pa[2] + sgn * dz])
+    return P, clamped, sign_used
+
+
+def hand_scale(F, side, rig):
+    """How much to shrink this signer's hand to fit the avatar's, in shoulder-width units.
+
+    Measured: the data's wrist-to-middle-fingertip runs 1.28-1.61x the rig's, relative to
+    shoulder width. That is not a rigging fault -- MediaPipe Pose and MediaPipe Hands are
+    SEPARATE models whose outputs are fused into one 75-point frame, and their scales do not
+    agree. Retargeting the hand at body scale therefore drives every fingertip past where the
+    rig can reach, the depth solver clamps the bone flat into the image plane, and the
+    handshape is destroyed -- which is what 32-42% clamping was, and why the signs read as
+    mush while the WRIST still landed within 0.4% of target.
+
+    🔴 MEASURE THE PALM, NEVER THE FINGERTIP. The first version of this used wrist-to-middle-
+    FINGERTIP, and that distance collapses when the hand closes -- so on a fist the estimate
+    came back tiny, the ratio inverted, and the hand was scaled UP instead of down. `yes` is a
+    fist and `drink` is a closed C: both ended up with ~100% of every finger bone clamped
+    flat, i.e. no handshape at all. Estimating hand size from a quantity that varies with
+    handshape is precisely backwards for a sign language, where handshape is the thing being
+    communicated.
+
+    wrist-to-middle-MCP is the palm, which is rigid: §6.4 parents every MCP directly to the
+    hand, so the MCP row cannot move relative to the wrist no matter what the fingers do.
+
+    The 90th percentile across the clip estimates the true 3D length, because projection can
+    only ever SHORTEN a bone -- so the longest projection observed is the closest look at the
+    real thing. The mean would systematically under-read it.
+    """
+    h0 = HAND0[side]
+    mcp = h0 + FINGER_OFF["middle"]
+    ok = ~np.isnan(F[:, mcp, 0]) & ~np.isnan(F[:, h0, 0])
+    if ok.sum() < 3:
+        return 1.0
+    est = float(np.percentile(
+        np.linalg.norm(F[ok][:, mcp, :2] - F[ok][:, h0, :2], axis=1), 90))
+    if est < 1e-6:
+        return 1.0
+    sh = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    rig_norm = float(np.linalg.norm(
+        rig.wp(f"middle_01_{side}") - rig.wp(f"hand_{side}"))) / sh
+    return rig_norm / est
+
+
+def frame_from(origin, fwd, across):
+    """Orthonormal basis from a long axis and an across axis. Returns columns [x, y, z]."""
+    x = fwd / (np.linalg.norm(fwd) + 1e-12)
+    a = across - x * float(np.dot(across, x))          # Gram-Schmidt
+    na = np.linalg.norm(a)
+    if na < 1e-9:
+        return None
+    y = a / na
+    return np.column_stack([x, y, np.cross(x, y)])
 
 
 def retarget_word(rig, word, chains):
     d = json.loads((WORDS / f"{word}.json").read_text(encoding="utf-8"))
     F = np.array(d["frames"], dtype=float)
+    F = one_euro(F, fps=float(d.get("fps", 30)))     # §6.12 #9, ours to apply
     n = len(F)
 
     # data is shoulder-centred with shoulder width == 1.0, y DOWN (§ note in every file).
@@ -242,7 +390,10 @@ def retarget_word(rig, word, chains):
     def to_rig(p):
         return origin + np.array([p[0], -p[1], p[2]]) * scale
 
+    HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
+    ZS = smooth_z(F)
     tree = build_tree(rig)
+    prev_sign = {}
     out_q, err, clamps, total = [], [], 0, 0
     driven = [c[0] for c in chains]
     for fi in range(n):
@@ -250,7 +401,20 @@ def retarget_word(rig, word, chains):
         for lm in range(75):
             tgt[lm] = to_rig(F[fi, lm]) if not np.any(np.isnan(F[fi, lm])) else \
                 np.array([np.nan] * 3)
-        P, cl = solve_depth(tgt, rig, F[fi], tree)
+        # Shrink each hand about its own wrist to the rig's hand size. Done in rig space,
+        # after conversion, so the wrist itself does not move and the arm solution above is
+        # untouched -- only the fingers come back inside reach.
+        for s in ("l", "r"):
+            h0 = HAND0[s]
+            if np.any(np.isnan(tgt[h0])) or abs(HS[s] - 1.0) < 1e-6:
+                continue
+            w0 = tgt[h0].copy()
+            for k in range(1, 21):
+                if not np.any(np.isnan(tgt[h0 + k])):
+                    tgt[h0 + k] = w0 + (tgt[h0 + k] - w0) * HS[s]
+        P, cl, used = solve_depth(tgt, rig, F[fi], tree,
+                                  zref=ZS[fi], prev_sign=prev_sign)
+        prev_sign.update(used)
         clamps += cl
         total += len(tree)
 
@@ -277,12 +441,41 @@ def retarget_word(rig, word, chains):
                 world_R[bi] = pR @ rig.rest_R[bi]
                 continue
             want /= np.linalg.norm(want)
-            # where this bone points at REST, carried into the parent's CURRENT frame
-            rest_dir = rig.wp(child) - rig.wp(nm)
-            rest_dir /= np.linalg.norm(rest_dir) + 1e-12
             R_rest_parent = rig.world_rest[p][1] if p is not None else np.eye(3)
-            cur = pR @ np.linalg.inv(R_rest_parent) @ rest_dir
-            world_R[bi] = align(cur, want) @ (pR @ rig.rest_R[bi])
+
+            # THE HAND GETS A FULL FRAME, NOT A DIRECTION.
+            #
+            # align() returns the MINIMAL rotation between two vectors, which pins only 2 of
+            # 3 rotational degrees of freedom -- the third, roll about the bone's own axis,
+            # is left at whatever the parent happened to give. For every other bone that is
+            # fine or nearly so. For the hand it is not: roll about the forearm axis IS palm
+            # orientation, and palm orientation is one of the five parameters that distinguish
+            # one ASL sign from another, alongside handshape, location, movement and
+            # non-manual markers. Leaving it unsolved meant the wrist arrived in exactly the
+            # right place with the palm facing an arbitrary direction -- correct by every
+            # number I was measuring, and unreadable as language.
+            #
+            # The across-palm vector (index MCP -> pinky MCP) pins it. Both landmarks were in
+            # the data all along; nothing here needs anything new from the rigger.
+            hand_side = nm[-1] if nm.startswith("hand_") else None
+            solved = False
+            if hand_side in ("l", "r"):
+                h0 = HAND0[hand_side]
+                iM, pM = h0 + FINGER_OFF["index"], h0 + FINGER_OFF["pinky"]
+                if P.get(iM) is not None and P.get(pM) is not None:
+                    Ft = frame_from(P[a], want, P[pM] - P[iM])
+                    Fr = frame_from(rig.wp(nm), rig.wp(child) - rig.wp(nm),
+                                    rig.wp(f"pinky_01_{hand_side}")
+                                    - rig.wp(f"index_01_{hand_side}"))
+                    if Ft is not None and Fr is not None:
+                        world_R[bi] = (Ft @ Fr.T) @ rig.world_rest[bi][1]
+                        solved = True
+            if not solved:
+                # where this bone points at REST, carried into the parent's CURRENT frame
+                rest_dir = rig.wp(child) - rig.wp(nm)
+                rest_dir /= np.linalg.norm(rest_dir) + 1e-12
+                cur = pR @ np.linalg.inv(R_rest_parent) @ rest_dir
+                world_R[bi] = align(cur, want) @ (pR @ rig.rest_R[bi])
             local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
         out_q.append({k: [round(float(x), 5) for x in v] for k, v in local_q.items()})
 
