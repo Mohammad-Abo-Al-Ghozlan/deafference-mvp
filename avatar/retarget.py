@@ -39,6 +39,10 @@ HAND0 = {"l": 33, "r": 54}          # wrist landmark of each hand block
 # offset of each finger's 4 nodes within a 21-point hand block
 FINGER_OFF = {"thumb": 1, "index": 5, "middle": 9, "ring": 13, "pinky": 17}
 
+# Only ever toggled by selftest(), to prove the `front` metric can detect a wrong z axis.
+# Nothing else should touch it.
+_FLIP_Z = True
+
 
 # ── GLB rest skeleton ────────────────────────────────────────────────────────────────────
 def load_skeleton(path):
@@ -429,6 +433,27 @@ def frame_from(origin, fwd, across):
 def retarget_word(rig, word, chains):
     d = json.loads((WORDS / f"{word}.json").read_text(encoding="utf-8"))
     F = np.array(d["frames"], dtype=float)
+
+    # 🔴 Z POINTS THE OTHER WAY IN THE DATA THAN IT DOES IN THE RIG. Flipped ONCE, here, at
+    # the boundary, so that everything downstream -- to_rig, smooth_z, solve_depth's root
+    # choice -- is speaking the rig's convention. Flipping it in two places instead would let
+    # the position and the depth-sign decision drift out of step.
+    #
+    # Established from anatomy, not from doctrine, because a convention you looked up is a
+    # convention you can misremember. Two landmarks have a known side:
+    #   - the NOSE is in front of the shoulder line. Measured: -0.90 to -1.42 in every clip.
+    #   - the WRIST, during signing, is in front of the torso. Measured: -1.1 to -2.8.
+    # Both negative, so in this data NEGATIVE z means TOWARD THE CAMERA, i.e. in front.
+    # The rig faces +z: its toes sit +0.09 forward of the ankles and its eyes +0.08 forward
+    # of the head joint. Opposite conventions.
+    #
+    # Unflipped, every hand the signer held in FRONT of their body was placed BEHIND the
+    # avatar's -- which is exactly what "the hand is from the back" was. Neither wrist error
+    # nor handshape error could see it: both are measured in the image plane, and this error
+    # is purely along the axis they discard. See the `front` metric below, which exists
+    # because of this.
+    F[:, :, 2] = -F[:, :, 2] if _FLIP_Z else F[:, :, 2]
+
     F = one_euro(F, fps=float(d.get("fps", 30)))     # §6.12 #9, ours to apply
     n = len(F)
 
@@ -438,6 +463,7 @@ def retarget_word(rig, word, chains):
     origin = (rig_sh_l + rig_sh_r) / 2.0
     # x already agrees: the signer's right shoulder is at smaller x in the data, and the rig's
     # right arm is at negative x. No mirroring. y is flipped because the data is image space.
+    # z is NOT flipped here -- it was already flipped above, on the whole array.
     def to_rig(p):
         return origin + np.array([p[0], -p[1], p[2]]) * scale
 
@@ -445,7 +471,7 @@ def retarget_word(rig, word, chains):
     ZS = smooth_z(F)
     tree = build_tree(rig)
     prev_sign = {}
-    out_q, err, shp, clamps, total = [], [], [], 0, 0
+    out_q, err, shp, front, clamps, total = [], [], [], [], 0, 0
     driven = [c[0] for c in chains]
     for fi in range(n):
         tgt = {}
@@ -566,6 +592,14 @@ def retarget_word(rig, word, chains):
                 continue
             got = world_T[rig.by[f"hand_{side}"]]
             err.append(float(np.linalg.norm(got[:2] - tgt[wr][:2])) / scale)
+            # IS THE HAND IN FRONT OF THE BODY? The two metrics above are image-plane only,
+            # so between them they cannot see the depth axis at all -- an avatar signing
+            # entirely behind its own back scores 0.0% wrist and a passing handshape. That is
+            # not hypothetical; it is what shipped, because the data's z and the rig's z run
+            # opposite ways. ASL happens in the signing space in FRONT of the signer, so this
+            # is close to a hard anatomical constraint rather than a preference, and it is
+            # cheap: the rig faces +z, so the wrist should sit at greater z than the shoulder.
+            front.append(float(got[2] > rig.wp(f"upperarm_{side}")[2]))
             # Handshape, scored separately so it cannot hide behind placement: each
             # fingertip's offset FROM THE WRIST, against the same offset in the (shrunk,
             # translated) target, in rig hand-lengths.
@@ -578,7 +612,7 @@ def retarget_word(rig, word, chains):
                 g = world_T[rig.by[f"{fname}_end_{side}"]] - got
                 t_ = tgt[tip] - tgt[h0]
                 shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
-    return d, out_q, np.array(err), np.array(shp), clamps, total, driven
+    return d, out_q, np.array(err), np.array(shp), np.array(front), clamps, total, driven
 
 
 def selftest(rig, chains):
@@ -594,7 +628,7 @@ def selftest(rig, chains):
     degrees must move the reported wrist error. A metric that survives this unchanged is
     measuring its own input again.
     """
-    base, _, err0, shp0, *_ = retarget_word(rig, "hello", chains)
+    base, _, err0, shp0, fr0, *_ = retarget_word(rig, "hello", chains)
     rest = rig.rest_R[rig.by["lowerarm_r"]].copy()
     th = np.radians(30.0)
     rig.rest_R[rig.by["lowerarm_r"]] = rest @ np.array(
@@ -633,6 +667,24 @@ def selftest(rig, chains):
     print(f"[selftest] break a knuckle 30deg   -> handshape {shp0.mean()*100:5.1f}% -> "
           f"{shp2.mean()*100:5.1f}%   (both metrics can fail)")
 
+    # And the one neither of them can see. Put the depth axis back the wrong way round and
+    # require `front` to collapse. This is the check that would have caught an avatar signing
+    # behind its own back on day one -- wrist error and handshape error both scored it clean,
+    # because both live in the image plane and the fault was on the axis they discard.
+    global _FLIP_Z
+    _FLIP_Z = False
+    try:
+        _, _, err3, shp3, fr3, *_ = retarget_word(rig, "hello", chains)
+    finally:
+        _FLIP_Z = True
+    assert fr0.mean() > 0.9 and fr3.mean() < 0.5, (
+        f"[err] the `front` metric cannot tell a correct depth axis from a reversed one "
+        f"({fr0.mean()*100:.0f}% correct vs {fr3.mean()*100:.0f}% reversed). It is the only "
+        f"check that sees z at all -- wrist and handshape error are both image-plane.")
+    print(f"[selftest] reverse the z axis     -> in front {fr0.mean()*100:5.0f}% -> "
+          f"{fr3.mean()*100:5.0f}%   (wrist {err3.mean()*100:.1f}% and handshape "
+          f"{shp3.mean()*100:.0f}% barely move -- that is why this check exists)")
+
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -646,14 +698,14 @@ def main():
     print(f"rig    {len(rig.joints)} joints, {len(chains)} driven bones "
           f"(shoulder width {np.linalg.norm(rig.wp('upperarm_l')-rig.wp('upperarm_r')):.3f} m)")
     print(f"\n{'word':<12s} {'frames':>6s} {'hands':>12s} {'wrist err':>11s} "
-          f"{'p95':>7s} {'handshape':>10s} {'clamped':>8s}")
-    print("-" * 74)
+          f"{'p95':>7s} {'handshape':>10s} {'in front':>9s} {'clamped':>8s}")
+    print("-" * 84)
     baked = {}
     for w in words:
         if not (WORDS / f"{w}.json").exists():
             print(f"{w:<12s}  no such word file")
             continue
-        d, q, err, shp, cl, tot, driven = retarget_word(rig, w, chains)
+        d, q, err, shp, fr, cl, tot, driven = retarget_word(rig, w, chains)
         F = np.array(d["frames"], dtype=float)
         lh = 1.0 - np.isnan(F[:, 33:54, 0]).mean()
         rh = 1.0 - np.isnan(F[:, 54:75, 0]).mean()
@@ -662,8 +714,9 @@ def main():
         e = f"{err.mean()*100:.1f}%" if len(err) else "n/a"
         p95 = f"{np.percentile(err,95)*100:.1f}%" if len(err) else "n/a"
         hs = f"{shp.mean()*100:.1f}%" if len(shp) else "n/a"
+        fr_s = f"{fr.mean()*100:.0f}%" if len(fr) else "n/a"
         print(f"{w:<12s} {len(q):6d} {hands:>12s} {e:>11s} {p95:>7s} {hs:>10s} "
-              f"{cl*100.0/max(tot,1):7.1f}%")
+              f"{fr_s:>9s} {cl*100.0/max(tot,1):7.1f}%")
         baked[w] = {"fps": d["fps"], "frames": q,
                     "hands": hands, "gloss": d.get("glosses", [w])[0],
                     # §14 test 7 numbers travel WITH the animation, so a viewer showing the
@@ -672,6 +725,7 @@ def main():
                     "err": round(float(err.mean() * 100), 2) if len(err) else None,
                     "p95": round(float(np.percentile(err, 95) * 100), 2) if len(err) else None,
                     "shape": round(float(shp.mean() * 100), 1) if len(shp) else None,
+                    "front": round(float(fr.mean() * 100), 0) if len(fr) else None,
                     "clamp": round(cl * 100.0 / max(tot, 1), 1)}
     out = REPO / "avatar" / "baked_signs.json"
     out.write_text(json.dumps({
