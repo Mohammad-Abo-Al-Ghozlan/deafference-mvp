@@ -9,7 +9,24 @@ Every number here is measured against the shipped 250-word export, not estimated
 
 ---
 
-## 1. 🔴 No non-manual markers. This is the largest correctness gap in the system.
+## 1. 🟠 Non-manual markers: the GRAMMATICAL four now render; the lexical ones do not
+
+> **Updated 2026-09-18.** This section used to say the avatar renders none of these, and that
+> the face channel "does not exist in the data we have" so nothing could be done without a
+> re-export. Half of that was wrong, and the wrong half was the actionable half.
+>
+> The four markers in `gloss_to_motion.NONMANUALS` — `q`, `wh`, `neg`, `top` — are
+> **grammatical**: they scope over a phrase and are determined by the sentence, not by the
+> word. So the sentence is the whole input, and no face landmark is needed to know that a
+> yes/no question takes a brow raise. The rig turned out to have the bones already
+> (`eyebrow_l/r`, `eyelid_l/r`, `jaw`, `mouth_l/r`, all parented to `head`, all skinned), and
+> `avatar/sequence_signs.py` now drives them, with the marker inferred from the raw sentence.
+> Amplitudes come from the rig's own skin weights, not from taste: 29 vertices ride
+> `eyebrow_l` at a mean 19.2 mm, and 20° about +z moves them 3.6 mm.
+>
+> **They have not been reviewed by a Deaf signer.** Legible, not authoritative.
+>
+> What is still missing is below, and it is the part that really does need the data.
 
 The export carries **75 points: 33 pose + 21 + 21 hands. There is no face.**
 
@@ -18,9 +35,14 @@ yes/no question and a statement. Head tilt and eye gaze carry topicalisation, co
 role shift. Mouth morphemes (`MM`, `TH`, `CHA`) modify a verb's manner and are lexically required
 on some signs. Negation is frequently carried by a headshake with no manual sign at all.
 
-The avatar renders **none of these**. A signed sentence with correct hands and a neutral face is
-not a neutral sentence — for a fluent reader it is closer to ungrammatical, or to a different
-meaning.
+Of that list the avatar now renders the brow and headshake markers. It renders **none of the
+rest**: eye gaze, role shift, conditionals, and every lexical mouth morpheme. Those are the ones
+that attach to a particular sign rather than to a clause, and they cannot be inferred from the
+sentence — `MM` on a verb is a fact about that verb, and nothing but the face channel or a
+per-sign lexicon can supply it.
+
+A signed sentence with correct hands and a neutral face is not a neutral sentence — for a fluent
+reader it is closer to ungrammatical, or to a different meaning.
 
 **Scope of the impact.** For the current product — isolated word playback from a 250-word
 vocabulary — this is acceptable, because isolated citation forms are the one context where
@@ -28,11 +50,13 @@ non-manuals carry the least. **For anything sentence-level it is a correctness f
 polish item**, and it should block any claim that the system "produces ASL" rather than "plays
 ASL signs."
 
-**Why it is not simply "next up."** The face channel does not exist in the data we have. GISLR
-provides 468 face landmarks, so a future export could carry them — but every downstream stage
-would need building: which non-manual attaches to which gloss, how it aligns in time with the
-manual sign, and a rig capable of rendering it. None of that exists, and none of it is a
-day's work.
+**Why the rest is not simply "next up."** The face channel does not exist in the data we have.
+GISLR provides 468 face landmarks and `training/medical/extract_landmarks.py` already runs
+MediaPipe **Holistic**, which emits them — we write 33 + 21 + 21 and drop the face. So the
+capture side is a change to code we own, on both paths. What is not a day's work is everything
+after it: which non-manual attaches to which gloss, how it aligns in time with the manual sign,
+and a Deaf reviewer to confirm any of it. The rig half of that objection is now answered — the
+bones exist and are driven.
 
 ---
 
