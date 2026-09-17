@@ -81,7 +81,25 @@ FACE_FAR = 0.70
 # this get proportionally more smoothing. `hello` measures 0.084.
 NOISE_REF = 0.10
 
-Q_MIN_CUTOFF = 3.0
+# Zero-phase: run the rotation filter forward and then backward. See smooth_quats().
+TWO_PASS = True
+
+# Reopened from 3.0 because the signal is now smoothed twice. Measured over all 250, against
+# the unfiltered track, the second pass is free in the only sense that matters -- it smooths
+# MORE while displacing the animation LESS:
+#
+#     setting                jitter   >30deg   moves the signal   wrist   handshape
+#     unfiltered             15.63d   11.11%          --            --       --
+#     one pass,  cutoff 3.0  12.93d    8.95%        2.50d         4.41%    12.32%
+#     two pass,  cutoff 6.0  11.38d    7.80%        2.09d         4.09%    11.86%   <- shipped
+#     two pass,  cutoff 8.0  11.48d    7.84%        2.00d         3.75%    11.76%
+#     two pass,  cutoff 14   11.72d    7.93%          --          3.03%    11.54%
+#
+# 6.0 is the knee on JITTER, and jitter is the only honest objective here. Wrist error and
+# handshape improve monotonically as the cutoff opens, but they measure fidelity to a target
+# that contains the tracking noise, so they reward filtering less by construction -- choosing
+# on them would end with the filter switched off and the numbers calling it an improvement.
+Q_MIN_CUTOFF = 6.0
 Q_BETA = 0.02
 
 # Playback timing -- see retime(). Frames at 30 fps: 6 = 0.20 s, 10 = 0.33 s, 18 = 0.60 s.
@@ -849,10 +867,10 @@ def smooth_quats(out_q, fps, min_cutoff=None, beta=None, bone_cut=None):
     if not out_q or min_cutoff <= 0:
         return out_q
     out = [dict(f) for f in out_q]
-    for nm in sorted({k for f in out for k in f}):
-        mc = (bone_cut or {}).get(nm, min_cutoff)
+
+    def pass_(frames, nm, mc):
         prev, prev_speed = None, 0.0
-        for f in out:
+        for f in frames:
             if nm not in f:
                 prev = None                 # a gap resets the filter, it never bridges one
                 continue
@@ -871,6 +889,24 @@ def smooth_quats(out_q, fps, min_cutoff=None, beta=None, bone_cut=None):
             sm = slerp(prev, q, alpha)
             prev = sm / (np.linalg.norm(sm) + 1e-12)
             f[nm] = [round(float(x), 4) for x in prev]
+
+    # FORWARD THEN BACKWARD, because a one-pole filter LAGS and the lag is not small. Every
+    # wrist error above about 5% traces to it rather than to the solve: measured on the frames
+    # themselves, the depth solver puts the wrist exactly on its 2D target -- residual 0.000 --
+    # and the number the second pass reports is how far the filter then moved it. On a long
+    # clip that is a transient (`hello` reads 17, 8, 22, 15% over its first four frames and
+    # then 1-2% for the remaining fifty), but `after` is 17 frames long, so the transient IS
+    # its average, and it was the worst-placed sign in the set at 12.3%.
+    #
+    # Running the same filter backwards over the result cancels the phase shift exactly, which
+    # is what filtfilt does and what makes it worth having: offline, whole clips, no reason to
+    # accept the lag of a causal filter. The cost is that the signal is smoothed twice, so the
+    # cutoff has to be reopened to land back on the same response -- see Q_MIN_CUTOFF.
+    for nm in sorted({k for f in out for k in f}):
+        mc = (bone_cut or {}).get(nm, min_cutoff)
+        pass_(out, nm, mc)
+        if TWO_PASS:
+            pass_(out[::-1], nm, mc)
     return out
 
 
@@ -1333,7 +1369,31 @@ def retarget_word(rig, word, chains):
     dom = str(d.get("segments", [{}])[0]
               .get("synthesis", {}).get("dominantHand", "R")).lower()
     passive = "l" if dom == "r" else "r"
-    if not two_handed:
+    # WHICH ARMS ARE IN THE SIGNING SPACE AT ALL, measured rather than declared. An arm whose
+    # wrist never rises within PARKED_Y of the shoulder line hung at the signer's side for the
+    # whole clip.
+    #
+    # It is measured because neither label describes THIS TAKE. Our corpus flag and ASL-LEX's
+    # Sign Type disagree on 29 of the 186 words both cover, and checked against what the arm
+    # actually does, our flag is right 84% of the time and ASL-LEX 79% -- ASL-LEX gives the
+    # citation form, and a signer may sign TREE or SICK either way on the day. What we animate
+    # is the take. By the flag alone we were driving a parked arm on 30 clips (`time`, `tree`,
+    # `after`, `chair`, `pen`, `touch`...) and holding a raised one at rest on 10 (`blue`,
+    # `if`).
+    #
+    # Driving a parked arm is not harmless: shoulder, elbow and wrist are nearly collinear
+    # there, which is ill-conditioned, and the note below measured that arm jumping over 30
+    # degrees in a single frame on 4.8% of frames against 1.5% for the signing arm. There is
+    # nothing in it to preserve -- a hanging arm and the rig's rest arm are the same pose --
+    # so it holds rest with the hand it carries.
+    active = {}
+    shy_a = np.nanmean(F[:, [L_SH, R_SH], 1])
+    for s_a in ("l", "r"):
+        yy = F[:, L_WR if s_a == "l" else R_WR, 1]
+        active[s_a] = bool(np.any(~np.isnan(yy)) and np.nanmin(yy) < shy_a + PARKED_Y)
+    if not active[dom]:          # the dominant arm never came up: trust nothing, drive both
+        active = {"l": True, "r": True}
+    if not active[passive]:
         chains = [c for c in chains if not c[0].endswith(f"_{passive}")]
 
     # SYMMETRY OR DOMINANCE? The flag says two-handed; it does not say which of the two ways.
@@ -1345,25 +1405,11 @@ def retarget_word(rig, word, chains):
     p_wr, d_wr = (L_WR, R_WR) if passive == "l" else (R_WR, L_WR)
     trav = [float(np.nansum(np.linalg.norm(np.diff(F[:, k, :2], axis=0), axis=-1)))
             for k in (p_wr, d_wr)]
-    symmetric = bool(two_handed and trav[0] > PASSIVE_MOVE * max(trav[1], 1e-9))
+    symmetric = bool(active[passive] and trav[0] > PASSIVE_MOVE * max(trav[1], 1e-9))
     mirrored = None
     if symmetric and np.isnan(F[:, HAND0[passive], 0]).all():
         F = mirror_passive_hand(F, dom)
         mirrored = passive
-
-    # Which arms are in the signing space at all. An arm whose wrist never rises within
-    # PARKED_Y of the shoulder line spent the clip hanging at the signer's side; it is still
-    # DRIVEN, because that is what the signer did and the avatar should show it, but it is not
-    # scored -- see the note at the scoring loop.
-    active = {}
-    for s_a in ("l", "r"):
-        wr_a = L_WR if s_a == "l" else R_WR
-        shy_a = np.nanmean(F[:, [L_SH, R_SH], 1])
-        yy = F[:, wr_a, 1]
-        active[s_a] = bool(np.any(~np.isnan(yy))
-                           and np.nanmin(yy) < shy_a + PARKED_Y)
-    if not any(active.values()):            # nothing raised all clip: score what we drive
-        active = {s_a: True for s_a in ("l", "r")}
 
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
     SEGS = {s: hand_chains(rig, s) for s in ("l", "r")}
@@ -1666,6 +1712,15 @@ def retarget_word(rig, word, chains):
                 # built in head_frames() from the face landmarks, applied over its rest frame.
                 # The neck carries a third of it: a head that turns while the neck stays rigid
                 # reads as a bobblehead, and the extra third has to come off somewhere.
+                # THE TORSO IS DELIBERATELY NOT DRIVEN, and now for a measured reason
+                # rather than a scheduling one. The signal is in the data -- all 250 clips
+                # carry hip landmarks -- and it is too small to be worth what it costs:
+                # shoulder roll deviates from its own clip median by 2.4 degrees at the
+                # median and 4.4 at p90, torso lean by 2.8 and 4.9, with exactly one clip
+                # over 10 degrees of either. Driving it means re-anchoring solve_depth on
+                # POSED shoulders, and every length, scale and depth root in this file is
+                # measured from shoulders that do not move. A 2-3 degree lean is not worth
+                # putting that under the whole solve.
                 if HR is not None and HR[fi] is not None and nm in ("neck", "head"):
                     delta = HR[fi] if nm == "head" else scale_rot(HR[fi], NECK_SHARE)
                     world_R[bi] = delta @ rig.world_rest[bi][1]
