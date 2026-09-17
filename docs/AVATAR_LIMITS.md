@@ -92,7 +92,57 @@ both hands — is the only real fix, and that is a data-acquisition project.
 
 ---
 
-## 3. 🟠 39 words are degraded at the source and re-selection may not save them
+## 3. 🟠 39 words are degraded at the source — and the 2s gate that starves them is now free to drop
+
+> **Updated 2026-09-18. The blocker on the 2s half of this was removed by a renderer change, and
+> the arm that tests it is already on disk (`clips_off.npz`). This is now a decision, not an
+> experiment.** Read the caveat at the end before acting on it.
+>
+> **Why the gate could not be dropped for 2s, and why it now can.** The 2026-08-26 A/B turned it
+> off for `2a` only, and kept it for `2s` with a stated reason: 2s mirrors the passive handshape
+> onto a **recorded** passive wrist, so a take where that arm hangs would anchor the mirrored hand
+> at the signer's hip. `avatar/retarget.py` now reflects the **whole limb** when the passive arm is
+> parked (`mirror_passive_arm`), so a hanging passive arm costs nothing. The gate is protecting a
+> quantity the renderer no longer reads.
+>
+> **What it buys, on the 35 words the retargeter currently tracks worst — all of them class 2s:**
+>
+> | | control (shipped) | gate off |
+> | --- | --- | --- |
+> | dominant-hand coverage | 39.3% | **83.8%** |
+> | share of the sign actually scored | 38.6% | **83.8%** |
+> | all 250: coverage | 79.9% | **87.7%** |
+>
+> Coverage is the honest headline here and the only quantity comparable across the two arms. At
+> 20% coverage four frames in five of the animation are `bridge_gaps` interpolating between
+> guesses, and no handshape number covers them.
+>
+> **The cost, measured and real:** the gate-off takes move **22% less** (mean spatial extent of the
+> dominant wrist on those 35 words, 0.72 → 0.56 shoulder-widths — measured as distance from the
+> wrist's own median position, so tracking dropouts cannot inflate it). That is the failure the
+> gate guards against, and it does not disappear. Class 2s does keep its travel floor and the
+> signing-hand gate with `require_passive_up off`, so the laziest takes are still rejected.
+>
+> ### ⚠️ Two reasons this is a decision and not a result
+>
+> 1. **Handshape error is NOT comparable between the arms.** Each arm is scored against *its own*
+>    take's landmarks, so the two numbers have different ground truths. Across all 250 it reads
+>    11.27% → 11.08%, better on 56 words and worse on 51 — and several of those regressions
+>    (`story` 8.1 → 17.4, `cheek` 6.9 → 15.9, `fine` 6.3 → 15.1) are words whose *coverage went up*.
+>    That combination is the tell: a different take is a different performance, not a worse solve.
+> 2. **`clips_off.npz` is not a clean A/B of the gate.** 71 of 163 **class-1** exemplars differ
+>    between the arms, and the gate cannot apply to class 1 — so the two builds differ in something
+>    besides the flag, and part of the coverage delta is not attributable to it. A clean re-run
+>    would be `build_sign_clips.py --require-passive-up off` against the same snapshot as the
+>    control.
+>
+> **Recommendation:** take it, after a look. It changes the exemplar on 154 of 250 words, which is
+> a data change no metric here can validate — `docs/BASE_HAND_REVIEW.md`'s argument applies. The
+> switch is `gloss_to_motion.py --clips clips_off.npz --per-word --out-dir animation_handoff`
+> followed by `retarget.py --all`; the animator holds a copy of that folder, so it is his change
+> too.
+
+## 3a. The original entry (2026-08-14)
 
 Tier C words are missing the dominant hand on more than half their frames. `bath` is the extreme:
 **84 frames, 9 with a dominant hand, longest single gap 51 frames (1.70 s).** No renderer recovers
@@ -116,6 +166,11 @@ starved rather than because the corpus lacks a good take.
 **mechanism rather than correlation**: on 2a the gate protects a recorded passive wrist that
 `asl_2a_base_placement.json` now discards, so it cannot be buying anything there. Until it runs,
 treat tier C as real, and treat the outcome as a **genuine unknown** — not a likely recovery.
+
+> **It ran, on both arms, and both results are above.** `2s-only` recovered 2a (coverage
+> 0.432 → 0.829, tier-C 2a words 24 → 0) and left 2s untouched, which is why 2s is the whole
+> remaining problem; `off` recovers 2s as well. The caution in this paragraph was right about the
+> correlation and right to insist on mechanism — the mechanism is what carried it, in both arms.
 
 ---
 
