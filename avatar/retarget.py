@@ -48,6 +48,14 @@ _FLIP_Z = True
 NECK_SHARE = 0.35
 
 # One-Euro parameters for the rotation-space filter. Measured, see smooth_quats().
+# How far past the shoulder plane an elbow must sit before the in-front prior overrides the
+# depth solver, in shoulder widths. Measured below.
+FRONT_MARGIN = 0.20
+
+# The per-frame wrist step, in shoulder widths, that a clean clip shows. Clips noisier than
+# this get proportionally more smoothing. `hello` measures 0.084.
+NOISE_REF = 0.10
+
 Q_MIN_CUTOFF = 3.0
 Q_BETA = 0.02
 
@@ -596,11 +604,33 @@ def smooth_quats(out_q, fps, min_cutoff=None, beta=None, bone_cut=None):
             alpha = 1.0 / (1.0 + fps / (2 * np.pi * cutoff))
             sm = slerp(prev, q, alpha)
             prev = sm / (np.linalg.norm(sm) + 1e-12)
-            f[nm] = [round(float(x), 5) for x in prev]
+            f[nm] = [round(float(x), 4) for x in prev]
     return out
 
 
-def bone_cutoffs(rig, chains):
+def clip_noise(F):
+    """How jittery is THIS clip, as the 95th-percentile per-frame wrist step in shoulder widths.
+
+    The clips are not equally good and treating them as if they were is why a filter tuned on
+    the clean ones leaves the rough ones rough. Measured, wrist step p95:
+
+        hello    0.084      the hand tracked in 96% of frames
+        bath     0.154      tracked in 11%
+        animal   0.276      tracked in 23%, and the z channel steps by up to 1.17
+
+    `animal`'s landmarks move eleven centimetres between consecutive frames. No fixed cutoff
+    is right for both that and `hello`; the filter has to know which one it is looking at.
+    """
+    vals = []
+    for wr in (L_WR, R_WR):
+        d = np.linalg.norm(np.diff(F[:, wr, :2], axis=0), axis=1)
+        d = d[~np.isnan(d)]
+        if len(d) >= 3:
+            vals.append(float(np.percentile(d, 95)))
+    return max(vals) if vals else NOISE_REF
+
+
+def bone_cutoffs(rig, chains, noise=None):
     """Per-bone filter cutoff, scaled by bone length. Short bones get smoothed harder.
 
     One global cutoff is the wrong shape for a hand. The angle a bone has to turn to absorb a
@@ -624,7 +654,48 @@ def bone_cutoffs(rig, chains):
     # segments, so the median IS a finger segment: every ratio came out at or above 1.0, the
     # clip flattened them all to 1.0, and a whole parameter sweep moved nothing at all.
     ref = max(lens.values())
-    return {b: Q_MIN_CUTOFF * float(np.clip(L / ref, 0.25, 1.0)) for b, L in lens.items()}
+    # and scaled again by how noisy this particular clip is, so a rough capture is smoothed
+    # harder than a clean one instead of both getting the setting that suited the clean one
+    ns = 1.0 if noise is None else float(np.clip(NOISE_REF / max(noise, 1e-6), 0.3, 1.0))
+    return {b: Q_MIN_CUTOFF * ns * float(np.clip(L / ref, 0.25, 1.0))
+            for b, L in lens.items()}
+
+
+def bridge_gaps(out_q, held):
+    """Interpolate a bone ACROSS a gap instead of holding it and then snapping out.
+
+    Holding the last pose through a gap fixes the flying-open-and-shut, but it leaves a step
+    at the far edge: the bone sits still for twenty frames and then jumps to wherever the hand
+    reappeared. Measured after the hold alone, `animal` still peaked at 149 degrees in one
+    frame and `book` at 133.
+
+    The corpus note says these nulls are frames "you must hold or interpolate through", and
+    interpolate is the better half of that where there is something to interpolate TO. A run of
+    held frames bracketed by two solved ones is slerped between them, so the hand travels
+    across the gap instead of waiting and then leaping. A run with no solved frame after it --
+    the hand simply never comes back -- has no target, so it keeps holding.
+    """
+    n = len(out_q)
+    for nm in sorted({k for f in out_q for k in f}):
+        solved = [i for i in range(n) if nm in out_q[i] and nm not in held[i]]
+        if not solved:
+            continue
+        # The LEADING run is the same problem mirrored: before the hand is first seen there is
+        # no previous pose to hold, so the bone sits at rest and then leaps to wherever the
+        # hand turned up -- `animal` peaked at 149 degrees on exactly that frame. Back-fill it
+        # with the first pose actually solved. (A hand absent for the WHOLE clip still holds
+        # rest, per §6: `solved` is empty there and nothing is written.)
+        for i in range(solved[0]):
+            out_q[i][nm] = list(out_q[solved[0]][nm])
+        for a, b in zip(solved, solved[1:]):
+            if b - a < 2:
+                continue
+            q0 = np.array(out_q[a][nm], dtype=float)
+            q1 = np.array(out_q[b][nm], dtype=float)
+            for i in range(a + 1, b):
+                q = slerp(q0, q1, (i - a) / (b - a))
+                out_q[i][nm] = [round(float(x), 4) for x in q]
+    return out_q
 
 
 def fk_world(rig, frame_q):
@@ -653,6 +724,101 @@ def scale_rot(R, t):
         axis = -axis
     a = ang * t / 2.0
     return quat_to_mat(np.array([*(axis * np.sin(a)), np.cos(a)]))
+
+
+def body_map(F, rig, origin, scale):
+    """Height in the signer's body -> height in the rig's, as an affine map (shy, a, b).
+
+    Everything else here is normalised by shoulder width, which is right horizontally and
+    WRONG vertically, because the rig is not built to these signers' proportions. Measured, in
+    shoulder widths:
+
+                 shoulder->hip     shoulder->eye/ear     upper+forearm
+        rig          1.200              0.763                1.592
+        data         0.974              ~0.47                ~1.40
+        ratio        1.23               1.62                 1.14
+
+    The rig is consistently taller-bodied per unit shoulder width, so a hand held at the
+    SIGNER's forehead arrives at the RIG's chin. Measured on `dad`, an open 5-hand whose thumb
+    touches the forehead: the thumb reached 0.334 above the shoulder line where the rig's jaw
+    is at 0.610 and its eyes at 0.763. Fourteen centimetres low, sitting at the neck. That is a
+    LOCATION error, and location is one of the five parameters that distinguish one ASL sign
+    from another.
+
+    Two anchors present in both bodies -- the hip line and the ear/eye line -- give two
+    equations for two unknowns, so both land exactly and everything between is interpolated.
+    Fitted per clip, not once, because these are different signers: the slope runs 1.14 to 1.48
+    across the eleven that were checked by hand.
+    """
+    # A HIGH PERCENTILE, NOT THE MEAN, for the same reason hand_scale uses one: projection can
+    # only ever SHORTEN a distance, so the largest value observed is the closest look at the
+    # real one. It matters here because the anchors are on the HEAD and the head moves. Fitted
+    # on means across all 250 words the slope ran 1.08 to 1.76, and the extremes were exactly
+    # the signs where the head tilts -- `nap`, `down`, `lion`, `elephant` -- where a tilt
+    # shortens the apparent shoulder-to-ear distance and the fit reads it as a short signer.
+    shy = np.nanmean(F[:, [L_SH, R_SH], 1], axis=1)
+    with np.errstate(invalid="ignore"):
+        ear = shy - (F[:, 7, 1] + F[:, 8, 1]) / 2.0
+        hip = shy - (F[:, 23, 1] + F[:, 24, 1]) / 2.0
+    ear_h = float(np.nanpercentile(ear, 90)) if np.isfinite(ear).any() else np.nan
+    hip_h = float(np.nanpercentile(hip, 10)) if np.isfinite(hip).any() else np.nan
+    if not (np.isfinite(ear_h) and np.isfinite(hip_h)) or abs(ear_h - hip_h) < 1e-6:
+        return shy, 1.0, 0.0
+    rig_eye = float((rig.wp("eye_r")[1] - origin[1]) / scale)
+    rig_hip = float((rig.wp("hip")[1] - origin[1]) / scale)
+    a = (rig_eye - rig_hip) / (ear_h - hip_h)
+    # Clamped, because past these bounds the fit is reading a bad anchor rather than an
+    # unusual signer. The ratio is known directly from the two bodies -- torso 1.23, head 1.62,
+    # arm 1.14 -- so the truth sits near 1.1-1.4, and across all 250 words the fit lands
+    # median 1.25 with p5-p95 of 1.15-1.39. The handful outside (`down` 1.68, `white` 1.67,
+    # `lion` 1.65) are signs where the head leaves neutral for most of the clip, so even a 90th
+    # percentile never catches it upright. Below 1.0 would mean the rig is the SHORTER-bodied
+    # one, which contradicts the direct measurement outright.
+    a = float(np.clip(a, 1.0, 1.5))
+    return shy, a, rig_eye - a * ear_h
+
+
+def two_bone_ik(S, W, L1, L2, pole):
+    """Place the elbow so the arm reaches W exactly, with both bones at their rig lengths.
+
+    THIS IS THE THIRD ATTEMPT AT THE HEIGHT PROBLEM AND THE FIRST THAT WORKS. The two that
+    failed are worth recording, because both failed the same way:
+
+      1. Scale the targets vertically by the body map. That puts the elbow target further from
+         the shoulder than the rig's upper arm is long, so the depth solver clamps -- and a
+         clamped bone is flattened into the image plane, discarding the depth solve for itself
+         and everything below it. Handshape error 12.9% -> 17.6%, clamping 15.9% -> 20.3%.
+      2. Rotate the solved arm about the shoulder to the target elevation. Preserves lengths,
+         but a rotation has only two degrees of freedom to spend and cannot put the wrist at an
+         arbitrary point, so it overshoots azimuth to buy elevation. Wrist error 0.4% -> 43.6%.
+
+    The thing both lack is the elbow's freedom. An arm reaching a point is a two-bone chain
+    with one degree of freedom left over -- the elbow swings on a circle about the
+    shoulder-wrist axis -- and that is exactly the slack needed to absorb a body of different
+    proportions. Solving for it puts the wrist EXACTLY on target with both bones at their
+    rig lengths, so there is nothing to clamp and nothing to stretch.
+
+    `pole` picks which point on the circle: the elbow keeps pointing the way the signer's did.
+    """
+    d = W - S
+    dist = float(np.linalg.norm(d))
+    if dist < 1e-9:
+        return None, W
+    lo, hi = abs(L1 - L2) + 1e-6, L1 + L2 - 1e-6
+    if dist > hi or dist < lo:                 # out of reach: pull the target to the boundary
+        dist = float(np.clip(dist, lo, hi))
+        W = S + d / float(np.linalg.norm(d)) * dist
+        d = W - S
+    u = d / dist
+    a = (L1 * L1 - L2 * L2 + dist * dist) / (2.0 * dist)
+    h = np.sqrt(max(L1 * L1 - a * a, 0.0))
+    n = pole - u * float(np.dot(pole, u))
+    if np.linalg.norm(n) < 1e-9:               # pole degenerate: any perpendicular will do
+        n = np.cross(u, np.array([0.0, 1.0, 0.0]))
+        if np.linalg.norm(n) < 1e-9:
+            n = np.cross(u, np.array([1.0, 0.0, 0.0]))
+    n = n / (np.linalg.norm(n) + 1e-12)
+    return S + u * a + n * h, W
 
 
 def arm_scale(F, side, rig):
@@ -764,6 +930,7 @@ def retarget_word(rig, word, chains):
 
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
     AS = {s: arm_scale(F, s, rig) for s in ("l", "r")}
+    SHY, VA, VB = body_map(F, rig, origin, scale)   # signer height -> rig height
     HR = head_frames(F, rig)          # non-manual: head pose, one of the five ASL parameters
     ZS = smooth_z(F)
     tree = build_tree(rig)
@@ -794,10 +961,17 @@ def retarget_word(rig, word, chains):
         if np.isnan(sh_z[fi]):
             continue
         for lm in (L_EL, R_EL):
-            if not np.isnan(F[fi, lm, 2]):
-                want_front[fi][lm] = bool(F[fi, lm, 2] > sh_z[fi])
+            # ONLY WHEN IT IS SURE. The prior is a hard override with no hysteresis behind it,
+            # so an elbow hovering near the shoulder plane flips side every frame and swings
+            # the forearm through 145 degrees -- which is exactly what `animal` and `bath` were
+            # doing, at regular intervals, in frames where the hand was not even present. Below
+            # the margin the answer is not "behind", it is "unknown", and solve_depth's
+            # relative-z rule with its own hysteresis is better placed to keep the peace.
+            m = F[fi, lm, 2] - sh_z[fi]
+            if not np.isnan(m) and abs(m) > FRONT_MARGIN:
+                want_front[fi][lm] = bool(m > 0)
 
-    prev_sign = {}
+    prev_sign, last_q, held = {}, {}, []
     out_q, err, shp, front, keep, clamps, total = [], [], [], [], [], 0, 0
     by_bone = {c[0]: c for c in chains}
     driven = [c[0] for c in chains] + ["neck", "head"]
@@ -859,12 +1033,66 @@ def retarget_word(rig, word, chains):
         P, cl, used = solve_depth(tgt, rig, F[fi], tree, zref=ZS[fi],
                                   prev_sign=prev_sign, want_front=want_front[fi])
         prev_sign.update(used)
+
+        # PUT THE HAND WHERE THE SIGN IS MADE ON THIS BODY. The solve above reproduces the
+        # signer's arm ANGLES faithfully, which on a differently proportioned body lands the
+        # hand in the wrong place -- see body_map() for the measurement. Only the height is
+        # corrected: x is already right (both bodies are normalised on shoulder width) and z
+        # comes from the depth solve, which is the one thing the data cannot supply.
+        #
+        # The elbow is then re-solved by IK so the wrist lands exactly there with both bones
+        # at their rig lengths. Nothing is scaled, so nothing can clamp. The hand block is
+        # carried along by the same translation the wrist made, which moves the handshape
+        # without touching it.
+        for s_ in ("l", "r"):
+            sh_, el_, wr_ = ((L_SH, L_EL, L_WR) if s_ == "l" else (R_SH, R_EL, R_WR))
+            if f"hand_{s_}" not in by_bone or P.get(wr_) is None or P.get(el_) is None:
+                continue
+            if not np.isfinite(SHY[fi]) or np.any(np.isnan(F[fi, wr_])):
+                continue
+            S_ = P[sh_]
+            # MATCH THE HAND, NOT THE WRIST. Mapping the wrist's height left the fingers short
+            # on exactly the signs that reach highest -- `dad` (thumb to the forehead) came out
+            # 16.5 cm low even with the wrist landing exactly on target -- because the rig's
+            # hand is far smaller relative to its shoulders than the signer's, so everything
+            # past the wrist falls behind. The rig CAN touch its own forehead; it just has to
+            # raise the arm further to do it with a shorter hand.
+            #
+            # We cannot put all 21 hand landmarks at their mapped heights at once, since the
+            # two hands are different sizes. The translation that minimises the squared error
+            # over all of them is the one that matches their MEAN, so the target is the hand's
+            # centroid. That is a least-squares answer, not a preference, and it needs no
+            # per-sign lexicon -- which matters because no such lexicon exists for one-handed
+            # signs.
+            h0_ = HAND0[s_]
+            ks = [h0_ + k for k in range(21)]
+            have = [k for k in ks if P.get(k) is not None and not np.any(np.isnan(F[fi, k]))]
+            if have:
+                cen_rig = float(np.mean([P[k][1] for k in have]))
+                cen_dat = float(np.mean([float(SHY[fi]) - F[fi, k, 1] for k in have]))
+                want_y = P[wr_][1] + (origin[1] + (VA * cen_dat + VB) * scale - cen_rig)
+            else:
+                want_y = origin[1] + (VA * (float(SHY[fi]) - F[fi, wr_, 1]) + VB) * scale
+            want = np.array([P[wr_][0], want_y, P[wr_][2]])
+            L1 = rig.bone_len(f"upperarm_{s_}", f"lowerarm_{s_}")
+            L2 = rig.bone_len(f"lowerarm_{s_}", f"hand_{s_}")
+            E, W = two_bone_ik(S_, want, L1, L2, P[el_] - S_)
+            if E is None:
+                continue
+            moved = W - P[wr_]
+            P[el_], P[wr_] = E, W
+            for k in range(21):
+                if P.get(h0_ + k) is not None:
+                    P[h0_ + k] = P[h0_ + k] + moved
+                if not np.any(np.isnan(tgt[h0_ + k])):
+                    tgt[h0_ + k] = tgt[h0_ + k] + moved
+            tgt[wr_] = tgt[wr_] + moved
         clamps += cl
         total += len(tree)
 
         # Hierarchical direction match. Walk the rig's own node order so a parent's solved
         # world rotation is always available before its children are solved in it.
-        world_R, world_T, local_q = {}, {}, {}
+        world_R, world_T, local_q, held_now = {}, {}, {}, set()
         for bi in rig._order():
             nm = rig.name[bi]
             p = rig.parent.get(bi)
@@ -889,7 +1117,20 @@ def retarget_word(rig, word, chains):
                 continue
             _bone, child, a, b = c
             if P.get(b) is None or P.get(a) is None:
-                world_R[bi] = pR @ rig.rest_R[bi]      # HOLD REST: missing hand (§6)
+                # HOLD, and hold the LAST POSE rather than the rest pose wherever there is
+                # one. §6's "a missing hand holds rest" is about a hand that is absent for the
+                # whole clip -- the passive hand, which was never formed. A GAP is a different
+                # thing, and the corpus note is explicit that the nulls inside a clip are
+                # frames "you must hold or interpolate through". Snapping to rest and back is
+                # neither: it reads as the hand flying open and shut, and it is not rare --
+                # 28 of the 250 words have their dominant hand measured in under half their
+                # frames, some as low as 11%.
+                if nm in last_q:
+                    world_R[bi] = pR @ quat_to_mat(np.array(last_q[nm], dtype=float))
+                    local_q[nm] = last_q[nm]
+                    held_now.add(nm)
+                else:
+                    world_R[bi] = pR @ rig.rest_R[bi]  # never solved yet: rest is all we have
                 continue
             want = P[b] - P[a]
             if np.linalg.norm(want) < 1e-9:
@@ -932,7 +1173,9 @@ def retarget_word(rig, word, chains):
                 cur = pR @ np.linalg.inv(R_rest_parent) @ rest_dir
                 world_R[bi] = align(cur, want) @ (pR @ rig.rest_R[bi])
             local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
-        out_q.append({k: [round(float(x), 5) for x in v] for k, v in local_q.items()})
+        last_q.update(local_q)
+        held.append(held_now)
+        out_q.append({k: [round(float(x), 4) for x in v] for k, v in local_q.items()})
 
         # Metric targets are STORED here, not scored. Scoring happens after the rotation
         # filter, because the filtered animation is what ships and a number describing the
@@ -940,8 +1183,9 @@ def retarget_word(rig, word, chains):
         keep.append({lm: tgt[lm].copy() for lm in _METRIC_LM
                      if lm in tgt and not np.any(np.isnan(tgt[lm]))})
 
+    out_q = bridge_gaps(out_q, held)
     out_q = smooth_quats(out_q, fps=float(d.get("fps", 30)),
-                         bone_cut=bone_cutoffs(rig, chains))
+                         bone_cut=bone_cutoffs(rig, chains, clip_noise(F)))
 
     # SECOND PASS: score the animation exactly as it ships, filter included.
     for fq, tg in zip(out_q, keep):
@@ -1045,7 +1289,10 @@ def selftest(rig, chains):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    words = args or ["hello", "mom", "water"]
+    if "--all" in sys.argv:
+        words = sorted(p.stem for p in WORDS.glob("*.json"))
+    else:
+        words = args or ["hello", "mom", "water"]
     rig = Rig(GLB if GLB.exists() else REPO / "3D Char deaf.glb")
     chains = build_chains(rig)
     selftest(rig, chains)
@@ -1057,12 +1304,17 @@ def main():
     print(f"\n{'word':<12s} {'frames':>6s} {'hands':>12s} {'wrist err':>11s} "
           f"{'p95':>7s} {'handshape':>10s} {'in front':>9s} {'clamped':>8s}")
     print("-" * 84)
-    baked = {}
+    baked, failed = {}, []
     for w in words:
         if not (WORDS / f"{w}.json").exists():
             print(f"{w:<12s}  no such word file")
             continue
-        d, q, err, shp, fr, cl, tot, driven = retarget_word(rig, w, chains)
+        try:
+            d, q, err, shp, fr, cl, tot, driven = retarget_word(rig, w, chains)
+        except Exception as exc:                      # one bad clip must not lose the other 249
+            print(f"{w:<12s}  FAILED: {type(exc).__name__}: {exc}")
+            failed.append(w)
+            continue
         F = np.array(d["frames"], dtype=float)
         lh = 1.0 - np.isnan(F[:, 33:54, 0]).mean()
         rh = 1.0 - np.isnan(F[:, 54:75, 0]).mean()

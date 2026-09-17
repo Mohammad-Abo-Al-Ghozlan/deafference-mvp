@@ -68,6 +68,9 @@ assert "__PAYLOAD__" not in html and "__STATS__" not in html
 out = HERE / "sign_viewer.html"
 out.write_text(html, encoding="utf-8")
 print(f"[ok] {out}")
-print(f"     {out.stat().st_size/1e6:.2f} MB, {len(payload['signs'])} signs, "
-      f"{payload['nb']} bones")
+mb = out.stat().st_size / 1e6
+print(f"     {mb:.2f} MB, {len(payload['signs'])} signs, {payload['nb']} bones")
+if mb > 24:
+    print("     [warn] this is getting large for one file — the sign list is the growth, "
+          "not the mesh")
 print(f"     open it directly in a browser — it fetches nothing but three.js")

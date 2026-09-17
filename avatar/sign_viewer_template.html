@@ -34,7 +34,15 @@ html,body{margin:0;min-height:100%;background:var(--bg);color:var(--txt);
 h2{margin:0 0 9px;font:600 10px/1 var(--sans);letter-spacing:.11em;
   text-transform:uppercase;color:var(--dim)}
 
-#words{display:flex;flex-wrap:wrap;gap:6px}
+/* 250 signs, so the list scrolls and filters rather than running off the rail. */
+#filter{width:100%;margin:0 0 8px;padding:6px 9px;border-radius:5px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+  font:400 12.5px/1.4 var(--mono)}
+#filter:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#wcount{color:var(--dim);font-weight:400;letter-spacing:0}
+#words{display:flex;flex-wrap:wrap;gap:6px;max-height:38vh;overflow-y:auto;
+  padding-right:4px}
+@media (max-width:860px){#words{max-height:none}}
 .w{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
   border-radius:5px;padding:6px 11px;font:500 13px/1 var(--mono);cursor:pointer;
   transition:border-color .12s,background .12s}
@@ -90,7 +98,9 @@ button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;f
     </div>
 
     <section>
-      <h2>Sign</h2>
+      <h2>Sign <span id="wcount"></span></h2>
+      <input id="filter" type="search" placeholder="type to filter…" autocomplete="off"
+             aria-label="Filter signs">
       <div id="words" role="group" aria-label="Choose a sign"></div>
     </section>
 
@@ -256,7 +266,10 @@ addEventListener("resize", resize);
 /* ── playback ────────────────────────────────────────────────────────────── */
 const SIGNS = P.signs;
 const names = Object.keys(SIGNS);
-let cur = names[0], frame = 0, playing = true, last = performance.now(), acc = 0;
+/* Open on a sign that is actually worth looking at. names[0] is alphabetical, which with 250
+   words means opening on "TV" — a fine sign, but not one anyone came here to check. */
+const OPEN_ON = ["hello", "dad", "mom", "no"].find(w => SIGNS[w]) || names[0];
+let cur = OPEN_ON, frame = 0, playing = true, last = performance.now(), acc = 0;
 const q = new THREE.Quaternion();
 
 function applyFrame(i){
@@ -310,21 +323,37 @@ function renderStats(){
 
 function select(w){
   cur = w; frame = 0;
-  document.querySelectorAll("#words .w").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.w === w)));
+  btns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.w === w)));
+  const sel = btns.find(b => b.dataset.w === w);
+  if (sel) sel.scrollIntoView({block: "nearest"});
   document.getElementById("scrub").max = SIGNS[w].frames.length - 1;
   document.getElementById("scrub").value = 0;
   applyFrame(0); renderStats(); hudText();
 }
 
 const wrap = document.getElementById("words");
-names.forEach(w => {
+const btns = names.map(w => {
   const b = document.createElement("button");
   b.className = "w"; b.type = "button"; b.dataset.w = w;
   b.textContent = w; b.setAttribute("aria-pressed","false");
   b.addEventListener("click", () => select(w));
   wrap.appendChild(b);
+  return b;
 });
+const counter = document.getElementById("wcount");
+const filt = document.getElementById("filter");
+function applyFilter(){
+  const q = filt.value.trim().toLowerCase();
+  let shown = 0;
+  btns.forEach(b => {
+    const hit = !q || b.dataset.w.toLowerCase().includes(q);
+    b.hidden = !hit;
+    if (hit) shown++;
+  });
+  counter.textContent = q ? `${shown} of ${names.length}` : `${names.length}`;
+}
+filt.addEventListener("input", applyFilter);
+applyFilter();
 
 document.getElementById("rigstats").innerHTML =
   `<dt>joints</dt><dd>${nb}</dd>` +
