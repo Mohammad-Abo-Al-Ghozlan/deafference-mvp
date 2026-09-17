@@ -39,6 +39,11 @@ h2{margin:0 0 9px;font:600 10px/1 var(--sans);letter-spacing:.11em;
   border:1px solid var(--line);background:var(--panel2);color:var(--txt);
   font:400 12.5px/1.4 var(--mono)}
 #filter:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#utter{width:100%;margin:0 0 8px;padding:6px 9px;border-radius:5px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+  font:400 12.5px/1.4 var(--mono)}
+#utter:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 #wcount{color:var(--dim);font-weight:400;letter-spacing:0}
 #words{display:flex;flex-wrap:wrap;gap:6px;max-height:38vh;overflow-y:auto;
   padding-right:4px}
@@ -106,6 +111,22 @@ button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;f
       <input id="filter" type="search" placeholder="type to filter…" autocomplete="off"
              aria-label="Filter signs">
       <div id="words" role="group" aria-label="Choose a sign"></div>
+    </section>
+
+    <!-- A DICTIONARY IS NOT A SYSTEM. 250 correct words that can only be played one at a
+         time do not answer the question this project exists to answer, which is whether a
+         deaf person can read a SENTENCE off the avatar. Same stitching rules as
+         avatar/sequence_signs.py: interior holds dropped, transition length set by how far
+         the skeleton has to travel, passive arm eased back to rest across a two-handed to
+         one-handed join. -->
+    <section>
+      <h2>Sentence</h2>
+      <input id="utter" type="text" placeholder="hello mom thirsty please"
+             autocomplete="off" aria-label="Words to sign in order">
+      <div class="row">
+        <button class="b pri" id="signit" type="button">Sign it</button>
+        <span class="note" id="utternote"></span>
+      </div>
     </section>
 
     <section>
@@ -295,6 +316,100 @@ function applyFrame(i){
   }
 }
 
+/* ── a sentence, not a word ──────────────────────────────────────────────────────────────
+   The three rules are avatar/sequence_signs.py's, and that file carries the argument for
+   each; this is the same thing in the browser so a sentence can be watched without a bake.
+     1. only the first sign keeps its lead-in hold and only the last its tail — otherwise
+        the avatar stops dead for half a second at every join, which in ASL is a boundary
+        marker, not a pause;
+     2. the transition is as long as the DISTANCE needs, not a fixed count: 15% of the
+        shorter clip gave RAIN → BLUE three frames to cross 171° of shoulder, i.e. 57° in
+        one frame, worse than anything inside a sign;
+     3. a bone missing from one side is interpolated against its REST pose, because that is
+        what missing means here — and the 18 bones of the passive arm go missing on every
+        crossing between a two-handed and a one-handed sign. */
+const MAX_STEP = 12, MAX_BLEND = 15;
+const restQ = {}; bones.forEach((b,k) => restQ[b.name] =
+  [rest[k].x, rest[k].y, rest[k].z, rest[k].w]);
+
+function qAngle(a, b){
+  return 2 * Math.acos(Math.min(1, Math.abs(
+    a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]))) * 180 / Math.PI;
+}
+/* SLERP, never a component lerp: a straight blend of two quaternions more than a few degrees
+   apart shortens the arc, and the limb dips through the body on the way. Joins are 30-180°. */
+function qSlerp(a, b, t){
+  let d = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+  if (d < 0){ b = b.map(v => -v); d = -d; }
+  let o;
+  if (d > 0.9995){ o = a.map((v,i) => v + t*(b[i]-v)); }
+  else {
+    const th = Math.acos(Math.max(-1, Math.min(1, d))), s = Math.sin(th);
+    const wa = Math.sin((1-t)*th)/s, wb = Math.sin(t*th)/s;
+    o = a.map((v,i) => wa*v + wb*b[i]);
+  }
+  const n = Math.hypot(o[0],o[1],o[2],o[3]) || 1;
+  return o.map(v => v/n);
+}
+function strokeOf(s){
+  const hi = s.hold_in || 0, st = s.stroke || (s.frames.length - hi);
+  return s.frames.slice(hi, hi + st);
+}
+function sequence(words){
+  const picked = words.filter(w => SIGNS[w]), missing = words.filter(w => !SIGNS[w]);
+  const frames = [], segments = [];
+  picked.forEach((g, i) => {
+    const s = SIGNS[g], body = strokeOf(s);
+    if (i === 0){ frames.push(...s.frames.slice(0, s.hold_in || 0)); }
+    else {
+      const a = frames[frames.length-1], b = body[0];
+      let far = 0;
+      const names = new Set([...Object.keys(a), ...Object.keys(b)]);
+      names.forEach(nm => {
+        const q0 = a[nm] || restQ[nm], q1 = b[nm] || restQ[nm];
+        if (q0 && q1) far = Math.max(far, qAngle(q0, q1));
+      });
+      const n = Math.max(1, Math.min(MAX_BLEND, Math.round(far / MAX_STEP)));
+      for (let k = 1; k <= n; k++){
+        const t = k/(n+1), w = t*t*(3-2*t), f = {};
+        names.forEach(nm => {
+          const q0 = a[nm] || restQ[nm], q1 = b[nm] || restQ[nm];
+          if (q0 && q1) f[nm] = qSlerp(q0, q1, w);
+        });
+        frames.push(f);
+      }
+    }
+    const start = frames.length;
+    frames.push(...body);
+    segments.push({gloss: g, start, end: frames.length});
+    if (i === picked.length - 1 && s.hold_out)
+      frames.push(...s.frames.slice(-s.hold_out));
+  });
+  return {frames, segments, missing, picked};
+}
+
+const UTTER = " utterance ";      /* a key no real gloss can collide with */
+function signSentence(text){
+  const words = (text || "").toLowerCase().split(/[^a-z']+/).filter(Boolean);
+  const note = document.getElementById("utternote");
+  if (!words.length){ note.textContent = "type some words first"; return; }
+  const r = sequence(words);
+  if (!r.picked.length){
+    note.textContent = "none of those are in the 250-word vocabulary"; return; }
+  const fps = SIGNS[r.picked[0]].fps || 30;
+  SIGNS[UTTER] = {gloss: r.picked.join(" "), fps, frames: r.frames,
+                  hold_in: SIGNS[r.picked[0]].hold_in || 0,
+                  hold_out: SIGNS[r.picked[r.picked.length-1]].hold_out || 0,
+                  stroke: r.frames.length, hands: "sequence", lh: null, rh: null,
+                  segments: r.segments};
+  STATS[UTTER] = {err: null, p95: null, shape: null, front: null, clamp: null, synth: null};
+  note.textContent = r.missing.length
+    ? `signing ${r.picked.length}, skipped ${r.missing.join(" ")}`
+    : `${r.picked.length} signs, ${r.frames.length} frames`;
+  select(UTTER);
+  playing = true; document.getElementById("play").textContent = "Pause";
+}
+
 const hud = document.getElementById("hud");
 const frameLbl = document.getElementById("frame");
 function hudText(){
@@ -302,6 +417,24 @@ function hudText(){
   const hi = s.hold_in || 0, ho = s.hold_out || 0;
   const stroke = s.stroke || s.frames.length;
   const secs = s.frames.length / (s.fps * speedSel);
+  if (s.segments){
+    // NAME THE WORD BEING SIGNED RIGHT NOW. Without it a stitched utterance is one long
+    // motion and there is no way to tell a bad transition from a bad sign.
+    const seg = s.segments.find(g => frame >= g.start && frame < g.end);
+    const at = s.segments.findIndex(g => g === seg);
+    hud.innerHTML =
+      `<b>${s.segments.map((g,i) => i === at ? `<u>${g.gloss}</u>` : g.gloss).join(" ")}</b>` +
+      ` &nbsp; ${s.frames.length} frames · ${secs.toFixed(2)} s<br>` +
+      (seg ? `signing <b>${seg.gloss}</b>` : `transition`) +
+      ` · ${s.segments.length} signs, ` +
+      `${s.frames.length - s.segments.reduce((a,g) => a + g.end - g.start, 0)} ` +
+      `frames of transition<br>` +
+      `each sign is its own take · nothing co-articulates between them<br>` +
+      `drag to orbit · scroll to zoom`;
+    frameLbl.textContent = `${String(frame+1).padStart(3," ")} / ${s.frames.length}` +
+      (seg ? "" : "  transition");
+    return;
+  }
   hud.innerHTML =
     `<b>${s.gloss}</b> &nbsp; ${s.frames.length} frames @ ${s.fps} fps · ` +
       `${secs.toFixed(2)} s<br>` +
@@ -394,6 +527,12 @@ function applyFilter(){
 }
 filt.addEventListener("input", applyFilter);
 applyFilter();
+
+const utterBox = document.getElementById("utter");
+document.getElementById("signit").addEventListener("click",
+  () => signSentence(utterBox.value));
+utterBox.addEventListener("keydown", e => {
+  if (e.key === "Enter"){ e.preventDefault(); signSentence(utterBox.value); } });
 
 document.getElementById("rigstats").innerHTML =
   `<dt>joints</dt><dd>${nb}</dd>` +

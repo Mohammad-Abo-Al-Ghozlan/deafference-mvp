@@ -2518,6 +2518,15 @@ def main():
                   "rigger's own bone names. A bone absent from a frame holds its rest pose."),
         "_wrist_error_note": ("§14 test 7 wants wrists within 5% of a shoulder-width of "
                               "target. Reported per word by the script that wrote this."),
+        # THE REST POSE, AS QUATERNIONS, so that "absent means rest" is a value a player can
+        # interpolate towards instead of a rule it has to snap to. There are exactly two bone
+        # sets in this file -- 20 on a one-handed sign, 38 on a two-handed one -- and the 18
+        # in the difference are the whole passive arm. A sentence player crossing from RAIN to
+        # BLUE therefore has to put that arm back down, and without these it can only drop it
+        # in a single frame. Local, xyzw, same convention as the tracks.
+        "_rest": {n: [round(float(x), 6) for x in mat_to_quat(rig.rest_R[rig.by[n]])]
+                  for n in sorted({c[0] for c in chains} | {"neck", "head"})
+                  if n in rig.by},
         "signs": baked}, separators=(",", ":")), encoding="utf-8")
     print(f"\n[ok] {out}  ({out.stat().st_size/1e3:.0f} KB, {len(baked)} signs)")
     print(f"     §14 test 7 passes at <5% of a shoulder-width.")
