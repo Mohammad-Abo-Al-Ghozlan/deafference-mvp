@@ -52,12 +52,94 @@ NECK_SHARE = 0.35
 # depth solver, in shoulder widths. Measured below.
 FRONT_MARGIN = 0.20
 
+# Distance from the eye midpoint, in shoulder widths, over which the hand's placement hands
+# over from face-anchored to body-mapped. Measured across 120 words, the hand's closest
+# approach to the eyes runs p5 0.168 to p90 0.560, median 0.391.
+# How much bend a finger needs before its landmarks define a plane worth using, as sin of the
+# angle. LOW ON PURPOSE (0.17 is 10 degrees): a high threshold is the worst of both worlds,
+# because the frames that fall through get an arbitrary roll from align() and the hinges below
+# then bend faithfully in that arbitrary plane. Measured over 12 signs, mean handshape error:
+# threshold 10deg 18.7%, 20deg 20.0%, 30deg 21.5%.
+#
+# Lowered again to 0.10 (5.7deg) once the per-segment reach fit was in, and it is a strict win
+# on BOTH axes at once, which is unusual enough to record: over 18 signs, handshape 18.32% ->
+# 18.12% and the share of frames with a bone jumping more than 30 degrees 13.6% -> 10.6%. The
+# jitter half is the interesting one -- solving the plane MORE often makes the motion smoother,
+# because a gate that flips on and off between frames hands the roll back and forth between
+# the solved plane and align()'s arbitrary one, and that handover is itself the snap. 0.05 is
+# worse again (jitter mean 13.97 -> 14.67), so this is a floor, not a direction.
+FINGER_PLANE_MIN = 0.10
+
+# Weight of the newest frame in the finger-plane average. Low: the plane turns slowly.
+PLANE_EMA = 0.30
+
+FACE_SIGMA = 0.25   # falloff of the contact weighting
+FACE_NEAR = 0.30
+FACE_FAR = 0.70
+
 # The per-frame wrist step, in shoulder widths, that a clean clip shows. Clips noisier than
 # this get proportionally more smoothing. `hello` measures 0.084.
 NOISE_REF = 0.10
 
 Q_MIN_CUTOFF = 3.0
 Q_BETA = 0.02
+
+# Playback timing -- see retime(). Frames at 30 fps: 6 = 0.20 s, 10 = 0.33 s, 18 = 0.60 s.
+HOLD_IN = 6
+HOLD_OUT = 10
+MIN_STROKE = 18
+MAX_STRETCH = 2.0
+
+# Share of frames a hand block must appear in before the clip counts as having that hand at
+# all. See the note in main(): the old 0.5 disowned 28 clips that are 11-50% tracked.
+HAND_MIN = 0.10
+
+# Passive-wrist travel, as a fraction of the dominant wrist's, above which a two-handed sign
+# counts as SYMMETRIC rather than base-and-dominant. See mirror_passive_hand().
+PASSIVE_MOVE = 0.35
+
+# Which of the 20 per-segment shrink ratios hand_scale() takes. See its docstring: the median
+# is the estimate of the signer's hand, but it leaves half the segments still longer than the
+# rig's own bone, and those clamp flat. Swept, not chosen.
+HAND_SCALE_Q = 50.0
+
+# How far inside the rig's reach fit_reach() pulls a frame that does not fit. Exactly on the
+# limit recovers zero depth, which is the flat finger we are trying to avoid.
+FIT_MARGIN = 0.97
+
+# How far a single phalanx's scale may depart from the hand-wide median, as a factor either
+# way. See hand_seg_scales(); 1.0 collapses it back to one scale for the whole hand.
+SEG_BAND = 1.0
+
+# The torso the hand may not be inside of, in shoulder-widths: how far past the shoulder line
+# the chest surface sits, and how far outside the shoulders the ribcage still counts. Only a
+# collision box -- see the note where it is applied; it is not a depth estimate.
+TORSO_FRONT = 0.10
+TORSO_PAD = 0.10
+
+# How close to the shoulder line a wrist must come, in shoulder-widths of the DATA, before that
+# arm counts as taking part in the sign rather than hanging. Parked arms measure 0.86-1.18
+# below; a base hand at chest height is nearer 0.3-0.5.
+PARKED_Y = 0.60
+
+# TRIED AND REJECTED: solving the hand bone's rotation by least squares over all five
+# metacarpal heads instead of the two-vector index/pinky frame. It is a better fit by every
+# average -- handshape 12.83% -> 12.77%, thumb direction 6.4 -> 5.4 degrees, jumps over 30
+# degrees 10.18% -> 9.66% -- and it is worse where it counts. Words above 20% handshape, which
+# is roughly where a sign starts looking wrong rather than slightly off, went 10 -> 18, and
+# above 25% went 3 -> 7: `bee` 18->27, `bedroom` 18->27, `smile` 20->27, `horse` 18->25.
+#
+# The rig's palm fan and MediaPipe's differ in SHAPE (thumb -8.2 degrees, pinky -8.8, middle
+# +0.5), and no rotation absorbs that. The two-vector frame dumps the whole mismatch on the
+# thumb; least squares spreads it over all five digits, which lowers the mean by making four
+# digits slightly worse on the words that were already marginal. Correcting the reference fan
+# instead was tried too and is worse again, because it measures a fan in a frame built from the
+# data's z -- the axis this file spends its length establishing is noise.
+
+
+# Which landmarks carry the in-front prior into solve_depth. See the table in retarget_word():
+# elbows only was measured against wrist only, never against BOTH, and both is better.
+WANT_FRONT_LM = (L_EL, R_EL, L_WR, R_WR)
 
 # the landmarks the metrics need, kept per frame so scoring happens AFTER filtering
 _METRIC_LM = ([L_WR, R_WR] + [HAND0[x] for x in ("l", "r")]
@@ -194,6 +276,62 @@ def build_chains(rig):
                 nxt = f"{f}_0{k+1}_{side}" if k < 3 else f"{f}_end_{side}"
                 ch.append((f"{f}_0{k}_{side}", nxt, h0 + o + k - 1, h0 + o + k))
     return ch
+
+
+def flexion_axes(rig):
+    """The one axis each finger joint is allowed to turn about, in world rest space.
+
+    A finger's middle and end joints (PIP and DIP) are HINGES. They flex and extend and that
+    is all: they cannot twist, and they cannot splay sideways -- only the knuckle (MCP) can do
+    that. Solving all three with a free minimal rotation, as this did, lets landmark noise
+    splay and twist each phalanx independently, and the result is a hand that cannot exist.
+
+    Measured, as the angle between the plane of the first two phalanges and the plane of the
+    last two, which a real finger holds at zero:
+
+        yes 41.0 deg mean, p90 71.8      dad 34.7, p90 75.6      hello 34.0, p90 72.4
+        clean 25.0                        drink 23.2              blue 17.4
+
+    Worst on `yes`, a fist -- a closed hand is where the landmarks are least reliable and the
+    direction recovery worst conditioned, which is exactly where anatomy has to carry the
+    answer instead. This is the constraint the rigger's seven handshape reference poses would
+    supply directly; until they arrive, the hinge is the part we can derive ourselves.
+
+    The axis is across the palm, perpendicular to the bone: a finger curls toward the palm.
+    """
+    ax = {}
+    for side in ("l", "r"):
+        # The palm's own plane, from two vectors that lie in it.
+        across = rig.wp(f"pinky_01_{side}") - rig.wp(f"index_01_{side}")
+        fwd = rig.wp(f"middle_01_{side}") - rig.wp(f"hand_{side}")
+        palm_n = np.cross(across, fwd)
+        if np.linalg.norm(palm_n) < 1e-9:
+            continue
+        palm_n = palm_n / np.linalg.norm(palm_n)
+        for f in FINGER_OFF:
+            # THE RIG ALREADY KNOWS EACH DIGIT'S PLANE, because the rigger posed the rest hand
+            # with a natural curl rather than dead straight -- 10 degrees at every finger joint
+            # and 14 at the thumb's first. Three consecutive joints with a bend in them define
+            # a plane, and that plane IS the flexion plane. Reading it off the rig beats
+            # deriving it: a palm-normal construction is right for the four fingers (their
+            # chain normal sits 87.5 degrees from the palm normal, i.e. across the palm, as
+            # expected) and wrong for the thumb, whose column is rotated out of the finger row
+            # and whose chain normal is only 33.8 degrees from it. Per digit, from its own
+            # geometry, with no special case for the thumb.
+            ch = [f"{f}_01_{side}", f"{f}_02_{side}", f"{f}_03_{side}", f"{f}_end_{side}"]
+            if any(c not in rig.by for c in ch):
+                continue
+            v1 = rig.wp(ch[1]) - rig.wp(ch[0])
+            v2 = rig.wp(ch[2]) - rig.wp(ch[1])
+            a = np.cross(v1, v2)
+            if np.linalg.norm(a) < 1e-9:
+                a = np.cross(v2, palm_n)          # rest chain straight: fall back to the palm
+            if np.linalg.norm(a) < 1e-9:
+                continue
+            a = a / np.linalg.norm(a)
+            for k in (2, 3):
+                ax[f"{f}_0{k}_{side}"] = a
+    return ax
 
 
 def build_tree(rig):
@@ -333,6 +471,11 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None, want_front=Non
     ref_z = float((rig.wp("upperarm_l")[2] + rig.wp("upperarm_r")[2]) / 2.0)
     sign_used = {}
     clamped = 0
+    # Segments this frame actually had the landmarks to solve. The rate used to divide by the
+    # WHOLE tree, so a clip missing a hand -- which in this corpus is every clip, on the
+    # passive side -- had 20 unsolvable segments counted as un-clamped successes. That made
+    # the number smallest exactly where the data was worst.
+    tried = 0
     for b, a, L in tree:
         pa = P.get(a)
         if pa is None or np.any(np.isnan(tgt[b])):
@@ -341,6 +484,7 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None, want_front=Non
         if L == 0.0:                                   # coincident landmarks
             P[b] = pa.copy()
             continue
+        tried += 1
         dx, dy = tgt[b][0] - pa[0], tgt[b][1] - pa[1]
         planar = dx * dx + dy * dy
         if planar > L * L:
@@ -371,7 +515,7 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None, want_front=Non
                     sgn = 1.0 if rel >= 0 else -1.0
             sign_used[b] = sgn
             P[b] = np.array([pa[0] + dx, pa[1] + dy, pa[2] + sgn * dz])
-    return P, clamped, sign_used
+    return P, clamped, sign_used, tried
 
 
 def hand_scale(F, side, rig):
@@ -437,7 +581,129 @@ def hand_scale(F, side, rig):
         ratios.append((rig.bone_len(ra, rb) / sh) / est)
     if not ratios:
         return 1.0
-    return float(np.median(ratios))
+    return float(np.percentile(ratios, HAND_SCALE_Q))
+
+
+def hand_seg_scales(F, side, rig):
+    """One shrink factor PER PHALANX, not one for the whole hand.
+
+    hand_scale() takes the median of the 20 per-segment ratios, and the median is the problem.
+    A segment whose own ratio is ABOVE the median ends up with a target shorter than the rig
+    bone that has to span it -- and solve_depth reads any shortfall against bone length as
+    DEPTH, because for a rigid phalanx that is what a shortfall means. So it invents an
+    out-of-plane rotation, on every frame, for as long as the clip lasts. With index ratios of
+    0.68/0.50/0.69/0.65 against a median near 0.62, the two outer segments sit at 0.91 of the
+    rig bone, which the solver turns into 0.41 of a bone length of invented depth -- about 24
+    degrees of spurious rotation per joint. The hinge below then bends in that tilted plane and
+    the finger comes out STRAIGHTER than the signer's.
+
+    That is exactly what the worst words were. Measured as the distance from wrist to fingertip
+    in rig hand-lengths, avatar against target: `blue` index 1.85 vs 1.52 and middle 1.88 vs
+    1.57, `clean` 1.80 vs 1.49 -- fingers pointing the right way (3-10 degrees) and not curling.
+    The words that already worked show no such gap: `dad` 1.40 vs 1.41, `mom` 1.52 vs 1.48.
+
+    Per segment there is no residual to invent: each phalanx's 90th-percentile projection maps
+    onto that phalanx's own rig bone, so a face-on finger reconstructs at zero depth and the
+    depth solve is left doing only the job it is good at -- real foreshortening. Scaling each
+    segment separately cannot distort the handshape, because the handshape is the ANGLES
+    between segments and those are untouched; the lengths were never the signer's to lend.
+
+    BOUNDED, not taken raw. A segment's 90th percentile is only a good estimate of its true
+    length if that segment was actually seen near face-on at some point, and some never are --
+    a finger held curled or pointing at the camera for a whole short clip has every projection
+    foreshortened, so p90 under-reads the bone and the ratio over-reads the correction. Taken
+    raw that is visible: the words that REGRESSED when this replaced the median are exactly the
+    ones whose per-segment scales spread widest -- `drawer` 0.28 to 1.63, a factor of 5.8, and
+    `milk` up to 2.02 -- against 1.5-1.9 on `hello`, `blue` and `dad`, which all improved. A
+    scale above 1 means lengthening a segment, which for a rig whose hand is smaller than every
+    signer's is a tell that the estimate is bad rather than that the bone is long.
+
+    So each ratio is clipped to a band around the hand-wide median, which is the same estimator
+    with 20 segments behind it: per segment where the data supports it, pooled where it does
+    not. SEG_BAND = 1.0 recovers the old single-factor behaviour exactly.
+    """
+    h0 = HAND0[side]
+    sh = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    med = hand_scale(F, side, rig)
+    lo, hi = med / SEG_BAND, med * SEG_BAND
+    out = {}
+    for f, o in FINGER_OFF.items():
+        names = [f"hand_{side}", f"{f}_01_{side}", f"{f}_02_{side}", f"{f}_03_{side}",
+                 f"{f}_end_{side}"]
+        ks = [h0] + [h0 + o + k for k in range(4)]
+        for i in range(4):
+            d = np.linalg.norm(F[:, ks[i + 1], :2] - F[:, ks[i], :2], axis=1)
+            d = d[~np.isnan(d)]
+            L = rig.bone_len(names[i], names[i + 1]) / sh
+            if len(d) < 3:
+                out[(ks[i], ks[i + 1])] = (None, L)
+                continue
+            est = float(np.percentile(d, 90))
+            s = float(np.clip(L / est, lo, hi)) if est > 1e-6 else None
+            out[(ks[i], ks[i + 1])] = (s, L)
+    return out
+
+
+def hand_chains(rig, side):
+    """Each finger as a chain of (parent lm, child lm, rig length) from the wrist outward."""
+    h0 = HAND0[side]
+    sh = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    out = []
+    for f, o in FINGER_OFF.items():
+        ch = [(h0, h0 + o, rig.bone_len(f"hand_{side}", f"{f}_01_{side}") / sh)]
+        for k in (1, 2, 3):
+            nxt = f"{f}_0{k+1}_{side}" if k < 3 else f"{f}_end_{side}"
+            ch.append((h0 + o + k - 1, h0 + o + k,
+                       rig.bone_len(f"{f}_0{k}_{side}", nxt) / sh))
+        out.append(ch)
+    return out
+
+
+def fit_reach(tgt, chains, scale):
+    """Rebuild each finger so every segment is within the rig bone that has to span it.
+
+    A GLOBAL hand scale cannot do this, and the sweep is why. hand_scale() estimates the
+    signer's hand from the 90th percentile of each segment's projected length; whichever
+    percentile is then taken ACROSS the 20 segments is one compromise for the whole clip:
+
+        percentile    handshape   clamped      yes    time    food
+            50          20.90%     36.94%     15.2    22.9    25.1
+            25          18.99%     19.76%     20.7    12.9    10.2
+            15          18.92%     11.17%     21.1    10.2    10.5
+
+    Shrinking helps the signs held face-on (TIME, FOOD, SAME, HIGH) and hurts the closed ones
+    (YES is a fist, SICK a bent middle finger), so no percentile serves both.
+
+    Shrinking the whole hand per frame does not work either, and the reason is the useful
+    finding: the binding segment is almost always ONE segment, `pinky_1`, needing a factor of
+    0.48-0.77 on words as different as TIME, FOOD, BLUE and YES. The rig's finger PROPORTIONS
+    differ from MediaPipe's hand model -- its pinky proximal phalanx is relatively much
+    shorter -- so a whole-hand fit shrinks the hand by up to half to satisfy one bone.
+
+    It is a per-segment mismatch, so it is fixed per segment. Each finger is rebuilt from the
+    wrist outward keeping the data's DIRECTION for every segment and capping only its LENGTH
+    at the rig's own bone. That is exactly the right thing to discard: the finger solve reads
+    directions, not positions -- length enters only through the depth recovery, which needs
+    the 2D span to fit inside the bone or it has no real root and flattens the finger into the
+    image plane. Angles are the handshape and they are preserved exactly; lengths were never
+    ours to keep, since they belong to a different hand.
+    """
+    for ch in chains:
+        # Segment vectors are read BEFORE any of them moves. Walking a chain while reading
+        # tgt[b] - tgt[a] takes the vector from the already-moved parent to the not-yet-moved
+        # child, which is not a segment of anybody's hand -- it silently lengthens every
+        # segment after the first one that gets capped.
+        vs = [(a, b, tgt[b] - tgt[a], L) for a, b, L in ch
+              if not (np.any(np.isnan(tgt[a])) or np.any(np.isnan(tgt[b])))]
+        for a, b, v, L in vs:
+            n = float(np.linalg.norm(v[:2])) / scale
+            # FIT_MARGIN keeps it just inside: a segment at planar == L recovers dz == 0,
+            # which is the flat finger this exists to prevent -- clamping removed from the
+            # count and not from the animation.
+            if n > L * FIT_MARGIN > 0.0:
+                v = v * (L * FIT_MARGIN / n)
+            tgt[b] = tgt[a] + v
+    return tgt
 
 
 def _unused_palm_scale(F, side, rig):
@@ -698,6 +964,120 @@ def bridge_gaps(out_q, held):
     return out_q
 
 
+def mirror_passive_hand(F, dom):
+    """Give the passive hand the dominant hand's handshape, mirrored. 72 of 250 signs.
+
+    THE PASSIVE HAND IS NOT IN THIS CORPUS AT ALL. Measured over all 250 clips, the left hand
+    block is NaN on 100.00% of frames -- not one landmark, in any word. The left ARM is a
+    different story: the pose left wrist and elbow are tracked in 250 of 250, and the corpus
+    flags 87 signs as two-handed. So on those the avatar's passive arm swings through the sign
+    correctly with a flat, uncurled rest hand stuck on the end of it. That is the single most
+    visible defect left, and it is on 35% of the vocabulary.
+
+    ASL settles what the missing handshape is, for most of those signs. Battison's Symmetry
+    Condition: in a two-handed sign where BOTH hands move, the two hands have the same
+    handshape and mirrored orientation -- it is a well-formedness constraint on the lexicon,
+    not a tendency. So for those signs the passive handshape is recoverable exactly: reflect
+    the dominant hand's landmarks across the sagittal plane and anchor them on the passive
+    wrist, which IS tracked. Reflecting the landmarks rather than the solved quaternions is
+    deliberate -- it goes in as data, so hand_scale, the depth solve, flexion_axes and the
+    hinge constraints all apply to the passive hand exactly as they do to the dominant one,
+    with no assumption that the rig's two hands are perfect mirrors of each other.
+
+    THE OTHER 15 ARE NOT DONE HERE and must not be. When only one hand moves, the Dominance
+    Condition holds instead: the passive hand is a static base drawn from a small set of
+    unmarked handshapes, and it is NOT required to match the dominant hand -- mirroring
+    TOUCH or CHOCOLATE would put a moving handshape on a hand that should be a flat base.
+    Those keep the rest pose, which is a relaxed near-flat hand, i.e. the commonest base
+    there is. Which of the two rules applies is decided by measurement in retarget_word().
+
+    What this CANNOT do is make the passive handshape a measured quantity. It is derived from
+    a linguistic rule applied to the other hand, so it is excluded from the reported handshape
+    error -- scoring a synthesised target against itself is exactly the self-referential trap
+    this file has already been caught in twice. The passive ARM stays scored: that one is real
+    pose data.
+    """
+    pas = "l" if dom == "r" else "r"
+    s0, d0 = HAND0[dom], HAND0[pas]
+    p_wr = L_WR if pas == "l" else R_WR
+    rel = F[:, s0:s0 + 21, :] - F[:, s0:s0 + 1, :]
+    rel[:, :, 0] = -rel[:, :, 0]              # reflect across the sagittal plane: x only
+    # NaN propagates on its own, so a frame missing the dominant hand or the passive pose
+    # wrist stays missing and bridge_gaps handles it like any other gap.
+    F[:, d0:d0 + 21, :] = F[:, p_wr:p_wr + 1, :] + rel
+    return F
+
+
+def resample(out_q, m):
+    """Resample a rotation track to m frames by slerping between neighbouring source frames.
+
+    Every bone is interpolated independently so a bone that is absent from one of the two
+    source frames -- undriven, therefore at rest -- is carried through rather than slerped
+    against nothing. Rounding matches the rest of the file: four decimals is well under the
+    angular resolution anything downstream can show.
+    """
+    n = len(out_q)
+    if m == n or n < 2:
+        return [dict(f) for f in out_q]
+    out = []
+    for j in range(m):
+        s = j * (n - 1) / (m - 1)
+        a = int(np.floor(s))
+        b = min(a + 1, n - 1)
+        t = s - a
+        f = {}
+        for nm in set(out_q[a]) | set(out_q[b]):
+            if nm not in out_q[a]:
+                f[nm] = list(out_q[b][nm])
+            elif nm not in out_q[b] or b == a:
+                f[nm] = list(out_q[a][nm])
+            else:
+                q = slerp(np.array(out_q[a][nm], dtype=float),
+                          np.array(out_q[b][nm], dtype=float), t)
+                f[nm] = [round(float(x), 4) for x in q]
+        out.append(f)
+    return out
+
+
+def retime(out_q):
+    """Give every sign a still frame to be READ in, and a floor under how fast it can flash by.
+
+    The clips are not recordings of a sign from rest to rest. They are windows cut out of
+    continuous signing, and the cut lands wherever the segmenter put it: measured across all
+    250, the hand is already moving on the FIRST frame of 99% of them and still moving on the
+    last frame of 93%. So a sign starts mid-gesture, ends mid-gesture, and -- in the viewer,
+    which loops -- jumps straight from one to the other. Nothing about that is legible, and no
+    amount of work on the retargeting fixes it, because it is a property of the capture window.
+
+    Holding the first and last pose is the fix, and it is why the frame COUNT is not the thing
+    to equalise. A hold is what the eye reads a handshape in; ~200 ms is about the floor for
+    that, so HOLD_IN/HOLD_OUT are 6 and 10 frames at 30 fps. The exit hold is longer because
+    the end pose is the one that carries the sign's final location and handshape, and because
+    it doubles as the gap that keeps a loop from reading as one continuous motion.
+
+    The second half is a floor, not a normalisation. Peak hand speed is the SAME in the short
+    clips and the long ones (0.089 vs 0.106 shoulder-widths/frame), so a 9-frame `tiger` is not
+    signed fast -- it simply contains less movement, and 0.3 s is under what anyone can see.
+    Those get stretched up to MIN_STROKE, capped at MAX_STRETCH so nothing ends up in slow
+    motion at a speed the signer never used. 17 of 250 clips are short enough to be touched.
+
+    Long clips are left ALONE. `puppy` is 116 frames because the sign repeats, and repetition
+    is phonological in ASL -- compressing it to a target duration would change the word.
+    """
+    n = len(out_q)
+    stretch = 1.0
+    if n and n < MIN_STROKE:
+        stretch = min(MIN_STROKE / n, MAX_STRETCH)
+        out_q = resample(out_q, int(round(n * stretch)))
+    if not out_q:
+        return out_q, {"hold_in": 0, "hold_out": 0, "stretch": 1.0, "stroke": 0}
+    stroke = len(out_q)
+    out_q = ([dict(out_q[0]) for _ in range(HOLD_IN)] + out_q +
+             [dict(out_q[-1]) for _ in range(HOLD_OUT)])
+    return out_q, {"hold_in": HOLD_IN, "hold_out": HOLD_OUT,
+                   "stretch": round(float(stretch), 2), "stroke": stroke}
+
+
 def fk_world(rig, frame_q):
     """World translation per node index from local quaternions; absent bones hold rest."""
     W, T = {}, {}
@@ -856,6 +1236,34 @@ def arm_scale(F, side, rig):
     return float(min(np.median(ratios), 1.0))
 
 
+def arm_seg_scales(F, side, rig):
+    """One factor for the upper arm and one for the forearm, rather than the median of both.
+
+    The shared scale above was justified by the elbow: scaling the two bones independently
+    moves it off the shoulder-wrist line, which is a posture change rather than a proportion
+    correction. That argument no longer holds, because the elbow is re-placed afterwards by
+    two_bone_ik and only its DIRECTION survives, as the pole vector.
+
+    Meanwhile the median costs what it costs everywhere else in this file. On `blue` the
+    forearm's own 2D span exceeded the rig's forearm on 77% of frames after the shared scale --
+    every one of those flattened into the image plane by the depth solve, while all 20 finger
+    segments sat at 0% once THEY were scaled per segment. Same mistake, one level up the arm.
+
+    Returns (upper, fore), each capped at 1.0 for the reason in arm_scale(): a signer's arm is
+    never stretched to fill a longer rig one.
+    """
+    sh, el, wr = ((L_SH, L_EL, L_WR) if side == "l" else (R_SH, R_EL, R_WR))
+    shw = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    out = []
+    for a, b, ra, rb in ((sh, el, f"upperarm_{side}", f"lowerarm_{side}"),
+                         (el, wr, f"lowerarm_{side}", f"hand_{side}")):
+        d = np.linalg.norm(F[:, b, :2] - F[:, a, :2], axis=1)
+        d = d[~np.isnan(d)]
+        est = float(np.percentile(d, 90)) if len(d) >= 3 else 0.0
+        out.append(min((rig.bone_len(ra, rb) / shw) / est, 1.0) if est > 1e-6 else None)
+    return out
+
+
 def frame_from(origin, fwd, across):
     """Orthonormal basis from a long axis and an across axis. Returns columns [x, y, z]."""
     x = fwd / (np.linalg.norm(fwd) + 1e-12)
@@ -928,12 +1336,45 @@ def retarget_word(rig, word, chains):
     if not two_handed:
         chains = [c for c in chains if not c[0].endswith(f"_{passive}")]
 
+    # SYMMETRY OR DOMINANCE? The flag says two-handed; it does not say which of the two ways.
+    # Decided by how far the passive wrist travels relative to the dominant one, both from
+    # pose landmarks that are tracked in every clip. Measured across the 87 two-handed signs
+    # the split is clean rather than borderline -- 72 above the threshold, 15 below -- and the
+    # 15 are the ones a signer would name as base-hand signs: TOUCH, CHAIR, PEN, TIME, INTO,
+    # AFTER, RIDE, CHOCOLATE. See mirror_passive_hand() for why only the first group is safe.
+    p_wr, d_wr = (L_WR, R_WR) if passive == "l" else (R_WR, L_WR)
+    trav = [float(np.nansum(np.linalg.norm(np.diff(F[:, k, :2], axis=0), axis=-1)))
+            for k in (p_wr, d_wr)]
+    symmetric = bool(two_handed and trav[0] > PASSIVE_MOVE * max(trav[1], 1e-9))
+    mirrored = None
+    if symmetric and np.isnan(F[:, HAND0[passive], 0]).all():
+        F = mirror_passive_hand(F, dom)
+        mirrored = passive
+
+    # Which arms are in the signing space at all. An arm whose wrist never rises within
+    # PARKED_Y of the shoulder line spent the clip hanging at the signer's side; it is still
+    # DRIVEN, because that is what the signer did and the avatar should show it, but it is not
+    # scored -- see the note at the scoring loop.
+    active = {}
+    for s_a in ("l", "r"):
+        wr_a = L_WR if s_a == "l" else R_WR
+        shy_a = np.nanmean(F[:, [L_SH, R_SH], 1])
+        yy = F[:, wr_a, 1]
+        active[s_a] = bool(np.any(~np.isnan(yy))
+                           and np.nanmin(yy) < shy_a + PARKED_Y)
+    if not any(active.values()):            # nothing raised all clip: score what we drive
+        active = {s_a: True for s_a in ("l", "r")}
+
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
+    SEGS = {s: hand_chains(rig, s) for s in ("l", "r")}
+    SSC = {s: hand_seg_scales(F, s, rig) for s in ("l", "r")}
+    ASS = {s: arm_seg_scales(F, s, rig) for s in ("l", "r")}
     AS = {s: arm_scale(F, s, rig) for s in ("l", "r")}
     SHY, VA, VB = body_map(F, rig, origin, scale)   # signer height -> rig height
     HR = head_frames(F, rig)          # non-manual: head pose, one of the five ASL parameters
     ZS = smooth_z(F)
     tree = build_tree(rig)
+    FLEX = flexion_axes(rig)
 
     # WHICH SIDE OF THE SHOULDER LINE IS THIS LANDMARK ON? Read in the data's own space, where
     # the SIGN of z is trustworthy even though its magnitude is not: across all 11 signs the
@@ -960,7 +1401,7 @@ def retarget_word(rig, word, chains):
     for fi in range(n):
         if np.isnan(sh_z[fi]):
             continue
-        for lm in (L_EL, R_EL):
+        for lm in WANT_FRONT_LM:
             # ONLY WHEN IT IS SURE. The prior is a hard override with no hysteresis behind it,
             # so an elbow hovering near the shoulder plane flips side every frame and swings
             # the forearm through 145 degrees -- which is exactly what `animal` and `bath` were
@@ -971,7 +1412,7 @@ def retarget_word(rig, word, chains):
             if not np.isnan(m) and abs(m) > FRONT_MARGIN:
                 want_front[fi][lm] = bool(m > 0)
 
-    prev_sign, last_q, held = {}, {}, []
+    prev_sign, last_q, held, last_nd = {}, {}, [], {}
     out_q, err, shp, front, keep, clamps, total = [], [], [], [], [], 0, 0
     by_bone = {c[0]: c for c in chains}
     driven = [c[0] for c in chains] + ["neck", "head"]
@@ -996,12 +1437,16 @@ def retarget_word(rig, word, chains):
         # signer's own body, which is what this preserves.
         for s in ("l", "r"):
             sh, el, wr = ((L_SH, L_EL, L_WR) if s == "l" else (R_SH, R_EL, R_WR))
-            if np.any(np.isnan(tgt[sh])) or abs(AS[s] - 1.0) < 1e-6:
+            if np.any(np.isnan(tgt[sh])):
                 continue
-            a0 = tgt[sh].copy()
-            for lm in (el, wr):
-                if not np.any(np.isnan(tgt[lm])):
-                    tgt[lm] = a0 + (tgt[lm] - a0) * AS[s]
+            # Per bone, walking out from the shoulder -- see arm_seg_scales(). Vectors read
+            # before anything moves, for the reason spelled out in fit_reach().
+            su, sf = ASS[s]
+            vs = [(sh, el, tgt[el] - tgt[sh], su if su is not None else AS[s]),
+                  (el, wr, tgt[wr] - tgt[el], sf if sf is not None else AS[s])]
+            for a_, b_, v_, sc_ in vs:
+                if not (np.any(np.isnan(tgt[a_])) or np.any(np.isnan(v_))):
+                    tgt[b_] = tgt[a_] + v_ * sc_
         # Shrink each hand about its own wrist to the rig's hand size, THEN move the whole
         # block onto the pose wrist. Both steps happen in rig space, after conversion.
         #
@@ -1020,18 +1465,28 @@ def retarget_word(rig, word, chains):
             h0, wr = HAND0[s], (L_WR if s == "l" else R_WR)
             if np.any(np.isnan(tgt[h0])):
                 continue
-            w0 = tgt[h0].copy()
-            if abs(HS[s] - 1.0) > 1e-6:
-                for k in range(1, 21):
-                    if not np.any(np.isnan(tgt[h0 + k])):
-                        tgt[h0 + k] = w0 + (tgt[h0 + k] - w0) * HS[s]
+            # PER SEGMENT, walking each finger out from the wrist. A single hand-wide factor
+            # leaves every segment whose own ratio differs from the median either too long for
+            # the rig bone (clamped flat) or too short for it (invented depth, a straightened
+            # finger). See hand_seg_scales(). The wrist itself does not move here.
+            for ch in SEGS[s]:
+                # Read every segment vector BEFORE moving anything: once the parent has been
+                # rescaled, tgt[b] - tgt[a] is no longer the segment the signer made.
+                vs = [(a_, b_, tgt[b_] - tgt[a_],
+                       SSC[s].get((a_, b_), (None, 0.0))[0])
+                      for a_, b_, _ in ch
+                      if not (np.any(np.isnan(tgt[a_])) or np.any(np.isnan(tgt[b_])))]
+                for a_, b_, v_, sc_ in vs:
+                    tgt[b_] = tgt[a_] + v_ * (HS[s] if sc_ is None else sc_)
+            # ... and then, on this frame only, far enough for the rig to reach it at all.
+            tgt = fit_reach(tgt, SEGS[s], scale)
             if not np.any(np.isnan(tgt[wr])):
                 shift = tgt[wr] - tgt[h0]
                 for k in range(21):
                     if not np.any(np.isnan(tgt[h0 + k])):
                         tgt[h0 + k] = tgt[h0 + k] + shift
-        P, cl, used = solve_depth(tgt, rig, F[fi], tree, zref=ZS[fi],
-                                  prev_sign=prev_sign, want_front=want_front[fi])
+        P, cl, used, tried = solve_depth(tgt, rig, F[fi], tree, zref=ZS[fi],
+                                         prev_sign=prev_sign, want_front=want_front[fi])
         prev_sign.update(used)
 
         # PUT THE HAND WHERE THE SIGN IS MADE ON THIS BODY. The solve above reproduces the
@@ -1067,13 +1522,116 @@ def retarget_word(rig, word, chains):
             h0_ = HAND0[s_]
             ks = [h0_ + k for k in range(21)]
             have = [k for k in ks if P.get(k) is not None and not np.any(np.isnan(F[fi, k]))]
-            if have:
-                cen_rig = float(np.mean([P[k][1] for k in have]))
-                cen_dat = float(np.mean([float(SHY[fi]) - F[fi, k, 1] for k in have]))
-                want_y = P[wr_][1] + (origin[1] + (VA * cen_dat + VB) * scale - cen_rig)
-            else:
+            # A MIRRORED HAND SUPPLIES HANDSHAPE, NEVER PLACEMENT. Its landmarks are reflected
+            # copies of the other hand anchored on the passive wrist, so their heights are the
+            # dominant hand's heights -- letting them into the centroid and face anchor moved
+            # the passive wrist off the pose target that IS real: `clean` 7.5% -> 8.8% wrist,
+            # clamping 22.7% -> 28.9%, `same` 6.0% -> 12.7%. Placement comes from the tracked
+            # pose wrist; only the finger rotations come from the mirror.
+            if s_ == mirrored:
+                have = []
+            if not have:
                 want_y = origin[1] + (VA * (float(SHY[fi]) - F[fi, wr_, 1]) + VB) * scale
-            want = np.array([P[wr_][0], want_y, P[wr_][2]])
+                want = np.array([P[wr_][0], want_y, P[wr_][2]])
+            else:
+                cen_dy = float(np.mean([float(SHY[fi]) - F[fi, k, 1] for k in have]))
+                body_y = origin[1] + (VA * cen_dy + VB) * scale
+
+                # NEAR THE FACE, ANCHOR TO THE FACE. A body map gets the height roughly right
+                # and still misses the thing that defines the sign: how close the hand comes to
+                # the head. Measured, the signer's thumb reaches within 0.189 shoulder widths
+                # of their own nose on `dad`, 0.173 on `mom`, 0.063 on `drink`; the avatar's
+                # nearest approach to its head was 0.427, 0.260 and 0.162. Roughly twice as far
+                # on the signs that are ABOUT touching the face. Contact is phonological -- a
+                # sign made at the forehead and a sign made in neutral space in front of it are
+                # different words -- so it cannot be left to fall out of a height fit.
+                #
+                # Both bodies have EYES, which is an exact correspondence that needs no lexicon
+                # and no guessing (MediaPipe pose carries eye centres at landmarks 2 and 5;
+                # the rig has eye_l and eye_r). So when the hand is near the face its offset
+                # FROM THE EYE MIDPOINT is reproduced directly.
+                #
+                # Blended, not switched, by distance: fully face-anchored within NEAR, fully
+                # body-mapped past FAR, linear between. A hard switch would make the hand jump
+                # the moment it crossed the threshold, which is the class of artefact this
+                # whole session has been removing.
+                #
+                # x and y only. z stays as the depth solver left it -- the data's z is the
+                # noise this solver exists to discard, and that does not stop being true
+                # because we are measuring from the eyes instead of the shoulders.
+                # THE ANCHOR IS THE PART THAT TOUCHES, not the middle of the hand. Anchoring
+                # the centroid helped most signs and made `dad` worse, because on `dad` the
+                # thumb touches the forehead while the four fingers stand up past the top of
+                # the head: the centroid sits well above the face and drags the contact with
+                # it. What has to land in the right place is whatever is nearest the face.
+                #
+                # Taken as a soft minimum rather than a hard one -- weights falling off with
+                # distance -- because "which landmark is nearest" flips between neighbours
+                # from frame to frame, and a hard pick would put a jump in the animation every
+                # time it did.
+                eye_d = (F[fi, 2, :2] + F[fi, 5, :2]) / 2.0
+                dk = np.array([np.linalg.norm(F[fi, k, :2] - eye_d) for k in have])
+                wk = np.exp(-(dk / FACE_SIGMA) ** 2)
+                if float(wk.sum()) < 1e-9:
+                    wk = np.ones_like(wk)
+                wk = wk / wk.sum()
+                anchor_d = np.array([float(np.dot(wk, [F[fi, k, 0] for k in have])),
+                                     float(np.dot(wk, [F[fi, k, 1] for k in have]))])
+                cen_rig = np.array([float(np.dot(wk, [P[k][0] for k in have])),
+                                    float(np.dot(wk, [P[k][1] for k in have])),
+                                    float(np.dot(wk, [P[k][2] for k in have]))])
+                off = anchor_d - eye_d
+                dist = float(dk.min())
+                w_face = float(np.clip((FACE_FAR - dist) / (FACE_FAR - FACE_NEAR), 0.0, 1.0))
+                rig_eye = (rig.wp("eye_l") + rig.wp("eye_r")) / 2.0
+                face_xy = np.array([rig_eye[0] + off[0] * scale,
+                                    rig_eye[1] - off[1] * scale])
+                tgt_x = w_face * face_xy[0] + (1.0 - w_face) * cen_rig[0]
+                tgt_y = w_face * face_xy[1] + (1.0 - w_face) * body_y
+                want = np.array([P[wr_][0] + (tgt_x - cen_rig[0]),
+                                 P[wr_][1] + (tgt_y - cen_rig[1]),
+                                 P[wr_][2]])
+            # AND IN FRONT OF THE BODY, IF THE DATA SAYS IT IS. The depth root chosen inside
+            # solve_depth stopped being the last word once two_bone_ik took over placement:
+            # swept over 70 words, carrying the in-front prior on the elbow, the wrist, both or
+            # neither moves the `front` metric by 0.14 points and handshape not at all, because
+            # the wrist's final z is whatever survives into this target. So the same rule has
+            # to be applied HERE, where it lands.
+            #
+            # It is worth applying. On the 15 base-hand signs the passive hand is behind the
+            # shoulder plane on 100% of frames -- `time` by 0.30 shoulder-widths, 10 cm, with
+            # the rig's own spine only 0.06 behind that plane. The hand is inside the torso.
+            # Meanwhile the data puts that wrist IN FRONT on 91-100% of frames.
+            #
+            # Mirrored about the shoulder plane rather than pushed to a floor, because that
+            # uses only the part of z we trust. The file's whole depth argument is that the
+            # data's z SIGN is reliable and its MAGNITUDE is not: the magnitude here stays the
+            # one our own bone-length solve produced, and only the side is taken from the data.
+            z0_ = rig.wp(f"upperarm_{s_}")[2]
+            if want_front[fi].get(wr_) is True and want[2] < z0_:
+                want[2] = 2.0 * z0_ - want[2]
+
+            # ... and NOT INSIDE THE BODY, whatever the data says. The mirror above needs the
+            # data's z-sign to be confident, and on the signs where the hand ends up furthest
+            # back it is not: `look` reads in-front on 68% of frames, `time` 73%, `sleep` 56%.
+            # Those four are exactly the ones still placing the hand behind the shoulder plane
+            # (`look` 39% of frames in front, `time` 50%, `sleep` 54%, `pen` 62%).
+            #
+            # This is not a depth estimate and does not pretend to be one. It is the fact that
+            # a hand cannot occupy the same space as the chest it is in front of. Applied only
+            # inside the torso's own footprint -- between the shoulders, and between hip and
+            # head height -- so a hand genuinely at the signer's side or above their head is
+            # left alone. Outside that box the constraint has nothing to say.
+            # Up to the TOP of the head, not the head joint, which sits at the base of the
+            # skull: a hand at the eye or the forehead is above that joint and was falling
+            # outside the box -- which is `look`, a V-hand at the eye, the worst word here.
+            hip_y = rig.wp("spine_01")[1] if "spine_01" in rig.by else origin[1] - scale
+            top_y = rig.wp("head_end" if "head_end" in rig.by else "head")[1] \
+                if "head" in rig.by else origin[1] + scale
+            half = scale * 0.5 + TORSO_PAD * scale
+            if (abs(want[0] - origin[0]) < half and hip_y < want[1] < top_y
+                    and want[2] < z0_ + TORSO_FRONT * scale):
+                want[2] = z0_ + TORSO_FRONT * scale
             L1 = rig.bone_len(f"upperarm_{s_}", f"lowerarm_{s_}")
             L2 = rig.bone_len(f"lowerarm_{s_}", f"hand_{s_}")
             E, W = two_bone_ik(S_, want, L1, L2, P[el_] - S_)
@@ -1088,7 +1646,7 @@ def retarget_word(rig, word, chains):
                     tgt[h0_ + k] = tgt[h0_ + k] + moved
             tgt[wr_] = tgt[wr_] + moved
         clamps += cl
-        total += len(tree)
+        total += tried
 
         # Hierarchical direction match. Walk the rig's own node order so a parent's solved
         # world rotation is always available before its children are solved in it.
@@ -1153,6 +1711,15 @@ def retarget_word(rig, word, chains):
             #
             # The across-palm vector (index MCP -> pinky MCP) pins it. Both landmarks were in
             # the data all along; nothing here needs anything new from the rigger.
+            # ... and two vectors are not the best available answer. Every MCP is a metacarpal
+            # head, rigidly attached to the same palm, so all five constrain the same rotation
+            # and the least-squares fit over all of them beats picking two. Measured per-joint,
+            # the two-vector frame left `hand -> thumb_01` 30.6 degrees off while the joints
+            # BELOW it were 1.9/6.2/7.7 -- as good as the fingers. That signature is roll:
+            # rolling the palm about its own axis swings the thumb a long way and the middle
+            # finger, which lies near that axis, hardly at all (thumb 30.6, pinky 12.2, middle
+            # 2.5). It is not anatomy -- the rig's palm fan and MediaPipe's agree to 8 degrees
+            # at the extremes and 0.5 at the middle finger -- so it was ours to fix.
             hand_side = nm[-1] if nm.startswith("hand_") else None
             solved = False
             if hand_side in ("l", "r"):
@@ -1166,11 +1733,83 @@ def retarget_word(rig, word, chains):
                     if Ft is not None and Fr is not None:
                         world_R[bi] = (Ft @ Fr.T) @ rig.world_rest[bi][1]
                         solved = True
+
+            mfp = nm.split("_")
+            if len(mfp) == 3 and mfp[1] == "01" and mfp[0] in FINGER_OFF:
+                # THE KNUCKLE SETS THE FINGER'S PLANE, and nothing was setting it. align()
+                # gives the minimal rotation, which pins where the bone POINTS and leaves its
+                # roll to whatever the parent gave. That was harmless while the two joints
+                # below were free and is not harmless now they are hinges: a hinge bends in
+                # the plane its parent's roll chose, so an unconstrained roll curls the finger
+                # in an arbitrary plane where it cannot reach -- `blue`'s fingers standing
+                # straight out where the data has them curled.
+                #
+                # Two sources for that plane, and the measured answer is to use both:
+                #
+                #   the DATA's finger normal   shape 18.7%  anatomy 0d  knuckle 9.2 deg/frame
+                #   the RIG's rest plane       shape 28.9%  anatomy 0d  knuckle 3.5 deg/frame
+                #   neither (align alone)      shape 17.9%  anatomy 26d knuckle 4.2 deg/frame
+                #
+                # The data is worth following when the finger is bent, because then the plane
+                # is well determined and the handshape is what it is describing. It is worth
+                # nothing when the finger is straight: |cross| is |u1||u2|sin(bend), so a
+                # straight finger yields a short vector pointing wherever the noise says, and
+                # tracking it is where that 9.2 deg/frame comes from. The rig's rest plane is
+                # exact, free of measurement, and cannot shimmer -- so it carries the frames
+                # the data cannot speak for, and the finger still cannot twist in either case.
+                fg, sd = mfp[0], mfp[2]
+                axr = FLEX.get(f"{fg}_02_{sd}")
+                if axr is not None:
+                    h0f = HAND0[sd] + FINGER_OFF[fg]
+                    pts = [P.get(h0f + j) for j in (0, 1, 3)]
+                    if all(q is not None for q in pts):
+                        # MCP->PIP against MCP->TIP: both give the plane, but a cross
+                        # product's direction is only as steady as its inputs are long, and
+                        # consecutive phalanges are the two shortest vectors available.
+                        u1, u2 = pts[1] - pts[0], pts[2] - pts[0]
+                        nd = np.cross(u1, u2)
+                        sin_bend = float(np.linalg.norm(nd)) / (
+                            float(np.linalg.norm(u1)) * float(np.linalg.norm(u2)) + 1e-12)
+                        if sin_bend > FINGER_PLANE_MIN:
+                            nd = nd / (np.linalg.norm(nd) + 1e-12)
+                            # smoothed across frames: a finger's PLANE turns slowly even
+                            # while the bend within it -- the handshape itself -- does not
+                            pn_ = last_nd.get(nm)
+                            if pn_ is not None:
+                                if float(np.dot(nd, pn_)) < 0.0:
+                                    nd = -nd
+                                nd = PLANE_EMA * nd + (1.0 - PLANE_EMA) * pn_
+                                nd = nd / (np.linalg.norm(nd) + 1e-12)
+                            last_nd[nm] = nd
+                            across_t = nd
+                            Ftf = frame_from(P[a], want, across_t)
+                            Frf = frame_from(rig.wp(nm),
+                                             rig.wp(child) - rig.wp(nm), axr)
+                            if Ftf is not None and Frf is not None:
+                                world_R[bi] = (Ftf @ Frf.T) @ rig.world_rest[bi][1]
+                                solved = True
+
             if not solved:
                 # where this bone points at REST, carried into the parent's CURRENT frame
                 rest_dir = rig.wp(child) - rig.wp(nm)
                 rest_dir /= np.linalg.norm(rest_dir) + 1e-12
                 cur = pR @ np.linalg.inv(R_rest_parent) @ rest_dir
+                # A FINGER JOINT IS A HINGE. For the middle and end phalanges the target
+                # direction is projected onto the one plane the joint can actually reach, so
+                # noise perpendicular to it is discarded instead of becoming a twist. See
+                # flexion_axes(): without this the three phalanges of a finger left their
+                # shared plane by 34-41 degrees on average, which no hand can do.
+                fx = FLEX.get(nm)
+                if fx is not None:
+                    axw = pR @ np.linalg.inv(R_rest_parent) @ fx
+                    na = np.linalg.norm(axw)
+                    if na > 1e-9:
+                        axw = axw / na
+                        wp_ = want - axw * float(np.dot(want, axw))
+                        cp_ = cur - axw * float(np.dot(cur, axw))
+                        if np.linalg.norm(wp_) > 1e-6 and np.linalg.norm(cp_) > 1e-6:
+                            want = wp_ / np.linalg.norm(wp_)
+                            cur = cp_ / np.linalg.norm(cp_)
                 world_R[bi] = align(cur, want) @ (pR @ rig.rest_R[bi])
             local_q[nm] = mat_to_quat(np.linalg.inv(pR) @ world_R[bi])
         last_q.update(local_q)
@@ -1191,14 +1830,28 @@ def retarget_word(rig, word, chains):
     for fq, tg in zip(out_q, keep):
         WT = fk_world(rig, fq)
         for side, wr in (("l", L_WR), ("r", R_WR)):
-            # only score an arm we actually drive; see the passive-arm note above
-            if f"hand_{side}" not in by_bone or wr not in tg:
+            # only score an arm we actually drive; see the passive-arm note above -- and not
+            # one that is PARKED, which is a different thing the same note is about. On a
+            # two-handed sign the passive chains are kept, and on eight of those the signer
+            # simply left that arm hanging: measured in the data, the passive wrist sits 0.85
+            # to 1.31 shoulder-widths out to the side and 0.86 to 1.18 BELOW the shoulder line
+            # for the whole clip, and the avatar reproduces that to within 0.01. Scoring it
+            # dragged `front` to 50-69% on `pen`, `time`, `after`, `touch`, `chair`, `into`,
+            # `beside` and `chocolate`, whose DOMINANT hand is in front on 100% of frames.
+            # That is the metric describing an arm at rest, not a depth solve going backwards.
+            if f"hand_{side}" not in by_bone or wr not in tg or not active[side]:
                 continue
             got = WT[rig.by[f"hand_{side}"]]
             err.append(float(np.linalg.norm(got[:2] - tg[wr][:2])) / scale)
             front.append(float(got[2] > rig.wp(f"upperarm_{side}")[2]))
             h0 = HAND0[side]
-            if h0 not in tg:
+            # The mirrored hand's target was DERIVED from the other hand by a linguistic rule,
+            # so scoring the solve against it says nothing about whether the handshape is
+            # right -- it would only report how well the solver hit a target we invented, and
+            # report it as if it were measured. The arm above it stays scored: that one is
+            # real pose data. This file has twice shipped a metric that could not fail; not a
+            # third time.
+            if h0 not in tg or side == mirrored:
                 continue
             hl = float(np.linalg.norm(rig.wp(f"middle_01_{side}") - rig.wp(f"hand_{side}")))
             for fname, off in FINGER_OFF.items():
@@ -1207,7 +1860,15 @@ def retarget_word(rig, word, chains):
                     g = WT[rig.by[f"{fname}_end_{side}"]] - got
                     t_ = tg[tip] - tg[h0]
                     shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
-    return d, out_q, np.array(err), np.array(shp), np.array(front), clamps, total, driven
+
+    # AFTER scoring, never before. The holds are copies of frames already scored and the
+    # stretched frames are interpolations between them, so scoring the stroke scores the
+    # animation; scoring the padded track would dilute every number with repeated frames and
+    # make it incomparable with every measurement taken before this pass existed.
+    out_q, timing = retime(out_q)
+    timing["mirrored"] = mirrored
+    return (d, out_q, np.array(err), np.array(shp), np.array(front), clamps, total, driven,
+            timing)
 
 
 def selftest(rig, chains):
@@ -1282,10 +1943,59 @@ def selftest(rig, chains):
         f"[err] the `front` metric cannot tell a correct depth axis from a reversed one "
         f"({fr0.mean()*100:.0f}% correct vs {fr3.mean()*100:.0f}% reversed). It is the only "
         f"check that sees z at all -- wrist and handshape error are both image-plane.")
+    # PALM ORIENTATION MUST DEPEND ON THE PALM. This solve has now gone missing twice -- once
+    # because it was never written, once because a careless edit cut it out -- and both times
+    # the symptom was a hand in exactly the right place facing an arbitrary direction, which
+    # wrist error scores as perfect. So: move the landmarks that define the across-palm vector
+    # and require the hand bone to notice. A retargeter that ignores them will not.
+    src = json.loads((WORDS / "hello.json").read_text(encoding="utf-8"))
+    base_q = retarget_word(rig, "hello", chains)[1]
+    _orig_ho = HAND0["r"]
+    try:
+        HAND0["r"] = _orig_ho            # unchanged; we perturb through FINGER_OFF instead
+        FINGER_OFF["index"], FINGER_OFF["pinky"] = (FINGER_OFF["pinky"],
+                                                    FINGER_OFF["index"])
+        swap_q = retarget_word(rig, "hello", chains)[1]
+    finally:
+        FINGER_OFF["index"], FINGER_OFF["pinky"] = (FINGER_OFF["pinky"],
+                                                    FINGER_OFF["index"])
+    moved = max(
+        float(np.degrees(2 * np.arccos(min(1.0, abs(float(np.dot(
+            np.array(a["hand_r"]), np.array(b_["hand_r"]))))))))
+        for a, b_ in zip(base_q, swap_q) if "hand_r" in a and "hand_r" in b_)
+    assert moved > 5.0, (
+        f"[err] swapping the index and pinky landmarks moved the hand bone by only "
+        f"{moved:.2f} degrees. Palm orientation is not being solved from the palm -- the "
+        f"hand will arrive in the right place facing an arbitrary direction, which wrist "
+        f"error scores as a pass.")
+    print(f"[selftest] swap index/pinky       -> hand rotates {moved:5.1f}deg   "
+          f"(palm orientation is solved from the palm)")
+
     print(f"[selftest] reverse the z axis     -> in front {fr0.mean()*100:5.0f}% -> "
           f"{fr3.mean()*100:5.0f}%   (wrist {err3.mean()*100:.1f}% and handshape "
           f"{shp3.mean()*100:.0f}% barely move -- that is why this check exists)")
 
+    # 6. The holds must BE holds, and the stretch must preserve the pose. A resample that
+    #    interpolated wrongly, or a hold that copied the wrong frame, would show up nowhere
+    #    else: every error metric is computed before this pass runs, by design.
+    short = [{"hand_r": [0.0, 0.0, 0.0, 1.0]},
+             {"hand_r": [0.0, 0.0, float(np.sin(np.pi / 4)), float(np.cos(np.pi / 4))]}]
+    pad, tm = retime([dict(f) for f in short])
+    assert tm["stretch"] == MAX_STRETCH and tm["stroke"] == 4, tm
+    assert len(pad) == HOLD_IN + 4 + HOLD_OUT, len(pad)
+    assert all(pad[i]["hand_r"] == pad[0]["hand_r"] for i in range(HOLD_IN + 1)), \
+        "[err] the entry hold is not still -- the sign starts mid-motion again"
+    assert all(pad[-1 - i]["hand_r"] == pad[-1]["hand_r"] for i in range(HOLD_OUT + 1)), \
+        "[err] the exit hold is not still"
+    mid = np.array(pad[HOLD_IN + 1]["hand_r"], dtype=float)
+    half = float(np.degrees(2 * np.arccos(min(1.0, abs(mid[3])))))
+    assert 25.0 < half < 35.0, (
+        f"[err] resampling a 90deg turn put frame 2 of 4 at {half:.1f}deg, not the 30deg an "
+        f"even slerp gives -- the stretched frames are not on the original motion.")
+    long_, tm2 = retime([{"hand_r": [0.0, 0.0, 0.0, 1.0]} for _ in range(MIN_STROKE + 5)])
+    assert tm2["stretch"] == 1.0 and tm2["stroke"] == MIN_STROKE + 5, tm2
+    print(f"[selftest] retime                 -> holds still, {MAX_STRETCH:.0f}x stretch "
+          f"lands mid-motion at {half:.0f}deg, long clips untouched")
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -1301,16 +2011,16 @@ def main():
     assert not missing, f"rig has no bone named {sorted(set(missing))}"
     print(f"rig    {len(rig.joints)} joints, {len(chains)} driven bones "
           f"(shoulder width {np.linalg.norm(rig.wp('upperarm_l')-rig.wp('upperarm_r')):.3f} m)")
-    print(f"\n{'word':<12s} {'frames':>6s} {'hands':>12s} {'wrist err':>11s} "
+    print(f"\n{'word':<12s} {'frames':>12s} {'hands':>16s} {'wrist err':>11s} "
           f"{'p95':>7s} {'handshape':>10s} {'in front':>9s} {'clamped':>8s}")
-    print("-" * 84)
+    print("-" * 94)
     baked, failed = {}, []
     for w in words:
         if not (WORDS / f"{w}.json").exists():
             print(f"{w:<12s}  no such word file")
             continue
         try:
-            d, q, err, shp, fr, cl, tot, driven = retarget_word(rig, w, chains)
+            d, q, err, shp, fr, cl, tot, driven, timing = retarget_word(rig, w, chains)
         except Exception as exc:                      # one bad clip must not lose the other 249
             print(f"{w:<12s}  FAILED: {type(exc).__name__}: {exc}")
             failed.append(w)
@@ -1318,16 +2028,34 @@ def main():
         F = np.array(d["frames"], dtype=float)
         lh = 1.0 - np.isnan(F[:, 33:54, 0]).mean()
         rh = 1.0 - np.isnan(F[:, 54:75, 0]).mean()
-        hands = ("both" if lh > .5 and rh > .5 else "right" if rh > .5 else
-                 "left" if lh > .5 else "none")
+        # A >50% threshold called 28 clips "none" that have the right hand on 11-50% of their
+        # frames -- five of them on EXACTLY 50%, missing the cut by a rounding hair. The
+        # fingers are driven on those frames and bridge_gaps interpolates the rest, so "none"
+        # was a lie about the animation AND about why the sign looks wrong. HAND_MIN is the
+        # honest floor: below it there is genuinely nothing to solve from. The coverage
+        # percentages ship alongside, because "right hand on 44% of frames" is the actual
+        # answer to "why is this sign off" and no label can carry it.
+        hands = ("both" if lh > HAND_MIN and rh > HAND_MIN else
+                 "right" if rh > HAND_MIN else "left" if lh > HAND_MIN else "none")
+        if max(lh, rh) < 0.5 and hands != "none":
+            hands += " (partial)"
+        # Says MIRRORED, never "both". The passive handshape is derived, and a label that hid
+        # that would be the same lie as scoring it.
+        if timing.get("mirrored"):
+            hands += " + mirrored"
         e = f"{err.mean()*100:.1f}%" if len(err) else "n/a"
         p95 = f"{np.percentile(err,95)*100:.1f}%" if len(err) else "n/a"
         hs = f"{shp.mean()*100:.1f}%" if len(shp) else "n/a"
         fr_s = f"{fr.mean()*100:.0f}%" if len(fr) else "n/a"
-        print(f"{w:<12s} {len(q):6d} {hands:>12s} {e:>11s} {p95:>7s} {hs:>10s} "
+        # "18>34 x2.0" reads: 18 frames of sign inside 34 of clip, slowed 2x to reach the
+        # legibility floor. No marker means the sign plays at the speed it was signed.
+        fcol = (f"{timing['stroke']}>{len(q)}" +
+                (f" x{timing['stretch']:.1f}" if timing["stretch"] > 1.005 else ""))
+        print(f"{w:<12s} {fcol:>12s} {hands:>16s} {e:>11s} {p95:>7s} {hs:>10s} "
               f"{fr_s:>9s} {cl*100.0/max(tot,1):7.1f}%")
         baked[w] = {"fps": d["fps"], "frames": q,
                     "hands": hands, "gloss": d.get("glosses", [w])[0],
+                    "lh": round(float(lh * 100), 0), "rh": round(float(rh * 100), 0),
                     # §14 test 7 numbers travel WITH the animation, so a viewer showing the
                     # sign always shows how well it actually landed rather than implying it
                     # is exact.
@@ -1335,7 +2063,11 @@ def main():
                     "p95": round(float(np.percentile(err, 95) * 100), 2) if len(err) else None,
                     "shape": round(float(shp.mean() * 100), 1) if len(shp) else None,
                     "front": round(float(fr.mean() * 100), 0) if len(fr) else None,
-                    "clamp": round(cl * 100.0 / max(tot, 1), 1)}
+                    "clamp": round(cl * 100.0 / max(tot, 1), 1),
+                    # Playback timing, so a player that wants to CONCATENATE signs can drop
+                    # the holds at an internal join instead of stacking two of them. frames
+                    # [hold_in : hold_in+stroke] is the sign itself.
+                    **timing}
     out = REPO / "avatar" / "baked_signs.json"
     out.write_text(json.dumps({
         "_note": ("Bone rotations baked by avatar/retarget.py from the 75-landmark motion in "

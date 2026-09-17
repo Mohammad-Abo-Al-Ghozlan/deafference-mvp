@@ -87,6 +87,10 @@ button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;f
 #scrub{flex:1 1 160px;min-width:120px;accent-color:var(--accent)}
 #frame{font:400 12px/1 var(--mono);color:var(--dim);
   font-variant-numeric:tabular-nums;white-space:nowrap}
+#spdwrap{font:400 12px/1 var(--mono);color:var(--dim);display:flex;align-items:center;gap:6px}
+#speed{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:5px;padding:6px 7px;font:500 12.5px/1 var(--mono)}
+#speed:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head>
 <body>
@@ -125,6 +129,15 @@ button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;f
       <input id="scrub" type="range" min="0" max="1" value="0" step="1"
              aria-label="Scrub frames">
       <span id="frame"></span>
+      <!-- Not a rendering option: a sign lasting 0.6 s is legible to a fluent signer and not
+           to anyone checking one. Half and quarter speed are for reading the handshape. -->
+      <label id="spdwrap">speed
+        <select id="speed" aria-label="Playback speed">
+          <option value="1" selected>1&times;</option>
+          <option value="0.5">&frac12;&times;</option>
+          <option value="0.25">&frac14;&times;</option>
+        </select>
+      </label>
       <button class="b" id="reset" type="button">Reset view</button>
       <button class="b" id="rest" type="button">Rest pose</button>
     </div>
@@ -286,12 +299,23 @@ const hud = document.getElementById("hud");
 const frameLbl = document.getElementById("frame");
 function hudText(){
   const s = SIGNS[cur];
+  const hi = s.hold_in || 0, ho = s.hold_out || 0;
+  const stroke = s.stroke || s.frames.length;
+  const secs = s.frames.length / (s.fps * speedSel);
   hud.innerHTML =
-    `<b>${s.gloss}</b> &nbsp; ${s.frames.length} frames @ ${s.fps} fps<br>` +
+    `<b>${s.gloss}</b> &nbsp; ${s.frames.length} frames @ ${s.fps} fps · ` +
+      `${secs.toFixed(2)} s<br>` +
+    // The clips are cut out of continuous signing, so every one of them starts and ends
+    // mid-gesture. The holds are what you read the handshape in; the stroke is the sign.
+    `${stroke} frames of sign` +
+      (hi + ho ? ` + ${hi}/${ho} hold` : "") +
+      (s.stretch > 1.005 ? ` · slowed ${s.stretch}&times; to stay legible` : "") + `<br>` +
     `${s.hands === "both" ? "two-handed" : s.hands + " hand only"} · ` +
     `passive hand holds rest<br>` +
     `drag to orbit · scroll to zoom`;
-  frameLbl.textContent = `${String(frame+1).padStart(3," ")} / ${s.frames.length}`;
+  const inStroke = frame >= hi && frame < hi + stroke;
+  frameLbl.textContent = `${String(frame+1).padStart(3," ")} / ${s.frames.length}` +
+    (inStroke ? "" : "  hold");
 }
 
 /* per-sign acceptance numbers — the reason this page exists */
@@ -318,7 +342,15 @@ function renderStats(){
     `<dt>hand in front</dt><dd><span class="pill ${frcls}">` +
       `${st.front == null ? "—" : st.front.toFixed(0) + "%"}</span></dd>` +
     `<dt>depth clamped</dt><dd>${st.clamp == null ? "—" : st.clamp.toFixed(0) + "%"}</dd>` +
-    `<dt>hands recorded</dt><dd>${SIGNS[cur].hands}</dd>`;
+    // The honest answer to "why does this sign look wrong" is often not in any error metric:
+    // the hand simply was not tracked. 28 of 250 clips have one hand under half-tracked and
+    // the other at zero, and no retargeting improves those -- only a recapture does.
+    `<dt>hands recorded</dt><dd><span class="pill ${
+        SIGNS[cur].hands === "none" ? "err"
+          : /partial/.test(SIGNS[cur].hands) ? "warn" : "ok"
+      }">${SIGNS[cur].hands}</span></dd>` +
+    `<dt>hand tracked</dt><dd>L ${SIGNS[cur].lh == null ? "—" : SIGNS[cur].lh + "%"} · ` +
+      `R ${SIGNS[cur].rh == null ? "—" : SIGNS[cur].rh + "%"}</dd>`;
 }
 
 function select(w){
@@ -380,6 +412,9 @@ document.getElementById("reset").addEventListener("click", () => {
 document.getElementById("rest").addEventListener("click", () => {
   playing = false; playBtn.textContent = "Play";
   bones.forEach((b,k) => b.quaternion.copy(rest[k])); });
+let speedSel = 1;
+document.getElementById("speed").addEventListener("change", e => {
+  speedSel = +e.target.value; acc = 0; hudText(); });
 const scrub = document.getElementById("scrub");
 scrub.addEventListener("input", () => {
   playing = false; playBtn.textContent = "Play";
@@ -390,7 +425,7 @@ function tick(now){
   const dt = Math.min(now - last, 200); last = now;
   if (playing){
     acc += dt;
-    const step = 1000 / s.fps;
+    const step = 1000 / (s.fps * speedSel);
     while (acc >= step){ acc -= step; frame = (frame + 1) % s.frames.length; }
     applyFrame(frame); scrub.value = frame; hudText();
   }
@@ -398,7 +433,7 @@ function tick(now){
   requestAnimationFrame(tick);
 }
 
-resize(); place(); select(names[0]);
+resize(); place(); select(OPEN_ON);
 boot.remove();
 document.getElementById("transport").hidden = false;
 requestAnimationFrame(tick);
