@@ -121,7 +121,7 @@ button.b.pri{background:var(--accent);border-color:var(--accent);color:#06121b;f
          one-handed join. -->
     <section>
       <h2>Sentence</h2>
-      <input id="utter" type="text" placeholder="hello mom thirsty please"
+      <input id="utter" type="text" placeholder="are you sick?"
              autocomplete="off" aria-label="Words to sign in order">
       <div class="row">
         <button class="b pri" id="signit" type="button">Sign it</button>
@@ -351,9 +351,67 @@ function qSlerp(a, b, t){
   const n = Math.hypot(o[0],o[1],o[2],o[3]) || 1;
   return o.map(v => v/n);
 }
+/* COPIES, never the dictionary's own frame objects — the non-manual writes bones into these,
+   and a slice would edit the baked sign itself. Caught in the Python by measuring a neutral
+   sentence and finding a 12-degree brow raise left over from the question before it. */
 function strokeOf(s){
   const hi = s.hold_in || 0, st = s.stroke || (s.frames.length - hi);
-  return s.frames.slice(hi, hi + st);
+  return s.frames.slice(hi, hi + st).map(f => Object.assign({}, f));
+}
+
+/* ── the grammar, which lives on the face ────────────────────────────────────────────────
+   A yes/no question and the same words as a statement differ in ASL ONLY in the brows. These
+   four markers are grammatical — they scope over phrases, not words — so they are decided by
+   the sentence and need none of the face landmarks the corpus lacks. Amplitudes are measured
+   off this rig's own skin weights: 29 vertices ride eyebrow_l at a mean 19.2 mm, and 20° about
+   +z moves them 3.6 mm down, so a raise is -z. See avatar/sequence_signs.py for the table. */
+const BROW_RAISE = -20, BROW_FURROW = 12, HEAD_TILT = 7, SHAKE_DEG = 8, SHAKE_HZ = 1.6,
+      NM_RAMP = 4;
+const WH_WORDS = new Set(["who","what","where","when","why","how","which","whose"]);
+const NEG_WORDS = new Set(["not","no","dont","cannot","cant","never","nothing"]);
+function axisQuat(ax, deg){
+  const t = deg * Math.PI / 360, s = Math.sin(t);
+  return [ax[0]*s, ax[1]*s, ax[2]*s, Math.cos(t)];
+}
+function qMul(a, b){
+  return [a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+          a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+          a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+          a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+}
+function inferNonmanual(raw, glosses){
+  const t = (raw || "").toLowerCase();
+  const words = new Set(t.replace(/\?/g, " ").split(/[^a-z']+/).filter(Boolean).concat(glosses));
+  for (const w of words) if (WH_WORDS.has(w)) return "wh";
+  if (t.includes("?")) return "q";
+  for (const w of words) if (NEG_WORDS.has(w.replace(/'/g,""))) return "neg";
+  return null;
+}
+function applyNonmanual(frames, segments, marker, fps){
+  if (!marker || !segments.length) return frames;
+  const lo = segments[0].start;
+  /* `top` marks the topicalised element ONLY; the other three mark the whole clause. Scope is
+     part of the marker: a brow raise over the wrong half is a different question. */
+  const hi = marker === "top" ? segments[0].end : segments[segments.length-1].end;
+  const span = Math.max(hi - lo, 1);
+  for (let i = lo; i < Math.min(hi, frames.length); i++){
+    const k = i - lo;
+    let w = Math.min(1, Math.min(k, span - 1 - k, NM_RAMP) / NM_RAMP);
+    w = Math.max(0, w*w*(3-2*w));
+    const f = frames[i];
+    if (marker === "q" || marker === "top" || marker === "wh"){
+      const deg = marker === "wh" ? BROW_FURROW : BROW_RAISE;
+      f.eyebrow_l = axisQuat([0,0,1], deg*w);
+      f.eyebrow_r = axisQuat([0,0,-1], deg*w);
+    }
+    if (marker === "wh" || marker === "neg"){
+      /* composed onto the head rotation the sign already has — that one is real pose data */
+      const base = f.head || restQ.head || [0,0,0,1];
+      f.head = qMul(base, marker === "wh" ? axisQuat([1,0,0], HEAD_TILT*w)
+        : axisQuat([0,1,0], SHAKE_DEG*w*Math.sin(2*Math.PI*SHAKE_HZ*k/fps)));
+    }
+  }
+  return frames;
 }
 function sequence(words){
   const picked = words.filter(w => SIGNS[w]), missing = words.filter(w => !SIGNS[w]);
@@ -397,15 +455,20 @@ function signSentence(text){
   if (!r.picked.length){
     note.textContent = "none of those are in the 250-word vocabulary"; return; }
   const fps = SIGNS[r.picked[0]].fps || 30;
-  SIGNS[UTTER] = {gloss: r.picked.join(" "), fps, frames: r.frames,
+  const marker = inferNonmanual(text, r.picked);
+  applyNonmanual(r.frames, r.segments, marker, fps);
+  SIGNS[UTTER] = {gloss: r.picked.join(" "), fps, frames: r.frames, marker,
                   hold_in: SIGNS[r.picked[0]].hold_in || 0,
                   hold_out: SIGNS[r.picked[r.picked.length-1]].hold_out || 0,
                   stroke: r.frames.length, hands: "sequence", lh: null, rh: null,
                   segments: r.segments};
   STATS[UTTER] = {err: null, p95: null, shape: null, front: null, clamp: null, synth: null};
-  note.textContent = r.missing.length
-    ? `signing ${r.picked.length}, skipped ${r.missing.join(" ")}`
-    : `${r.picked.length} signs, ${r.frames.length} frames`;
+  const MARK = {q: "yes/no question — brow raise", wh: "wh-question — brow furrow + tilt",
+                neg: "negation — headshake", top: "topic — brow raise on the first sign"};
+  note.textContent = (r.missing.length
+      ? `signing ${r.picked.length}, skipped ${r.missing.join(" ")}`
+      : `${r.picked.length} signs, ${r.frames.length} frames`)
+    + (marker ? ` · ${MARK[marker]}` : "");
   select(UTTER);
   playing = true; document.getElementById("play").textContent = "Pause";
 }
@@ -426,6 +489,7 @@ function hudText(){
       `<b>${s.segments.map((g,i) => i === at ? `<u>${g.gloss}</u>` : g.gloss).join(" ")}</b>` +
       ` &nbsp; ${s.frames.length} frames · ${secs.toFixed(2)} s<br>` +
       (seg ? `signing <b>${seg.gloss}</b>` : `transition`) +
+      (s.marker ? ` · <b>${s.marker}</b> marker on the face` : "") +
       ` · ${s.segments.length} signs, ` +
       `${s.frames.length - s.segments.reduce((a,g) => a + g.end - g.start, 0)} ` +
       `frames of transition<br>` +

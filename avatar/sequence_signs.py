@@ -38,15 +38,21 @@ Interpolation is SLERP per bone, eased, never a linear blend of quaternion compo
 of two rotations more than a few degrees apart shortens the arc and the limb dips through the
 body on the way. Signs are 30-180 degrees apart at a join.
 
+IT ALSO PUTS THE GRAMMAR ON THE FACE. A yes/no question and the same words as a statement
+differ in ASL only in the brows; negation is a headshake, not a sign. Those markers are
+grammatical -- they scope over phrases and are decided by the sentence -- so they need no face
+landmarks, and the rig already has eyebrow, eyelid, jaw and mouth bones. See apply_nonmanual().
+
 WHAT THIS DOES NOT DO, so nobody reads it as more than it is. There is no co-articulation
 model here: a real signer's handshape for word N is already forming during word N-1, and the
 transition's own shape carries information (movement epenthesis). This is a smooth eased path
-between two citation forms, which is the honest floor. It also does not fingerspell a word
-outside the 250, does not inflect, and does not mark non-manuals -- the corpus has no face
-landmarks at all, so no player built on it can.
+between two citation forms, which is the honest floor. It does not fingerspell a word outside
+the 250 and it does not inflect. And the OTHER kind of non-manual -- the lexical mouth
+morphemes TH, MM and CS that belong to individual signs -- stays missing, because that one
+really does need face landmarks and the corpus has none.
 
     python avatar/sequence_signs.py hello mom hungry
-    python avatar/sequence_signs.py --text "I am thirsty please"
+    python avatar/sequence_signs.py --text "are you sick?"           # infers the brow raise
     python avatar/sequence_signs.py --text "hello mom" --out utterance.json
 """
 import argparse
@@ -130,11 +136,18 @@ def blend_len(cap, a, b, rest):
 
 
 def stroke_of(sign):
-    """The sign without its rest padding: frames[hold_in : hold_in+stroke]."""
+    """The sign without its rest padding: frames[hold_in : hold_in+stroke].
+
+    COPIED, not sliced through. A slice of a list of dicts hands out the dictionary's own
+    frame objects, so anything that writes a bone into an utterance -- apply_nonmanual does
+    exactly that -- edits the baked sign itself and every later utterance inherits it. Caught
+    by measuring a neutral sentence and finding a 12-degree brow raise on it, left over from
+    the wh-question measured before.
+    """
     fr = sign["frames"]
     hi = int(sign.get("hold_in", 0) or 0)
     st = int(sign.get("stroke", len(fr) - hi) or len(fr) - hi)
-    return fr[hi:hi + st] or fr
+    return [dict(f) for f in (fr[hi:hi + st] or fr)]
 
 
 def transition(a, b, n, rest):
@@ -172,7 +185,7 @@ def sequence(glosses, signs, rest, cap=DEFAULT_TRANSITION):
         body = stroke_of(s)
         if i == 0:
             hi = int(s.get("hold_in", 0) or 0)
-            frames.extend(s["frames"][:hi])         # only the first sign keeps its lead-in
+            frames.extend(dict(f) for f in s["frames"][:hi])   # first sign keeps its lead-in
         else:
             n = blend_len(cap, frames[-1], body[0], rest)
             frames.extend(transition(frames[-1], body[0], n, rest))
@@ -184,8 +197,119 @@ def sequence(glosses, signs, rest, cap=DEFAULT_TRANSITION):
         if i == len(picked) - 1:
             ho = int(s.get("hold_out", 0) or 0)
             if ho:
-                frames.extend(s["frames"][-ho:])    # ... and only the last one its tail
+                frames.extend(dict(f) for f in s["frames"][-ho:])  # ... and the last its tail
     return frames, segments, missing
+
+
+# ── non-manual markers ───────────────────────────────────────────────────────────────────
+# THE GRAMMAR IS ON THE FACE, and until now none of it was rendered. In ASL a yes/no question
+# and the same words as a statement differ ONLY in the brows; negation is carried by a
+# headshake, not by a sign; a topic is marked by a brow raise on the topicalised element. A
+# sentence signed with a neutral face is not a neutral sentence, it is a different one.
+#
+# This does not need the face landmarks we do not have. Those four markers are GRAMMATICAL --
+# they scope over phrases and are determined by the sentence, not by the word -- so they can
+# be driven from the utterance itself, which is exactly what gloss_to_motion.NONMANUALS has
+# specified since the contract was written. What needs landmarks is the other kind: the
+# lexical mouth morphemes (TH, MM, CS) that belong to individual signs. Those stay missing,
+# and no marker here pretends otherwise.
+#
+# AMPLITUDES ARE MEASURED OFF THE RIG, not chosen. Each face bone's skinned vertices were
+# read out of the GLB with their weights, and the rotation below is the one that moves them
+# by the stated distance:
+#
+#   bone         verts   mean dist from bone   20 deg about +z moves them
+#   eyebrow_l       29          19.2 mm            3.60 mm DOWN  (so a raise is -z)
+#   eyebrow_r       30          18.8 mm            3.60 mm down
+#   jaw           1137          62.3 mm           16.15 mm down about +x
+#
+# so BROW_RAISE lifts the brow about 3.6 mm on average and BROW_FURROW lowers it about 2 mm.
+# A Deaf reviewer should tune these; they are legible, not authoritative.
+BROW_RAISE = -20.0        # degrees about +z on the left brow, mirrored on the right
+BROW_FURROW = 12.0
+HEAD_TILT = 7.0           # wh-questions come with a slight forward tilt
+SHAKE_DEG = 8.0           # negation headshake amplitude, degrees of yaw
+SHAKE_HZ = 1.6            # ... and its rate. Two to three shakes over a short clause.
+NM_RAMP = 4               # frames to ease a marker in and out. Non-manuals do not snap on.
+
+WH_WORDS = {"who", "what", "where", "when", "why", "how", "which", "whose"}
+NEG_WORDS = {"not", "no", "dont", "don't", "cannot", "cant", "can't", "never", "nothing"}
+
+
+def axis_quat(axis, deg):
+    a = np.asarray(axis, dtype=float)
+    a = a / (np.linalg.norm(a) + 1e-12)
+    t = np.radians(deg) / 2.0
+    s = np.sin(t)
+    return np.array([a[0] * s, a[1] * s, a[2] * s, np.cos(t)])
+
+
+def qmul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return np.array([aw * bx + ax * bw + ay * bz - az * by,
+                     aw * by - ax * bz + ay * bw + az * bx,
+                     aw * bz + ax * by - ay * bx + az * bw,
+                     aw * bw - ax * bx - ay * by - az * bz])
+
+
+def infer_nonmanual(text, glosses):
+    """Which marker this sentence carries, from the sentence -- never from the glosses alone.
+
+    The glosses have already lost it: ASL drops the copula and the auxiliaries, so "are you
+    sick?" and "you are sick" both come out as the single gloss `sick`. The question mark is
+    the only surviving evidence and it is in the raw text, which is why this takes both.
+    """
+    t = (text or "").lower()
+    words = set(t.replace("?", " ").split()) | set(glosses)
+    if any(w in WH_WORDS for w in words):
+        return "wh"
+    if "?" in t:
+        return "q"
+    if any(w in NEG_WORDS for w in words):
+        return "neg"
+    return None
+
+
+def apply_nonmanual(frames, segments, marker, fps, rest):
+    """Write the marker's face and head motion across the span it scopes over.
+
+    Scope is the marker's own, not one span for all of them: `q` and `wh` mark the whole
+    clause, `top` marks only the topicalised element (the first sign), and `neg` runs from the
+    negated predicate to the end. Getting the scope wrong changes the sentence as surely as
+    omitting the marker -- a brow raise over the wrong half is a different question.
+    """
+    if not marker or not segments:
+        return frames
+    if marker == "top":
+        lo, hi = segments[0]["start"], segments[0]["end"]
+    elif marker == "neg":
+        lo, hi = segments[0]["start"], segments[-1]["end"]
+    else:
+        lo, hi = segments[0]["start"], segments[-1]["end"]
+    span = max(hi - lo, 1)
+    for i in range(lo, min(hi, len(frames))):
+        # eased in and out, so the marker arrives with the phrase rather than switching on
+        k = i - lo
+        w = min(1.0, min(k, span - 1 - k, NM_RAMP) / float(NM_RAMP))
+        w = max(0.0, w * w * (3.0 - 2.0 * w))
+        f = frames[i]
+        if marker in ("q", "top", "wh"):
+            deg = BROW_RAISE if marker in ("q", "top") else BROW_FURROW
+            f["eyebrow_l"] = [round(float(x), 4) for x in axis_quat((0, 0, 1), deg * w)]
+            f["eyebrow_r"] = [round(float(x), 4) for x in axis_quat((0, 0, -1), deg * w)]
+        if marker in ("wh", "neg"):
+            # COMPOSED onto the head rotation the sign already has, never replacing it. The
+            # head is driven from the signer's own pose (head_frames in retarget.py), and
+            # overwriting it would delete a real movement to add a synthetic one.
+            base = np.array(f.get("head") or rest.get("head") or [0, 0, 0, 1], dtype=float)
+            if marker == "wh":
+                extra = axis_quat((1, 0, 0), HEAD_TILT * w)
+            else:
+                extra = axis_quat((0, 1, 0),
+                                  SHAKE_DEG * w * np.sin(2 * np.pi * SHAKE_HZ * k / fps))
+            f["head"] = [round(float(x), 4) for x in qmul(base, extra)]
+    return frames
 
 
 def to_glosses(text):
@@ -208,6 +332,8 @@ def main():
     ap.add_argument("--transition", type=int, default=MAX_BLEND,
                     help="cap on blend frames between signs; 0 disables blending")
     ap.add_argument("--out", type=Path, help="write the utterance JSON here")
+    ap.add_argument("--nonmanual", choices=("q", "wh", "neg", "top", "none"),
+                    help="force the grammatical marker instead of inferring it from --text")
     a = ap.parse_args()
 
     signs, rest = load_bake()
@@ -225,7 +351,15 @@ def main():
     if not frames:
         raise SystemExit(f"[err] none of {gl} is in the bake.")
     fps = float(next(iter(signs.values())).get("fps", 30))
+    marker = (None if a.nonmanual == "none"
+              else a.nonmanual or infer_nonmanual(a.text, gl))
+    frames = apply_nonmanual(frames, segments, marker, fps, rest)
     print(f"glosses  {' '.join(s['gloss'] for s in segments)}")
+    said = {"q": "yes/no question: brow raise across the clause",
+            "wh": "wh-question: brow furrow + head tilt",
+            "neg": "negation: headshake across the clause",
+            "top": "topic: brow raise on the first sign only"}
+    print(f"marker   {marker or 'none'}   {said.get(marker, '')}")
     if dropped:
         print(f"dropped  {' '.join(dropped)}   (not in the 250-word vocabulary)")
     if missing:
