@@ -66,8 +66,16 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 BAKE = HERE / "baked_signs.json"
 
-# Same cap as the landmark stitcher's contract default (§10), scaled the same way.
-DEFAULT_TRANSITION = 8
+# NO SEPARATE DEFAULT HERE. There was one -- 8, the landmark stitcher's contract default (§10)
+# -- left over from when the transition was a fixed frame COUNT. It stopped meaning anything
+# when blend_len() started deriving the length from distance and `cap` became only an upper
+# bound, and it then silently disagreed with itself: sequence()'s own default was 8 while the
+# CLI passed MAX_BLEND and the viewer used MAX_BLEND, so the same sentence animated differently
+# depending on which door you came in by -- `rain blue` was 89 frames from a script and 95 from
+# the command line and the browser. Caught by running the viewer's JS and this file side by
+# side on the same bake; see the parity check in the commit that added this note.
+#
+# One bound, named once, below: MAX_BLEND.
 
 
 def load_bake(path=BAKE):
@@ -175,7 +183,7 @@ def transition(a, b, n, rest):
     return out
 
 
-def sequence(glosses, signs, rest, cap=DEFAULT_TRANSITION):
+def sequence(glosses, signs, rest, cap=MAX_BLEND):
     """Returns (frames, segments, missing). One track, one segment record per sign played."""
     frames, segments, missing = [], [], []
     picked = [g for g in glosses if g in signs]
