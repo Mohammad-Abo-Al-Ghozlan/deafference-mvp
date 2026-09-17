@@ -141,6 +141,41 @@ FRONT_MARGIN = 0.20
 # because a gate that flips on and off between frames hands the roll back and forth between
 # the solved plane and align()'s arbitrary one, and that handover is itself the snap. 0.05 is
 # worse again (jitter mean 13.97 -> 14.67), so this is a floor, not a direction.
+#
+# WHAT THAT HANDOVER ACTUALLY COSTS, measured 2026-09-18 over all 250 -- and why the obvious
+# fix was tried and REJECTED. Every single-frame step over 30 degrees was decomposed into the
+# angle the bone's own AXIS turned through (real motion) and the twist about that axis (which
+# moves no landmark, so the solver is free to choose it):
+#
+#     whole rotation  mean 58.9d      of which axis 13.6d, twist 45.4d
+#     75% of those steps turn the bone's axis less than 15 degrees
+#
+# Three quarters of the popping is a phalanx spinning in place, which is not a motion a finger
+# has, and it is concentrated exactly where this gate lives: the five MCPs account for 67.8% of
+# all over-30 steps and the thumb's for another 21.6%, while the PIPs and DIPs below them --
+# hinges, with no free roll -- barely appear.
+#
+# The fix that follows from that is to stop switching and start blending: carry the rig's own
+# rest plane (exact, cannot shimmer) and cross-fade to the measured plane as the finger bends,
+# over a band FINGER_PLANE_MIN..FULL. It works, and it is still the wrong trade:
+#
+#     FULL   handshape   >30d    kiss    radio
+#     --     10.97%      7.59%   21.5%   19.5%   <- shipped, the hard gate
+#     0.101  11.11%      8.38%                   (fallback swapped, no blend: WORSE both ways)
+#     0.20   11.15%      6.50%   23.0%   22.4%
+#     0.30   11.27%      5.80%
+#     0.60   11.70%      4.58%
+#
+# The popping gain is real and diffuse; the cost lands on `kiss` and `radio`, which were already
+# the two worst solver-side words in the set and are the two that are ABOUT the thumb. Holding
+# the thumb out of the blend recovers the over-20 count but gives back half the smoothness
+# (7.09%) and still leaves both words worse than they are here. A mean that improves while the
+# named problem cases regress is the trade this file has been caught taking before.
+#
+# So the gate stays, and the finding is left here rather than in a commit message because the
+# next person to look at finger popping should start from "75% of it is twist" and not have to
+# re-derive it. The lever that would settle it is the rigger's seven handshape reference poses:
+# with a measured pose per handshape the knuckle's roll is a lookup, not a fit.
 FINGER_PLANE_MIN = 0.10
 
 # Weight of the newest frame in the finger-plane average. Low: the plane turns slowly.
