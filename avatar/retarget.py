@@ -33,6 +33,79 @@ REPO = Path(__file__).resolve().parent.parent
 GLB = REPO / "3D Char deaf [untextured].glb"
 WORDS = REPO / "animation_handoff" / "words"
 
+# ── the three lexicon files this renderer is REQUIRED to read ────────────────────────────
+# asl_handedness_250.json's `renderer_contract` is not advice, it is the interface: "For every
+# word not marked '1', the passive hand's landmarks DO NOT EXIST in our corpus for any take...
+# The avatar must synthesize the passive hand: 2s -> mirror the dominant hand across the body
+# midline. 2a -> place an unmarked handshape at the base location; do not mirror."
+#
+# Until now this file synthesized only the 2s case and decided WHICH words got it by measuring
+# the passive wrist's height. That measurement answers a different question -- "is this arm in
+# the signing space on this take" -- and using it as the lexical one put a second hand on 8
+# one-handed signs (`blue`, `happy`, `brother`, `aunt`, `if`, `pencil`, `snow`, `stairs`) and
+# left 12 symmetrical ones with a single hand (`rain`, `cry`, `smile`, `blow`, `wet`...).
+# Neither shows up in any error column: the handshape metric only scores hands it drives
+# against landmarks that exist, so it cannot charge us for inventing a hand or for dropping
+# one. Both decisions are still made, but from their own evidence now -- the class from the
+# lexicon, because handedness provably is not derivable from these landmarks (that file's own
+# `why` records four classifiers at AUC 0.335-0.500), and the take's usability from the data.
+LEXICON = REPO / "asl_handedness_250.json"
+BASE_PLACE = REPO / "asl_2a_base_placement.json"
+TEMPLATES = REPO / "handshape_templates.json"
+
+_LEX_CACHE = {}
+
+
+def lexicon(path=LEXICON):
+    """word -> (class, confidence). Missing file or word falls back to measurement."""
+    if path not in _LEX_CACHE:
+        try:
+            d = json.loads(Path(path).read_text(encoding="utf-8"))
+            _LEX_CACHE[path] = {
+                "class": {k: tuple(v) for k, v in d["words"].items()},
+                "passive": d.get("passive_handshape", {}).get("words", {}),
+            }
+        except (OSError, KeyError, ValueError):
+            _LEX_CACHE[path] = {"class": {}, "passive": {}}
+    return _LEX_CACHE[path]
+
+
+def base_placement(path=BASE_PLACE):
+    if path not in _LEX_CACHE:
+        try:
+            _LEX_CACHE[path] = json.loads(
+                Path(path).read_text(encoding="utf-8"))["words"]
+        except (OSError, KeyError, ValueError):
+            _LEX_CACHE[path] = {}
+    return _LEX_CACHE[path]
+
+
+def handshape_template(name, path=TEMPLATES):
+    """The 21 palm-frame points of one unmarked handshape, RIGHT-hand chirality.
+
+    Returns (points, normal) where `normal` is the palm normal in the same frame, or None if
+    the shape is unknown. The file's z_warning says to prefer template_xy where the 3D
+    agreement is materially worse than the 2D -- z there is raw MediaPipe relative depth,
+    the same channel this whole file refuses to trust -- so that comparison is made here
+    rather than assumed either way.
+    """
+    if path not in _LEX_CACHE:
+        try:
+            d = json.loads(Path(path).read_text(encoding="utf-8"))
+            _LEX_CACHE[path] = (d["handshapes"],
+                                {k: v["use"] for k, v in d.get("resolution", {}).items()})
+        except (OSError, KeyError, ValueError):
+            _LEX_CACHE[path] = ({}, {})
+    shapes, resolve = _LEX_CACHE[path]
+    h = shapes.get(resolve.get(name, name)) or shapes.get(name)
+    if h is None or not h.get("usable", False):
+        return None, None
+    axy, axyz = h.get("agreement_xy", 0.0), h.get("agreement_xyz", 1e9)
+    if axyz <= axy * 1.05 and h.get("template_xyz"):
+        return np.array(h["template_xyz"], dtype=float), np.array([0.0, 0.0, 1.0])
+    p = np.array(h["template_xy"], dtype=float)
+    return np.column_stack([p, np.zeros(len(p))]), np.array([0.0, 0.0, 1.0])
+
 # ── §7 landmark indices. pose 0-32, left hand 33-53, right hand 54-74. ───────────────────
 NOSE, L_SH, R_SH, L_EL, R_EL, L_WR, R_WR = 0, 11, 12, 13, 14, 15, 16
 HAND0 = {"l": 33, "r": 54}          # wrist landmark of each hand block
@@ -383,7 +456,7 @@ def build_tree(rig):
     return t
 
 
-def one_euro(F, fps=30.0, min_cutoff=2.0, beta=0.4):
+def one_euro(F, fps=30.0, min_cutoff=2.0, beta=0.4, _two_pass=True):
     """The filter §6.12 failure mode #9 prescribes, applied to every landmark channel.
 
     §3.3: "Landmarks jitter... This is a property of the source recordings, not a bug awaiting
@@ -416,7 +489,28 @@ def one_euro(F, fps=30.0, min_cutoff=2.0, beta=0.4):
     Note that the setting which minimises POPPING is the worst for handshape, and the one
     that minimised WRIST error was worst of all -- which is why wrist error alone was never
     enough to tell whether this was working.
+
+    RUN FORWARD THEN BACKWARD. A one-pole filter lags, and that grid was measured with only
+    the forward pass, so every row of it paid a lag it could not see. smooth_quats() went
+    zero-phase for the same reason and the input filter was simply left behind. Measured
+    across all 250, same cutoff, forward-backward against forward alone:
+
+        one pass  mc 2.0   wrist 4.09%  shape 11.86%  >30d 7.80%  | vs RAW: tip 6.60d
+        two pass  mc 2.0   wrist 3.22%  shape 10.97%  >30d 5.62%  | vs RAW: tip 6.25d  <- here
+        two pass  mc 3.0   wrist 3.54%  shape 11.28%  >30d 6.25%  | vs RAW: tip 6.11d
+        two pass  mc 4.5   wrist 3.93%  shape 11.60%  >30d 7.21%  | vs RAW: tip 6.03d
+        two pass  mc 6.0   wrist 4.24%  shape 11.84%  >30d 7.82%  | vs RAW: tip 5.98d
+
+    The second pass improves every column at once, which a smoothing change is not supposed to
+    do -- smoothing trades handshape for stability, and that trade is what the cutoff column
+    shows. It can do it because removing a PHASE LAG is not smoothing: the lagged output was
+    simply the right pose at the wrong time. `vs RAW` is the check that this is real and not
+    the filter flattering itself -- fingertip direction scored against the UNFILTERED
+    landmarks, where more smoothing cannot help by definition. It improves too.
     """
+    if _two_pass:
+        fwd = one_euro(F, fps, min_cutoff, beta, _two_pass=False)
+        return one_euro(fwd[::-1], fps, min_cutoff, beta, _two_pass=False)[::-1]
     out = F.copy()
     n, m, _ = F.shape
     prev_x = np.full((m, 3), np.nan)
@@ -1044,6 +1138,170 @@ def mirror_passive_hand(F, dom):
     return F
 
 
+def mirror_passive_arm(F, dom):
+    """Reflect the dominant ARM across the body midline onto the passive side. 2s only.
+
+    mirror_passive_hand() anchors the reflected handshape on the TRACKED passive wrist, which
+    is right whenever that wrist is where the signer actually held their passive hand. On 12
+    of the 52 symmetrical signs it is not: the signer simply did not raise the second arm --
+    `rain`, `cry`, `smile`, `blow`, `wet`, `sticky`, `fast`, `cowboy`, `donkey`, `stay`,
+    `yucky`, `refrigerator` all measure the passive wrist at or below the parked threshold,
+    and their passive HAND block is 100% NaN like every other clip in the corpus. Anchoring a
+    mirrored handshape on a hip is worse than nothing, so those words used to render with one
+    hand -- which for RAIN or CRY is not a lesser version of the sign, it is a different one.
+
+    The Symmetry Condition says what the second arm was doing: the same thing, mirrored. So
+    the whole limb is reflected, not just the hand. Reflecting across the SHOULDER MIDPOINT
+    rather than about x=0 matters -- the export is shoulder-centred but a signer is not
+    perfectly square to the camera, and reflecting about the wrong plane tilts the mirrored
+    arm out of the body.
+
+    This makes the passive arm synthetic, so retarget_word() stops scoring it. The alternative
+    -- driving the parked arm from its own pose landmarks -- is what the note in retarget_word
+    measured at over 30 degrees of single-frame jump on 4.8% of frames: shoulder, elbow and
+    wrist nearly collinear is ill-conditioned, and a mirrored arm is not.
+    """
+    pas = "l" if dom == "r" else "r"
+    midx = 0.5 * (F[:, L_SH, 0] + F[:, R_SH, 0])
+    for a, b in (((R_EL, L_EL) if dom == "r" else (L_EL, R_EL)),
+                 ((R_WR, L_WR) if dom == "r" else (L_WR, R_WR))):
+        F[:, b, 0] = 2.0 * midx - F[:, a, 0]
+        F[:, b, 1] = F[:, a, 1]
+        F[:, b, 2] = F[:, a, 2]
+    return F, pas
+
+
+# Where each orientation word points, in the flipped data frame: x toward the signer's LEFT,
+# y DOWN (image space), z toward the viewer once retarget_word has flipped it. The vocabulary
+# is asl_2a_base_placement.json's own; `toward_dominant` is the only one that depends on which
+# hand is dominant, and every exemplar in this corpus is right-dominant.
+def _dir(word, dom):
+    to_dom = -1.0 if dom == "r" else 1.0
+    return {"up": (0.0, -1.0, 0.0), "down": (0.0, 1.0, 0.0),
+            "toward_signer": (0.0, 0.0, -1.0), "away_from_signer": (0.0, 0.0, 1.0),
+            "forward": (0.0, 0.0, 1.0), "toward_dominant": (to_dom, 0.0, 0.0),
+            }.get(word)
+
+
+def _elbow_2d(shoulder, wrist, a, b, out_sign):
+    """Where the elbow goes so both bones keep their length and the joint points outward."""
+    d = wrist[:2] - shoulder[:2]
+    L = float(np.linalg.norm(d))
+    if L < 1e-6:
+        return None
+    if L >= a + b:                              # unreachable: straighten the arm
+        return np.array([shoulder[0] + d[0] * a / L, shoulder[1] + d[1] * a / L, wrist[2]])
+    t = (a * a - b * b + L * L) / (2.0 * L)
+    h = float(np.sqrt(max(a * a - t * t, 0.0)))
+    u = d / L
+    n = np.array([-u[1], u[0]])                 # perpendicular, in the image plane
+    e = shoulder[:2] + u * t + n * (h * out_sign)
+    return np.array([e[0], e[1], 0.5 * (shoulder[2] + wrist[2])])
+
+
+def unmarked_base(F, word, dom):
+    """class 2a: a STATIC unmarked base hand, placed from the lexicon rather than the take.
+
+    Battison's Dominance Condition: when only one hand moves, the passive hand is a static
+    base restricted to a small set of unmarked handshapes. It is not a mirror of the dominant
+    hand -- mirroring TOUCH or CHOCOLATE puts a moving handshape on a hand that should be a
+    flat B -- and it is not at the recorded passive wrist either. asl_2a_base_placement.json
+    measured that wrist across all 35 of these words and found it a median 1.56 shoulder
+    widths from the dominant one, most of an arm away: "It is not a badly-placed base; it is
+    an arm doing nothing." So both the shape and the position are supplied by lexicon:
+
+        handshape   asl_handedness_250.json    passive_handshape.words[word].shape
+        template    handshape_templates.json   21 points in a canonical palm frame
+        position    asl_2a_base_placement.json anchor mode + offset from the dominant wrist
+        orientation asl_2a_base_placement.json palm/fingers direction words
+
+    WHAT THIS IS NOT: measured. All three files carry the same review status -- authored by a
+    hearing developer from published ASL phonology, not validated against video, not seen by a
+    Deaf signer. They render plausibly; they are not evidence. Nothing synthesized here is
+    scored, for the reason the mirrored hand is not scored, and `kind` is returned so the
+    caller can keep the synthetic arm out of the wrist and depth metrics too.
+
+    The template is RIGHT-hand chirality (the file reflected its left-hand samples in z before
+    averaging), so for a right-dominant signer -- which is every exemplar in this corpus --
+    the palm normal is negated to get a left hand back. Returns (F, placed).
+    """
+    pas = "l" if dom == "r" else "r"
+    ph = lexicon()["passive"].get(word)
+    pl = base_placement().get(word)
+    if not ph or not pl:
+        return F, False
+    pts, n_t = handshape_template(ph.get("shape", ""))
+    if pts is None:
+        return F, False
+    palm, fing = _dir(pl.get("palm", ""), dom), _dir(pl.get("fingers", ""), dom)
+    if palm is None or fing is None:
+        return F, False
+
+    d0, p0 = HAND0[dom], HAND0[pas]
+    d_wr, p_wr = (R_WR, L_WR) if dom == "r" else (L_WR, R_WR)
+    d_sh, p_sh = (R_SH, L_SH) if dom == "r" else (L_SH, R_SH)
+    d_el, p_el = (R_EL, L_EL) if dom == "r" else (L_EL, R_EL)
+
+    track = F[:, d_wr, :]
+    ok = ~np.isnan(track[:, 0])
+    if not ok.any():
+        return F, False
+    mode = pl.get("anchor", "dominant_median")
+    if mode == "dominant_lowest":
+        anchor = track[np.nanargmax(np.where(ok, track[:, 1], -np.inf))]
+    elif mode == "dominant_first":
+        anchor = track[int(np.argmax(ok))]
+    elif mode == "dominant_last":
+        anchor = track[len(ok) - 1 - int(np.argmax(ok[::-1]))]
+    else:
+        anchor = np.array([float(np.nanmedian(track[:, k])) for k in range(3)])
+    off = np.array(pl.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+    off[2] = -off[2]                    # the file's z is the export's; ours is already flipped
+    base = anchor + off
+
+    # The signer's own hand size, so the base matches the hand beside it rather than the
+    # template's unit scale. Falls back to the corpus median if this clip never saw a hand.
+    hl = np.linalg.norm(F[:, d0 + FINGER_OFF["middle"], :2] - F[:, d0, :2], axis=1)
+    hl = hl[np.isfinite(hl)]
+    scale = float(np.median(hl)) if len(hl) else 0.22
+
+    e1 = pts[FINGER_OFF["middle"]] - pts[0]
+    if np.linalg.norm(e1) < 1e-9:
+        return F, False
+    e1 /= np.linalg.norm(e1)
+    n_t = n_t if dom == "l" else -n_t                     # right template -> left hand
+    e3 = n_t - e1 * float(np.dot(n_t, e1))
+    if np.linalg.norm(e3) < 1e-9:
+        return F, False
+    e3 /= np.linalg.norm(e3)
+    d1 = np.array(fing, dtype=float)
+    d3 = np.array(palm, dtype=float)
+    d3 = d3 - d1 * float(np.dot(d3, d1))
+    if np.linalg.norm(d3) < 1e-9:                         # palm along the fingers: ill-posed
+        return F, False
+    d3 /= np.linalg.norm(d3)
+    R = (np.column_stack([d1, np.cross(d3, d1), d3])
+         @ np.column_stack([e1, np.cross(e3, e1), e3]).T)
+
+    F[:, p0:p0 + 21, :] = base + scale * (pts @ R.T)
+    F[:, p_wr, :] = base
+    # The arm that carries it. Both bone lengths come from the DOMINANT arm of this same
+    # signer, so the passive limb is their arm, not the rig's.
+    seg = []
+    for a_, b_ in ((d_sh, d_el), (d_el, d_wr)):
+        v = np.linalg.norm(F[:, b_, :2] - F[:, a_, :2], axis=1)
+        v = v[np.isfinite(v)]
+        seg.append(float(np.median(v)) if len(v) else 0.3)
+    out_sign = 1.0 if (pas == "l") else -1.0              # elbow away from the midline
+    for i in range(len(F)):
+        if np.any(np.isnan(F[i, p_sh])):
+            continue
+        e = _elbow_2d(F[i, p_sh], base, seg[0], seg[1], out_sign)
+        if e is not None:
+            F[i, p_el, :] = e
+    return F, True
+
+
 def resample(out_q, m):
     """Resample a rotation track to m frames by slerping between neighbouring source frames.
 
@@ -1319,7 +1577,7 @@ def frame_from(origin, fwd, across):
     return np.column_stack([x, y, np.cross(x, y)])
 
 
-def retarget_word(rig, word, chains):
+def retarget_word(rig, word, chains, fixed_shift=None):
     d = json.loads((WORDS / f"{word}.json").read_text(encoding="utf-8"))
     F = np.array(d["frames"], dtype=float)
 
@@ -1393,23 +1651,56 @@ def retarget_word(rig, word, chains):
         active[s_a] = bool(np.any(~np.isnan(yy)) and np.nanmin(yy) < shy_a + PARKED_Y)
     if not active[dom]:          # the dominant arm never came up: trust nothing, drive both
         active = {"l": True, "r": True}
+    raised = active[passive]     # keep the TAKE's answer; the class decides separately
+
+    # TWO QUESTIONS, TWO SOURCES OF EVIDENCE. They were being answered by one measurement.
+    #
+    #   how many hands does this SIGN have?   -> lexical. Not derivable from these landmarks:
+    #        asl_handedness_250.json tested four classifiers against 40 hand-labelled words
+    #        and got AUC 0.335 (inverted), 0.460, 0.468, 0.500. A coin.
+    #   is this TAKE's passive arm usable?    -> measured, above. A signer may leave the arm
+    #        down on a sign that has two hands; the corpus is isolated single-sign prompts.
+    #
+    # Answering the first with the second put a whole second hand on 8 one-handed signs and
+    # dropped it from 12 symmetrical ones -- and no error column moved, because a metric that
+    # scores driven hands against landmarks that exist cannot see either mistake.
+    cls, _conf = lexicon()["class"].get(word, (None, None))
+    p_wr, d_wr = (L_WR, R_WR) if passive == "l" else (R_WR, L_WR)
+    if cls is None:
+        # Not in the lexicon (the medical handoff, or a word added later): fall back to the
+        # measurement, which is what this file did for every word before the lexicon was read.
+        trav = [float(np.nansum(np.linalg.norm(np.diff(F[:, k, :2], axis=0), axis=-1)))
+                for k in (p_wr, d_wr)]
+        cls = ("2s" if raised and trav[0] > PASSIVE_MOVE * max(trav[1], 1e-9)
+               else ("2a" if raised else "1"))
+
+    synth_hand = synth_arm = None
+    if cls == "1":
+        # ONE-HANDED. Whatever the passive arm did on this take, it is not part of the sign.
+        active[passive] = False
+    elif cls == "2s" and np.isnan(F[:, HAND0[passive], 0]).all():
+        active[passive] = True
+        if not raised:
+            # The signer left the arm down on a sign that needs it. Symmetry says what it was
+            # doing, so the whole limb is reflected rather than a handshape being anchored on
+            # a hip. See mirror_passive_arm().
+            F, _ = mirror_passive_arm(F, dom)
+            synth_arm = passive
+        F = mirror_passive_hand(F, dom)
+        synth_hand = passive
+    elif cls == "2a":
+        # DOMINANCE. A static unmarked base, placed from the lexicon -- never mirrored, and
+        # never at the recorded passive wrist. See unmarked_base().
+        F, placed = unmarked_base(F, word, dom)
+        if placed:
+            active[passive] = True
+            synth_hand = synth_arm = passive
+        else:
+            active[passive] = raised
     if not active[passive]:
         chains = [c for c in chains if not c[0].endswith(f"_{passive}")]
-
-    # SYMMETRY OR DOMINANCE? The flag says two-handed; it does not say which of the two ways.
-    # Decided by how far the passive wrist travels relative to the dominant one, both from
-    # pose landmarks that are tracked in every clip. Measured across the 87 two-handed signs
-    # the split is clean rather than borderline -- 72 above the threshold, 15 below -- and the
-    # 15 are the ones a signer would name as base-hand signs: TOUCH, CHAIR, PEN, TIME, INTO,
-    # AFTER, RIDE, CHOCOLATE. See mirror_passive_hand() for why only the first group is safe.
-    p_wr, d_wr = (L_WR, R_WR) if passive == "l" else (R_WR, L_WR)
-    trav = [float(np.nansum(np.linalg.norm(np.diff(F[:, k, :2], axis=0), axis=-1)))
-            for k in (p_wr, d_wr)]
-    symmetric = bool(active[passive] and trav[0] > PASSIVE_MOVE * max(trav[1], 1e-9))
-    mirrored = None
-    if symmetric and np.isnan(F[:, HAND0[passive], 0]).all():
-        F = mirror_passive_hand(F, dom)
-        mirrored = passive
+    mirrored = synth_hand
+    dom_shifts = []          # the dominant hand's per-frame placement correction; see below
 
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
     SEGS = {s: hand_chains(rig, s) for s in ("l", "r")}
@@ -1545,7 +1836,10 @@ def retarget_word(rig, word, chains):
         # at their rig lengths. Nothing is scaled, so nothing can clamp. The hand block is
         # carried along by the same translation the wrist made, which moves the handshape
         # without touching it.
-        for s_ in ("l", "r"):
+        # DOMINANT FIRST, so the base hand can be moved by whatever moved the hand it is being
+        # contacted by. See the shift applied below.
+        dom_shift = None
+        for s_ in (dom, passive):
             sh_, el_, wr_ = ((L_SH, L_EL, L_WR) if s_ == "l" else (R_SH, R_EL, R_WR))
             if f"hand_{s_}" not in by_bone or P.get(wr_) is None or P.get(el_) is None:
                 continue
@@ -1637,6 +1931,34 @@ def retarget_word(rig, word, chains):
                 want = np.array([P[wr_][0] + (tgt_x - cen_rig[0]),
                                  P[wr_][1] + (tgt_y - cen_rig[1]),
                                  P[wr_][2]])
+            # MOVE THE BASE WITH THE HAND THAT CONTACTS IT. Everything above maps each hand
+            # independently -- centroid fit, face anchor, body map -- which is right when both
+            # are measured, because then both targets are real and any relation between them
+            # is already in the data. A 2a base is not measured: the only claim made about it
+            # is a RELATION, "this far from the dominant wrist, because that is where the
+            # dominant hand touches it". Mapping it on its own destroys the one property it
+            # has. Measured over the 35 base words, the two hands came out a median 0.49 and
+            # up to 1.18 shoulder-widths apart against a rig hand 0.64 long -- on `helicopter`
+            # and `chair` the dominant hand was pressing on nothing.
+            #
+            # So the base takes the dominant hand's own translation, whatever the map decided
+            # that was. The offset between them then survives the map exactly, because both
+            # ends of it moved by the same vector.
+            #
+            # THE SHIFT IS ONE VECTOR FOR THE WHOLE CLIP, not this frame's. A base does not
+            # move -- that is what makes it a base -- and the dominant hand's own translation
+            # changes frame to frame as the face anchor fades in and out. Handing the base
+            # that per-frame vector fixed the distance and broke the staticness instead: the
+            # base drifted up to 0.33 shoulder-widths on `jump`, 11 cm, following the hand it
+            # is supposed to be held still for. So the median over the clip is used, which
+            # costs one extra solve on the 35 words that have a base and nothing on the 215
+            # that do not.
+            if s_ == synth_arm and cls == "2a":
+                if fixed_shift is not None:
+                    want = P[wr_] + fixed_shift
+            elif s_ == dom:
+                dom_shift = want - P[wr_]
+                dom_shifts.append(dom_shift)
             # AND IN FRONT OF THE BODY, IF THE DATA SAYS IT IS. The depth root chosen inside
             # solve_depth stopped being the last word once two_bone_ik took over placement:
             # swept over 70 words, carrying the in-front prior on the elbow, the wrist, both or
@@ -1894,7 +2216,16 @@ def retarget_word(rig, word, chains):
             # dragged `front` to 50-69% on `pen`, `time`, `after`, `touch`, `chair`, `into`,
             # `beside` and `chocolate`, whose DOMINANT hand is in front on 100% of frames.
             # That is the metric describing an arm at rest, not a depth solve going backwards.
-            if f"hand_{side}" not in by_bone or wr not in tg or not active[side]:
+            #
+            # A SYNTHETIC ARM IS NOT SCORED EITHER. The mirrored HAND could stay out of the
+            # handshape column alone while its arm kept being scored, because that arm was
+            # real pose data. Two of the three synthesis paths no longer are: a mirrored arm
+            # (2s, passive side never raised) and a placed base (2a) both put the wrist where
+            # a lexicon said, so `err` would report how precisely the solver hit our own
+            # invention and `front` would report that we invented it in front. Same trap as
+            # the handshape column, one joint up the chain.
+            if (f"hand_{side}" not in by_bone or wr not in tg or not active[side]
+                    or side == synth_arm):
                 continue
             got = WT[rig.by[f"hand_{side}"]]
             err.append(float(np.linalg.norm(got[:2] - tg[wr][:2])) / scale)
@@ -1916,12 +2247,29 @@ def retarget_word(rig, word, chains):
                     t_ = tg[tip] - tg[h0]
                     shp.append(float(np.linalg.norm(g[:2] - t_[:2])) / hl)
 
+    # ONE MORE SOLVE, ONLY FOR A PLACED BASE. The base's target is "wherever the dominant hand
+    # ended up, plus the lexicon's offset", and the dominant hand's own placement is not known
+    # until the whole clip has been solved. So the first solve exists to measure that, and the
+    # second is the one that ships. Guarded on fixed_shift so it recurses exactly once, and
+    # only on the 35 words with a base -- the other 215 solve once, as before.
+    if cls == "2a" and synth_arm and fixed_shift is None and dom_shifts:
+        return retarget_word(rig, word, chains,
+                             fixed_shift=np.median(np.array(dom_shifts), axis=0))
+
     # AFTER scoring, never before. The holds are copies of frames already scored and the
     # stretched frames are interpolations between them, so scoring the stroke scores the
     # animation; scoring the padded track would dilute every number with repeated frames and
     # make it incomparable with every measurement taken before this pass existed.
     out_q, timing = retime(out_q)
     timing["mirrored"] = mirrored
+    timing["class"] = cls
+    # Which synthesis ran, so the label and the viewer can say it rather than imply two
+    # tracked hands. "mirror" = 2s handshape reflected onto a tracked arm; "mirror+arm" = the
+    # whole limb reflected because the signer left it down; "base" = a 2a unmarked base placed
+    # from the lexicon. All three are derived, none is measured.
+    timing["synth"] = (None if synth_hand is None else
+                       ("base" if cls == "2a" else
+                        ("mirror+arm" if synth_arm else "mirror")))
     return (d, out_q, np.array(err), np.array(shp), np.array(front), clamps, total, driven,
             timing)
 
@@ -2052,6 +2400,45 @@ def selftest(rig, chains):
     print(f"[selftest] retime                 -> holds still, {MAX_STRETCH:.0f}x stretch "
           f"lands mid-motion at {half:.0f}deg, long clips untouched")
 
+    # THE SYNTHESIZED HAND IS THE ONE THING NO ERROR COLUMN CAN SEE. Every number this file
+    # reports is computed against landmarks, and a hand that has none -- because the corpus
+    # never recorded it -- is invisible to all of them: `blue` scored 9.2% while the avatar
+    # signed it with two hands, and `rain` scored 12.2% with one. So the check on the passive
+    # hand cannot be an error and has to be a property. Two that hold by anatomy, not by fit:
+    #
+    #   a base is WITHIN REACH of the hand that contacts it -- a dominant hand pressing on
+    #     something a shoulder-width away is contacting nothing;
+    #   a base is STILL. That is the definition of a base, and the per-frame version of the
+    #     shift above passed the first test while failing this one on all 35 words.
+    #
+    # `after` because it is class 2a with contact, its base is a plain hand rather than one of
+    # the five forearm entries the placement file marks as outside its schema, and it is 34
+    # frames -- long enough for a drift to show.
+    _, bq, *_rest = retarget_word(rig, "after", chains)
+    tm_b = _rest[-1]
+    assert tm_b.get("synth") == "base", f"[err] `after` is class 2a and did not get a base: {tm_b}"
+    sw_ = float(np.linalg.norm(rig.wp("upperarm_l") - rig.wp("upperarm_r")))
+    hand_ = 3.0 * float(np.linalg.norm(rig.wp("middle_01_r") - rig.wp("hand_r"))) / sw_
+    pos = np.array([fk_world(rig, f)[rig.by["hand_l"]] for f in bq])
+    dom = np.array([fk_world(rig, f)[rig.by["hand_r"]] for f in bq])
+    apart = float(np.median(np.linalg.norm(pos - dom, axis=1)) / sw_)
+    drift = float(np.linalg.norm(pos - pos.mean(0), axis=1).max() / sw_)
+    assert apart < hand_, (
+        f"[err] `after`'s base sits {apart:.2f} shoulder-widths from the hand that contacts "
+        f"it, further than the rig's own hand is long ({hand_:.2f}). The dominant hand is "
+        f"pressing on nothing. See the clip-constant shift in retarget_word().")
+    assert drift < 0.03, (
+        f"[err] `after`'s base moved {drift:.3f} shoulder-widths across the clip. A 2a base "
+        f"is static by definition -- if it follows the dominant hand it is not a base.")
+    one = retarget_word(rig, "blue", chains)[-1]
+    assert one.get("synth") is None and one.get("class") == "1", (
+        f"[err] `blue` is one-handed in asl_handedness_250.json and got {one.get('synth')!r}. "
+        f"A second hand on a one-handed sign is a different sign, and no metric here can see "
+        f"it -- this assertion is the only thing that can.")
+    print(f"[selftest] synthesized hands      -> `after`s base {apart:.2f} sh.w. from the "
+          f"hand (rig hand {hand_:.2f}), drifts {drift:.3f}; `blue` stays one-handed")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if "--all" in sys.argv:
@@ -2094,10 +2481,11 @@ def main():
                  "right" if rh > HAND_MIN else "left" if lh > HAND_MIN else "none")
         if max(lh, rh) < 0.5 and hands != "none":
             hands += " (partial)"
-        # Says MIRRORED, never "both". The passive handshape is derived, and a label that hid
-        # that would be the same lie as scoring it.
-        if timing.get("mirrored"):
-            hands += " + mirrored"
+        # Says MIRRORED or BASE, never "both". The passive hand is derived -- reflected from
+        # the other hand, or placed from a lexicon written by a hearing developer and not yet
+        # Deaf-reviewed. A label that hid that would be the same lie as scoring it.
+        if timing.get("synth"):
+            hands += f" + {timing['synth']}"
         e = f"{err.mean()*100:.1f}%" if len(err) else "n/a"
         p95 = f"{np.percentile(err,95)*100:.1f}%" if len(err) else "n/a"
         hs = f"{shp.mean()*100:.1f}%" if len(shp) else "n/a"

@@ -54,8 +54,11 @@ tpl = (HERE / "sign_viewer_template.html").read_text(encoding="utf-8")
 check_syntax(tpl)
 payload = json.loads((HERE / "viewer_payload.json").read_text(encoding="utf-8"))
 
+# `synth` travels with the stats and not with the geometry on purpose: it is the same kind of
+# fact as the error columns -- how far to trust what is on screen -- and it is the only one
+# that covers the passive hand, which no error column can see.
 stats = {w: {"err": s.get("err"), "p95": s.get("p95"), "shape": s.get("shape"),
-             "front": s.get("front"), "clamp": s.get("clamp")}
+             "front": s.get("front"), "clamp": s.get("clamp"), "synth": s.get("synth")}
          for w, s in payload["signs"].items()}
 
 # The </script> sequence inside a JSON string would close the host <script> tag early. It

@@ -350,7 +350,15 @@ function renderStats(){
           : /partial/.test(SIGNS[cur].hands) ? "warn" : "ok"
       }">${SIGNS[cur].hands}</span></dd>` +
     `<dt>hand tracked</dt><dd>L ${SIGNS[cur].lh == null ? "—" : SIGNS[cur].lh + "%"} · ` +
-      `R ${SIGNS[cur].rh == null ? "—" : SIGNS[cur].rh + "%"}</dd>`;
+      `R ${SIGNS[cur].rh == null ? "—" : SIGNS[cur].rh + "%"}</dd>` +
+    // WHICH HAND IS REAL. The passive hand is never in this corpus, so on a two-handed sign
+    // one of the two hands on screen was synthesized from a lexicon a Deaf signer has not yet
+    // reviewed. Nothing in the error columns says so -- they only score hands with landmarks
+    // behind them -- so the viewer has to, or a reviewer will read a placed base as measured.
+    (st.synth ? `<dt>passive hand</dt><dd><span class="pill warn">${
+        st.synth === "base" ? "placed base (2a)"
+          : st.synth === "mirror+arm" ? "mirrored arm + hand (2s)" : "mirrored (2s)"
+      }</span> not recorded, not reviewed</dd>` : "");
 }
 
 function select(w){
