@@ -52,7 +52,30 @@ def check_syntax(template):
 
 tpl = (HERE / "sign_viewer_template.html").read_text(encoding="utf-8")
 check_syntax(tpl)
-payload = json.loads((HERE / "viewer_payload.json").read_text(encoding="utf-8"))
+pay_path, bake_path = HERE / "viewer_payload.json", HERE / "baked_signs.json"
+
+# A STALENESS CHECK, because the alternative is a confident lie. This script only inlines the
+# payload -- it never reads the bake -- so a rebake followed by a rebuild used to print
+# "[ok] 250 signs" off a payload from before the rebake, and the viewer silently showed the
+# previous numbers. Nothing in the output could distinguish that from success. It happened on
+# 2026-09-18 and cost a round of "why has nothing changed". mtime is the crude check; the
+# per-word comparison below is the real one, since a touched file can be stale and a rewritten
+# one can be identical.
+if bake_path.exists():
+    bake = json.loads(bake_path.read_text(encoding="utf-8"))["signs"]
+    pay = json.loads(pay_path.read_text(encoding="utf-8"))["signs"]
+    drift = [w for w in bake.keys() & pay.keys()
+             if bake[w].get("shape") != pay[w].get("shape")
+             or len(bake[w].get("frames", ())) != len(pay[w].get("frames", ()))]
+    gone = (bake.keys() | pay.keys()) - (bake.keys() & pay.keys())
+    if drift or gone:
+        raise SystemExit(
+            f"[err] viewer_payload.json does not match baked_signs.json -- "
+            f"{len(drift)} words differ" + (f", {len(gone)} only in one of them" if gone else "")
+            + f"\n      e.g. {sorted(drift or gone)[:6]}"
+            f"\n      Run:  python avatar/export_viewer_payload.py   then build again.")
+
+payload = json.loads(pay_path.read_text(encoding="utf-8"))
 
 # `synth` travels with the stats and not with the geometry on purpose: it is the same kind of
 # fact as the error columns -- how far to trust what is on screen -- and it is the only one
