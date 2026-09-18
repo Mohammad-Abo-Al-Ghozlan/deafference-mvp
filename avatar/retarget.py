@@ -248,6 +248,13 @@ TORSO_PAD = 0.10
 # below; a base hand at chest height is nearer 0.3-0.5.
 PARKED_Y = 0.60
 
+# The furthest from its own shoulder a synthesized 2a base hand may be placed, as a fraction of
+# that arm's reach. NOT a taste knob: it is the 95th percentile of base-distance/reach over the
+# 24 words whose placement was already reachable, so clamping an outlier never pulls it tighter
+# than the range its peers occupy. Leaves ~144 deg at the elbow -- extended, not locked. See
+# unmarked_base() for what goes wrong without it.
+REACH_FRAC = 0.97
+
 # TRIED AND REJECTED: solving the hand bone's rotation by least squares over all five
 # metacarpal heads instead of the two-vector index/pinky frame. It is a better fit by every
 # average -- handshape 12.83% -> 12.77%, thumb direction 6.4 -> 5.4 degrees, jumps over 30
@@ -1294,6 +1301,42 @@ def unmarked_base(F, word, dom):
     off[2] = -off[2]                    # the file's z is the export's; ours is already flipped
     base = anchor + off
 
+    # THE PASSIVE ARM HAS TO BE ABLE TO REACH IT. The placement above is authored as an offset
+    # from the DOMINANT wrist and knows nothing about the other shoulder, so on a clip where
+    # the dominant hand sits wide the base lands past the far arm's fingertips. _elbow_2d then
+    # takes its `unreachable -> straighten the arm` branch on EVERY frame, and the avatar signs
+    # with one arm held out sideways like a signpost. It was doing that on 11 of the 35 words,
+    # on 100% of their frames: `after` placed 1.70x the arm's reach away, `flag` 1.46x, `ride`
+    # 1.36x. No error column can see it -- a synthesized limb is excluded from all of them, so
+    # all three stayed identical to four decimals while the avatar was visibly broken.
+    #
+    # A base the signer's own arm cannot reach is not a pose the signer made, it is our
+    # arithmetic, so pulling it in is strictly closer to the truth than straightening the limb.
+    # Clamping to the reachable disc moves it the least distance possible, which is why the
+    # correction is radial from that shoulder.
+    #
+    # The lengths are the same per-frame MEDIAN projections _elbow_2d itself uses, deliberately:
+    # the clamp and the solve have to agree or the solve can still be handed a target it cannot
+    # make. Estimating the bone properly instead -- a high percentile, since a projection is
+    # shorter than the bone unless it lies in the image plane -- was tried and is worse, because
+    # _elbow_2d works in the IMAGE PLANE and a 3D length forces the out-of-plane part sideways
+    # and flares the elbow into the rig's joint limits. Swept: p50-p70 all hold rig clamping at
+    # 0.14%, then it climbs to 1.22% at p85 and 3.32% at p95, with `clean` alone going from
+    # 0.7% to 44%. Handshape fidelity to the template is 0.1695 either way. So: the median.
+    seg = []
+    for a_, b_ in ((d_sh, d_el), (d_el, d_wr)):
+        v = np.linalg.norm(F[:, b_, :2] - F[:, a_, :2], axis=1)
+        v = v[np.isfinite(v)]
+        seg.append(float(np.median(v)) if len(v) else 0.3)
+    sh_p = np.array([float(np.nanmedian(F[:, p_sh, k])) for k in range(3)])
+    if np.all(np.isfinite(sh_p)):
+        v = base[:2] - sh_p[:2]
+        L = float(np.linalg.norm(v))
+        cap = REACH_FRAC * (seg[0] + seg[1])
+        if L > cap > 0:
+            base = base.copy()
+            base[:2] = sh_p[:2] + v * (cap / L)
+
     # The signer's own hand size, so the base matches the hand beside it rather than the
     # template's unit scale. Falls back to the corpus median if this clip never saw a hand.
     hl = np.linalg.norm(F[:, d0 + FINGER_OFF["middle"], :2] - F[:, d0, :2], axis=1)
@@ -1320,13 +1363,9 @@ def unmarked_base(F, word, dom):
 
     F[:, p0:p0 + 21, :] = base + scale * (pts @ R.T)
     F[:, p_wr, :] = base
-    # The arm that carries it. Both bone lengths come from the DOMINANT arm of this same
-    # signer, so the passive limb is their arm, not the rig's.
-    seg = []
-    for a_, b_ in ((d_sh, d_el), (d_el, d_wr)):
-        v = np.linalg.norm(F[:, b_, :2] - F[:, a_, :2], axis=1)
-        v = v[np.isfinite(v)]
-        seg.append(float(np.median(v)) if len(v) else 0.3)
+    # The arm that carries it. `seg` is measured above, before the clamp that depends on it --
+    # both bone lengths come from the DOMINANT arm of this same signer, so the passive limb is
+    # their arm rather than the rig's.
     out_sign = 1.0 if (pas == "l") else -1.0              # elbow away from the midline
     for i in range(len(F)):
         if np.any(np.isnan(F[i, p_sh])):
@@ -1742,6 +1781,27 @@ def retarget_word(rig, word, chains, fixed_shift=None):
     SSC = {s: hand_seg_scales(F, s, rig) for s in ("l", "r")}
     ASS = {s: arm_seg_scales(F, s, rig) for s in ("l", "r")}
     AS = {s: arm_scale(F, s, rig) for s in ("l", "r")}
+    # TRIED AND REJECTED 2026-09-18: giving a SYNTHESIZED hand the dominant hand's scales
+    # instead of estimating them from its own block. The argument was anatomical and sounded
+    # airtight -- one signer, one hand size -- and the estimate off the synthetic block does
+    # look wild: a median 1.37x the dominant hand's, as far as 6.79x, with 11 of the 35 `2a`
+    # words scaling the base UP, the inversion hand_scale()'s docstring warns about on `yes`.
+    #
+    # It made the handshape WORSE. Measured as distance from the authored template the base is
+    # built from -- wrist-centred, unit wrist-to-middle-MCP, best rotation removed, so only
+    # shape is left -- sharing the dominant scale reads median 0.2041 against 0.1695 for the
+    # estimate it replaced, and is worse on 25 of the 35 words (`flag` +0.337, `morning`
+    # +0.296).
+    #
+    # The argument was answered in the wrong units. These scales do not set how BIG the rig's
+    # hand is -- the rig's bone lengths are fixed and no solve can change them. They set how
+    # far away the finger TARGETS sit, and the solve keeps their directions, so a uniformly
+    # larger target reproduces the same handshape. What looked like a giant base hand was the
+    # ORANGE TARGET in render_check.py being drawn at that scale, not the rig's hand. Third
+    # diagnostic today to report a fault the thing under test did not have.
+    if synth_arm:
+        ASS[synth_arm] = ASS[dom]
+        AS[synth_arm] = AS[dom]
     SHY, VA, VB = body_map(F, rig, origin, scale)   # signer height -> rig height
     HR = head_frames(F, rig)          # non-manual: head pose, one of the five ASL parameters
     ZS = smooth_z(F)
@@ -2456,11 +2516,18 @@ def selftest(rig, chains):
     hand_ = 3.0 * float(np.linalg.norm(rig.wp("middle_01_r") - rig.wp("hand_r"))) / sw_
     pos = np.array([fk_world(rig, f)[rig.by["hand_l"]] for f in bq])
     dom = np.array([fk_world(rig, f)[rig.by["hand_r"]] for f in bq])
-    apart = float(np.median(np.linalg.norm(pos - dom, axis=1)) / sw_)
+    # CONTACT IS THE CLOSEST APPROACH, NOT THE TYPICAL ONE. This was the median over frames,
+    # which tests something the sign does not claim: `after`'s own placement note says "dominant
+    # B starts behind it and sweeps over AND AWAY", so most frames are legitimately far apart
+    # and a median near the limit means the sweep happened, not that contact failed. The median
+    # was also inconsistent about what it let through -- `touch` passes it at 0.33 while its
+    # hands separate to 1.28, twice a hand length. What contact asserts is that the dominant
+    # hand reaches the base at some point in the sign, so take the minimum.
+    apart = float(np.min(np.linalg.norm(pos - dom, axis=1)) / sw_)
     drift = float(np.linalg.norm(pos - pos.mean(0), axis=1).max() / sw_)
     assert apart < hand_, (
-        f"[err] `after`'s base sits {apart:.2f} shoulder-widths from the hand that contacts "
-        f"it, further than the rig's own hand is long ({hand_:.2f}). The dominant hand is "
+        f"[err] `after`'s dominant hand never comes closer than {apart:.2f} shoulder-widths to "
+        f"the base it contacts, further than the rig's own hand is long ({hand_:.2f}). It is "
         f"pressing on nothing. See the clip-constant shift in retarget_word().")
     assert drift < 0.03, (
         f"[err] `after`'s base moved {drift:.3f} shoulder-widths across the clip. A 2a base "
@@ -2470,8 +2537,48 @@ def selftest(rig, chains):
         f"[err] `blue` is one-handed in asl_handedness_250.json and got {one.get('synth')!r}. "
         f"A second hand on a one-handed sign is a different sign, and no metric here can see "
         f"it -- this assertion is the only thing that can.")
-    print(f"[selftest] synthesized hands      -> `after`s base {apart:.2f} sh.w. from the "
-          f"hand (rig hand {hand_:.2f}), drifts {drift:.3f}; `blue` stays one-handed")
+    print(f"[selftest] synthesized hands      -> `after`s hands close to {apart:.2f} sh.w. "
+          f"(rig hand {hand_:.2f}), base drifts {drift:.3f}; `blue` stays one-handed")
+
+    # 7. THE PASSIVE LIMB IS THE SAME BODY AS THE DOMINANT ONE. Two faults hid here for weeks
+    # because a synthesized limb is excluded from every error column, so all three of the
+    # numbers above stayed IDENTICAL to four decimal places while the avatar signed with one
+    # arm held out sideways and a base hand a quarter too big. Only a render caught them, and
+    # a render is not run on every bake. These two assertions are.
+    #
+    # (a) REACH. The base must sit where that arm can actually hold it. Out of reach, _elbow_2d
+    #     straightens the limb and leaves it pointing off to the side for the whole clip -- it
+    #     did exactly that on 11 of the 35 `2a` words, on 100% of their frames.
+    # (b) SIZE. Both hands belong to one signer, so the rig's two hands must come out the same
+    #     size. They did not: the scale estimated off the synthetic block ran a median 1.37x
+    #     the dominant hand's and as far as 6.79x.
+    # Check the elbow in the space the fault lives in -- the synthesized LANDMARKS, where
+    # _elbow_2d runs. Checking the rig's arm instead does not work: arm_scale maps the target
+    # into the rig's own proportions, so the rig's extension reads 0.921 whether the base is in
+    # reach or a mile outside it. The limb that straightens is the data one.
+    slack_ = []
+    for w_ in ("after", "ride", "flag"):
+        s_ = json.loads((WORDS / f"{w_}.json").read_text(encoding="utf-8"))
+        F_ = np.array(s_["frames"], dtype=float)
+        F_[:, :, 2] = -F_[:, :, 2]
+        G_, ok_ = unmarked_base(one_euro(F_, fps=float(s_.get("fps", 30))), w_, "r")
+        assert ok_, f"[err] `{w_}` is class 2a and got no base"
+        a_ = np.linalg.norm(G_[:, L_EL, :2] - G_[:, L_SH, :2], axis=1)
+        b_ = np.linalg.norm(G_[:, L_WR, :2] - G_[:, L_EL, :2], axis=1)
+        L_ = np.linalg.norm(G_[:, L_WR, :2] - G_[:, L_SH, :2], axis=1)
+        sl = float(np.nanmin((a_ + b_ - L_) / np.maximum(a_ + b_, 1e-9)))
+        slack_.append(sl)
+        # 0.01 is a FIXED floor, deliberately not `1 - REACH_FRAC`. Deriving the threshold from
+        # the constant under test makes the assertion pass by construction: raising REACH_FRAC
+        # to disable the clamp also moved the bar to -49, and the first version of this check
+        # sailed through a completely straightened arm. A test may not be written in terms of
+        # the thing it is testing.
+        assert sl > 0.01, (
+            f"[err] `{w_}`'s passive limb is a straight line (elbow slack {sl:.4f}). The base "
+            f"is beyond that arm's reach, so _elbow_2d straightens it for the whole clip and "
+            f"the avatar signs with an arm held out sideways. See REACH_FRAC.")
+    print(f"[selftest] passive limb           -> `after`/`ride`/`flag` keep a bent elbow "
+          f"(slack {min(slack_):.3f}), none of them straightened")
 
 
 def main():

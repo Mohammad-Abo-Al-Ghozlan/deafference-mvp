@@ -57,10 +57,26 @@ for word in words:
     F = np.array(src["frames"], dtype=float)
     F[:, :, 2] = -F[:, :, 2]
     F = R.one_euro(F, fps=float(src.get("fps", 30)))
-    F, _placed = ((R.unmarked_base(F, word, "r") if sign.get("class") == "2a" else
-                   (R.mirror_passive_hand(F, "r"), True))
-                  if sign.get("synth") else (F, False))
+    # REPRODUCE THE SYNTHESIS THE BAKE ACTUALLY DID, all of it. This used to apply only the
+    # HAND mirror, so on a `mirror+arm` word the orange target hand was drawn at the signer's
+    # PARKED passive wrist -- down by the hip -- while the rig showed the correctly mirrored
+    # limb up in signing space. The two were a foot apart on screen and the bake was right
+    # both times. A diagnostic that reports a fault the thing under test does not have is
+    # worse than no diagnostic; `synth` names which branch ran, so read it instead of guessing.
+    synth = sign.get("synth")
+    if synth == "base":
+        F, _placed = R.unmarked_base(F, word, "r")
+    elif synth:                                   # "mirror" or "mirror+arm"
+        if synth.endswith("+arm"):
+            F, _ = R.mirror_passive_arm(F, "r")
+        F = R.mirror_passive_hand(F, "r")
     HS = {s: R.hand_scale(F, s, rig) for s in ("l", "r")}
+    # NOTE, because it misled me once: on a synthesized hand this can come back several times
+    # the dominant hand's, so the ORANGE TARGET below is drawn far longer than the rig's hand.
+    # That is the target's drawn size, not the rig's -- the solve keeps the finger DIRECTIONS
+    # and the rig's bone lengths are fixed, so the handshape is unaffected. Do not "fix" it by
+    # sharing the dominant scale: measured against the authored template that is worse on 25
+    # of 35 words. See the TRIED AND REJECTED note in retarget.retarget_word.
     frames = sign["frames"]
     # THE BAKED TRACK IS NOT THE SOURCE TRACK. retime() prepends hold_in copies of the first
     # frame and appends hold_out of the last, and may stretch the stroke, so baked frame i
