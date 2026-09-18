@@ -60,22 +60,38 @@ bones exist and are driven.
 
 ---
 
-## 2. 🟠 Two-handed signs are structurally worse than one-handed ones
+## 2. 🟡 Two-handed signs are worse than one-handed ones — but most of that gap was ours, not the corpus
 
-Measured across the 250 shipped words, dominant-hand coverage by handedness class:
+> **Corrected 2026-09-18.** This section used to read *"🟠 structurally worse"*, and the table below
+> was the evidence. **Most of the gap was our own exemplar-selection flag, not the data.** The
+> `--require-passive-up` gate rejected any take where the signer's passive arm hung, which on a
+> corpus that records one hand per participant is most of them. Dropping it for `2a` (2026-08-26)
+> and for `2s` (§3, today) took **every** two-handed word out of tier C. What remains below is real
+> but much smaller than this section claimed.
+
+Dominant-hand coverage by handedness class, measured on the shipped bake:
 
 | class | words | 🟢 A (≥80%) | 🟡 B (50–80%) | 🔴 C (<50%) |
 |---|---|---|---|---|
 | **1** one-handed | 163 | **144** | 19 | **0** |
-| **2s** symmetric | 52 | 3 | 26 | 23 |
-| **2a** asymmetric | 35 | **0** | 19 | 16 |
-| — combined 2s+2a | 87 | **3** | 45 | **39** |
+| **2s** symmetric | 52 | **37** | 15 | **0** |
+| **2a** asymmetric | 35 | **27** | 8 | **0** |
+| — combined 2s+2a | 87 | **64** | 23 | **0** |
 
-**Three of 87 two-handed words reach tier A. Zero of 163 one-handed words fall to tier C.** The
-split is almost perfectly along the one-vs-two-handed line, which is the tell that this is a
-property of the source data rather than of any processing stage.
+<details><summary>What this table said before, and why it was wrong twice</summary>
 
-Two independent causes, both structural:
+The published version read `2s: 3 / 26 / 23` and `2a: 0 / 19 / 16` — "three of 87 two-handed words
+reach tier A", 39 in tier C. The `2a` row was **already stale when it was written**: the shipped
+handoff had carried the recovered 2a takes since 2026-08-26 and measured `27 / 8 / 0`, not
+`0 / 19 / 16`. The `2s` row was accurate until §3 today. Mean coverage by class went
+`1: 88.8 / 2s: 49.4 / 2a: 83.8` → `88.8 / 85.8 / 83.8`.
+
+The lesson is the one this project keeps relearning: **a table copied forward is not a
+measurement.** Both rows were re-derivable in seconds from `avatar/baked_signs.json`.
+</details>
+
+Two-handed words still trail — 64 of 87 reach tier A against 144 of 163 one-handed (74% vs 88%) —
+and two causes are genuinely structural:
 
 **(a) GISLR records ONE hand per participant.** Both hands are present in 1.7% of clips; both-hand
 frames average 0.1%; 14 of 21 participants are single-handed throughout. So the passive hand is
@@ -87,60 +103,120 @@ median wrist speed is **0.0208 sh.w./frame when the hand block is present** and 
 is missing — a 1.52× ratio.** Two-handed signs are exactly where the hands cross and occlude each
 other, so the dominant hand drops out most on the words that need it most.
 
-**Neither is fixable with more engineering on this corpus.** A different source — one that records
-both hands — is the only real fix, and that is a data-acquisition project.
+> Corroborated independently by §3's measurement, in position rather than speed: the dominant wrist
+> sits **1.5–3.3× farther from its own median on frames where the hand block is missing** — farther
+> on 107 of 109 one-handed words and 40 of 51 `2s` words. The frames the tracker loses are the
+> frames where the hand is somewhere interesting. Anything measured only over tracked frames is
+> measured over the calm part of the sign, which is why §3's "22% less travel" cost turned out to be
+> mostly an artifact.
+
+**(a) is not fixable with more engineering on this corpus** — a source that records both hands is
+the only real fix, and that is a data-acquisition project. **(b) is a tracker limit**, and the
+lever on it is a better hand tracker or a re-extraction at higher resolution, not the renderer.
+What was fixable was the third cause this section did not have: our own exemplar gate. That one is
+now fixed (§3).
 
 ---
 
-## 3. 🟠 39 words are degraded at the source — and the 2s gate that starves them is now free to drop
+## 3. ✅ 23 words were degraded at the source by the 2s gate — TAKEN 2026-09-18
 
-> **Updated 2026-09-18. The blocker on the 2s half of this was removed by a renderer change, and
-> the arm that tests it is already on disk (`clips_off.npz`). This is now a decision, not an
-> experiment.** Read the caveat at the end before acting on it.
+> **Done. `animation_handoff/words/` now carries the gate-off exemplar for all 52 class-2s words
+> and nothing else changed.** 50 of 250 word files changed in motion; the other 200 are
+> byte-identical frame data. No word got worse and none lost coverage. The previous copy is at
+> `animation_handoff_pre_gatefix/words/`.
 >
-> **Why the gate could not be dropped for 2s, and why it now can.** The 2026-08-26 A/B turned it
-> off for `2a` only, and kept it for `2s` with a stated reason: 2s mirrors the passive handshape
-> onto a **recorded** passive wrist, so a take where that arm hangs would anchor the mirrored hand
-> at the signer's hip. `avatar/retarget.py` now reflects the **whole limb** when the passive arm is
-> parked (`mirror_passive_arm`), so a hanging passive arm costs nothing. The gate is protecting a
-> quantity the renderer no longer reads.
+> **What the gate was.** `build_sign_clips.py --require-passive-up` rejects a take unless the
+> signer's passive arm is raised. It was kept on for 2s with a stated reason: 2s mirrors the
+> passive handshape onto a **recorded** passive wrist, so a take where that arm hangs would anchor
+> the mirrored hand at the signer's hip. `avatar/retarget.py` now reflects the **whole limb** when
+> the passive arm is parked (`mirror_passive_arm`), so a hanging passive arm costs nothing. The
+> gate was protecting a quantity the renderer no longer reads.
 >
-> **What it buys, on the 35 words the retargeter currently tracks worst — all of them class 2s:**
+> **Measured, all 250, before → after:**
 >
-> | | control (shipped) | gate off |
-> | --- | --- | --- |
-> | dominant-hand coverage | 39.3% | **83.8%** |
-> | share of the sign actually scored | 38.6% | **83.8%** |
-> | all 250: coverage | 79.9% | **87.7%** |
+> | | shipped | gate fix | |
+> | --- | --- | --- | --- |
+> | class 2s dominant-hand coverage | 49.3% | **85.8%** | comparable across takes |
+> | words with no usable dominant hand | 23 | **0** | ⬅ the headline |
+> | all 250: coverage | 79.9% | **87.4%** | |
+> | in front | 99.82% | 99.94% | |
+> | clamped | 0.29% | 0.18% | |
+> | handshape error over 20% | 3 words | **1** (`kiss`) | *not* comparable — see below |
+> | popping (>30° in a stroke frame pair) | 7.59% | 8.01% | absolute; slightly worse |
 >
-> Coverage is the honest headline here and the only quantity comparable across the two arms. At
-> 20% coverage four frames in five of the animation are `bridge_gaps` interpolating between
-> guesses, and no handshape number covers them.
+> The popping increase is real but is not a new defect. Split across 400 random two-sign utterances,
+> the same pairs on both bakes: **at the joins, 0 of 308,450 bone steps exceed 30° in either bake**
+> (worst 17.4° in both) — the sequencer is untouched by this. Inside the signs it goes
+> 0.497% → 0.565%, worst step 146.3° → 144.4°, and in both bakes the worst offender is a **thumb**
+> (`thumb_01_r` on `owie`; `thumb_01_l` on `puzzle`). That is the known finger-popping limit already
+> recorded in `retarget.py`'s TRIED-AND-REJECTED block, and it got marginally more frequent for the
+> mechanical reason that there are now twice as many solved frames for it to happen in.
 >
-> **The cost, measured and real:** the gate-off takes move **22% less** (mean spatial extent of the
-> dominant wrist on those 35 words, 0.72 → 0.56 shoulder-widths — measured as distance from the
-> wrist's own median position, so tracking dropouts cannot inflate it). That is the failure the
-> gate guards against, and it does not disappear. Class 2s does keep its travel floor and the
-> signing-hand gate with `require_passive_up off`, so the laziest takes are still rejected.
+> `stairs`, the worst word in the vocabulary, went from 23% coverage / 22.9% handshape error to
+> **100% / 13.7%**. `bath` — §3a's poster child, 84 frames with a hand on 9 of them — went to 76%.
+> The full list of 23 is in the commit message.
 >
-> ### ⚠️ Two reasons this is a decision and not a result
+> ### The "22% less travel" cost was mostly an artifact. Here is the corrected number.
 >
-> 1. **Handshape error is NOT comparable between the arms.** Each arm is scored against *its own*
->    take's landmarks, so the two numbers have different ground truths. Across all 250 it reads
->    11.27% → 11.08%, better on 56 words and worse on 51 — and several of those regressions
->    (`story` 8.1 → 17.4, `cheek` 6.9 → 15.9, `fine` 6.3 → 15.1) are words whose *coverage went up*.
->    That combination is the tell: a different take is a different performance, not a worse solve.
-> 2. **`clips_off.npz` is not a clean A/B of the gate.** 71 of 163 **class-1** exemplars differ
->    between the arms, and the gate cannot apply to class 1 — so the two builds differ in something
->    besides the flag, and part of the coverage delta is not attributable to it. A clean re-run
->    would be `build_sign_clips.py --require-passive-up off` against the same snapshot as the
->    control.
+> The earlier entry recorded the cost as *"the gate-off takes move 22% less — measured as distance
+> from the wrist's own median position, so tracking dropouts cannot inflate it."* The second half of
+> that sentence is wrong, and it is the usual defect: **the hand tracker drops out precisely when
+> the wrist is far from its median.** On the shipped 2s takes the wrist sits 0.296 from its median
+> on frames where the hand is tracked and **0.469 on frames where the hand dropped out** — farther
+> on 40 of 51 words, and on 107 of 109 class-1 words. So most of the control's extra travel happens
+> while the hand is invisible and `bridge_gaps` is interpolating through it.
 >
-> **Recommendation:** take it, after a look. It changes the exemplar on 154 of 250 words, which is
-> a data change no metric here can validate — `docs/BASE_HAND_REVIEW.md`'s argument applies. The
-> switch is `gloss_to_motion.py --clips clips_off.npz --per-word --out-dir animation_handoff`
-> followed by `retarget.py --all`; the animator holds a copy of that folder, so it is his change
-> too.
+> Re-measured as the **diameter of the dominant wrist's path** (no median to choose):
+>
+> | | shipped | gate fix | |
+> | --- | --- | --- | --- |
+> | true sign size, every frame | 1.601 | 1.350 | **−16%** — the performances really are smaller |
+> | visible sign size, raw | 0.934 | 1.017 | +9% — **do not quote this**, see below |
+> | visible sign size, at matched sample size | 0.934 | 0.882 | **−6%** — the honest figure |
+> | frames the renderer can solve from | 20.2 | **41.5** | |
+>
+> The raw +9% is a **point-count artifact**: a diameter over N points is biased small as N falls,
+> and the shipped takes have half as many visible frames. Subsampling the gate-fix frames down to
+> the shipped count (200 draws/word, seed 0) removes it and leaves −6%. Null check: class 1, where
+> the take did not change, reads 1.021 → 1.021.
+>
+> **So the real trade is a sign ~6% smaller that the renderer sees twice as much of** — not the 22%
+> shrink recorded before. Class 2s keeps its travel floor and the signing-hand gate, so the laziest
+> takes are still rejected.
+>
+> ### Why this is a clean A/B, where `clips_off.npz` was not
+>
+> The earlier caveat stands and is the reason the full switch was **not** taken: 71 of 163 **class-1**
+> exemplars differ between `sign_clips_250.npz` and `clips_off.npz`, and the gate cannot apply to
+> class 1 — so that pair differs in something besides the flag. `clips_gatefix.npz` takes class 2s
+> from `clips_off.npz` and everything else from the shipped build, so **the only words that move are
+> the ones the gate can act on.** Two things fall out of that:
+>
+> - **`animation_handoff/reference_pose.json` is byte-identical.** It is sourced from `TV` frame 0,
+>   and `TV` is class 1 — but `clips_off.npz` *does* pick a different take for it
+>   (`TV/61333_…` vs `TV/53618_…`). The full switch would have moved the pose the animator builds
+>   his rig against, for no reason connected to the gate. This one does not.
+> - Class-1 coverage is **88.8% either way**. The metadata claims 82.9% → 89.0%, which is what made
+>   the class-1 churn look like it was worth having; measured from the arrays themselves it is
+>   88.8 → 89.2. **`sign_clips_250.meta.json`'s `dominant_hand_coverage` does not agree with
+>   `sign_clips_250.npz`** — it reads ~7 points low across every class. Measure from the arrays.
+>
+> **Handshape error is still NOT comparable across a take change** — each take is scored against its
+> own landmarks. It reads 10.97% → 10.78% overall, and every regression in class 2s is a word whose
+> *coverage went up* (`story` 7.6 → 16.8 at 75 → 82% coverage; `puzzle` 7.6 → 13.6 at 67 → 93%).
+> That combination is the tell: a different take is a different performance, not a worse solve.
+> The swap is unconditional on class 2s because **all 50 changed takes gain coverage** — there is no
+> word that was swapped for nothing, so no threshold is warranted. Adding one to shave 0.23 off the
+> handshape mean would be tuning on the number this paragraph says not to trust.
+>
+> **Still unvalidated by any metric here:** whether these 50 takes are *good ASL*. They have not
+> been Deaf-reviewed — `docs/BASE_HAND_REVIEW.md`'s argument applies to them too.
+>
+> **Reproduce:** `clips_gatefix.npz` = `sign_clips_250.npz` with the 87 two-handed words replaced
+> from `clips_off.npz` (`build_sign_clips.py --require-passive-up off`); `clips_gatefix.meta.json`
+> is committed and names the source take for every word. Then
+> `gloss_to_motion.py --clips clips_gatefix.npz --per-word --out-dir animation_handoff`
+> and `retarget.py --all`. **The animator holds a copy of the old folder — he needs the new one.**
 
 ## 3a. The original entry (2026-08-14)
 
@@ -171,6 +247,13 @@ treat tier C as real, and treat the outcome as a **genuine unknown** — not a l
 > 0.432 → 0.829, tier-C 2a words 24 → 0) and left 2s untouched, which is why 2s is the whole
 > remaining problem; `off` recovers 2s as well. The caution in this paragraph was right about the
 > correlation and right to insist on mechanism — the mechanism is what carried it, in both arms.
+>
+> **Closed 2026-09-18 (§3).** Tier C is empty. `bath`, the extreme case named above, went from a
+> hand on 9 frames of 84 to **76% coverage**; `stairs`, the worst-solved word in the vocabulary,
+> from 23% to **100%**. "No renderer recovers a sign from that" was true of the take we had chosen,
+> and the take was chosen by a flag of ours. The honest reading of this entry in hindsight: it
+> correctly refused to *assume* the pool was starved, then correctly identified the mechanism test —
+> and the answer, on both classes, was that it was.
 
 ---
 
