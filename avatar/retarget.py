@@ -248,6 +248,10 @@ TORSO_PAD = 0.10
 # below; a base hand at chest height is nearer 0.3-0.5.
 PARKED_Y = 0.60
 
+# The brief's §14 test 7 bar: how far the rig's wrist may sit from the target, as a percentage of
+# a shoulder width. Named once so the bake's pass line is computed against it rather than asserted.
+WRIST_BAR = 5.0
+
 # The furthest from its own shoulder a synthesized 2a base hand may be placed, as a fraction of
 # that arm's reach. NOT a taste knob: it is the 95th percentile of base-distance/reach over the
 # 24 words whose placement was already reachable, so clamping an outlier never pulls it tighter
@@ -2671,7 +2675,19 @@ def main():
                   if n in rig.by},
         "signs": baked}, separators=(",", ":")), encoding="utf-8")
     print(f"\n[ok] {out}  ({out.stat().st_size/1e3:.0f} KB, {len(baked)} signs)")
-    print(f"     §14 test 7 passes at <5% of a shoulder-width.")
+    # THIS LINE USED TO BE A HARDCODED STRING: "§14 test 7 passes at <5% of a shoulder-width."
+    # It was printed after every bake whether or not that was true, and it was not -- 31 of the
+    # 250 words are over the bar, up to 11.6%. A pass line that cannot fail is worse than no
+    # pass line, because it is read as a check having run. Count them instead, and say which.
+    over = sorted(((v["err"], w) for w, v in baked.items() if (v.get("err") or 0) > WRIST_BAR),
+                  reverse=True)
+    if over:
+        print(f"     §14 test 7 (wrist within {WRIST_BAR}% of a shoulder-width): "
+              f"{len(baked) - len(over)}/{len(baked)} pass, {len(over)} OVER -- "
+              + ", ".join(f"{w} {e:.1f}%" for e, w in over[:6])
+              + (f", +{len(over)-6} more" if len(over) > 6 else ""))
+    else:
+        print(f"     §14 test 7: all {len(baked)} wrists within {WRIST_BAR}% of a shoulder-width.")
 
 
 if __name__ == "__main__":
