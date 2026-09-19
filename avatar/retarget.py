@@ -210,6 +210,13 @@ TWO_PASS = True
 Q_MIN_CUTOFF = 6.0
 Q_BETA = 0.02
 
+# How much wider the upper arm and forearm get their cutoff than bone length alone would give
+# them. The arm carries the sign's LOCATION, one of the five phonemic parameters, and filtering
+# it was costing 31 of the 250 words the contract's own wrist bar. Chosen against the CONTRACT:
+# swept on all 250, x6 is the smallest boost at which every word meets §14 test 7's 5% wrist
+# bar (x4 leaves 3 over, x1 leaves 32). See bone_cutoffs() for the full table and the cost.
+Q_ARM_BOOST = 6.0
+
 # Playback timing -- see retime(). Frames at 30 fps: 6 = 0.20 s, 10 = 0.33 s, 18 = 0.60 s.
 HOLD_IN = 6
 HOLD_OUT = 10
@@ -624,6 +631,20 @@ def solve_depth(tgt, rig, frame, tree, zref=None, prev_sign=None, want_front=Non
     the body on 46% of `thankyou`'s frames and 33% of `please`'s while the data said in-front
     on every single one. Where both roots agree with the prior, or neither does, it is genuinely
     ambiguous and the old relative-z rule with its hysteresis still decides.
+
+    READ THE CLAMP RATE WITH ITS MAGNITUDE OR NOT AT ALL. The remaining rates look alarming and
+    are not: measured 2026-09-19 on the three worst words, instrumented ON this branch rather
+    than re-derived outside it, the overshoot is 1.00x to 1.14x of the bone and the joint is
+    moved by
+
+        farm  5.12% of segments, mean 0.8 mm   hat 4.70%, mean 2.0 mm   face 3.21%, mean 0.6 mm
+
+    against a rig shoulder width of 339 mm and a §14 wrist bar of 17 mm. At a ratio near 1.0 the
+    clamp also discards nothing: dz = sqrt(L^2 - planar) is already ~0 there, so there is no
+    depth being thrown away, only an impossible target being made possible. The 32-42% era this
+    docstring's neighbours describe was a different animal -- large ratios, real flattening. A
+    few per cent at 1.0x is the solver working, and chasing it would be chasing a rate whose
+    consequence is sub-millimetre.
     """
     P = {L_SH: rig.wp("upperarm_l").copy(), R_SH: rig.wp("upperarm_r").copy()}
     ref_z = float((rig.wp("upperarm_l")[2] + rig.wp("upperarm_r")[2]) / 2.0)
@@ -845,6 +866,37 @@ def fit_reach(tgt, chains, scale):
     the 2D span to fit inside the bone or it has no real root and flattens the finger into the
     image plane. Angles are the handshape and they are preserved exactly; lengths were never
     ours to keep, since they belong to a different hand.
+
+    WHAT THIS DOES NOT FIX, AND WHAT THE 6 REMAINING WORDS ACTUALLY ARE. Lengths are capped per
+    segment; the across-palm SPREAD is not, and cannot be from here -- the rig's metacarpals are
+    rigid relative to `hand_*`, so no solve can widen or narrow its palm to match MediaPipe's.
+    Measured 2026-09-19 by instrumenting the scoring line itself (NOT by rebuilding the target,
+    which was tried twice and measured the wrong quantity both times), tip error resolved in the
+    hand's own frame, in the same 2D plane `shp` scores, as % of a palm length:
+
+                     across-palm   |mean|   rms    |mean|/rms
+        thumb           -17.0       19.2    40.9      0.47      <- the six words over 18%
+        index            -8.1       10.3    18.7      0.55
+        middle           +0.5        1.5     6.1      0.24
+        ring             +7.5        7.5    14.2      0.53
+        pinky            +9.5       12.0    26.2      0.46
+        middle/ring       0.0        0.0     ~5.7     0.00      <- the 40 words under 9%
+
+    The middle finger carries NO bias in either group and the two sides are displaced in
+    OPPOSITE directions. That is a splay signature, not a finger fault: the rig's palm and
+    MediaPipe's disagree about how far apart the knuckles sit, the middle finger is the axis it
+    pivots about, and the error grows outward from there. It is 3.7x larger on the failing words
+    than on the clean ones, which is why those words fail -- they are the handshapes that spread.
+
+    This is also why "kiss and radio are the thumb problem" -- repeated in these notes for weeks
+    -- was half wrong. Decomposing `shp` per finger: `kiss` is 52% thumb, but `radio` is PINKY
+    (28.7 vs the thumb's 27.1) and so is `ear` (37.1, 40%). And the thumb is the largest single
+    contributor on the GOOD words too (`animal` 49%, `blue` 44%), so it was never what separated
+    them.
+
+    The lever is the rigger's seven handshape reference poses: knowing where the rig's OWN
+    fingertips belong for A/S/O/C/B/1/5 replaces aiming them at a differently-proportioned
+    hand's landmarks. Nothing in this file can substitute for that.
     """
     for ch in chains:
         # Segment vectors are read BEFORE any of them moves. Walking a chain while reading
@@ -1099,7 +1151,40 @@ def bone_cutoffs(rig, chains, noise=None):
     # and scaled again by how noisy this particular clip is, so a rough capture is smoothed
     # harder than a clean one instead of both getting the setting that suited the clean one
     ns = 1.0 if noise is None else float(np.clip(NOISE_REF / max(noise, 1e-6), 0.3, 1.0))
+    # THE ARM WAS NOT ACTUALLY BEING LEFT ALONE. The paragraph above says the longest bones are
+    # "untouched" so this buys quiet fingers "without softening the arm movement that carries
+    # the sign". Measured, it was not true: the arm sits at the TOP of the L/ref range, not
+    # outside it, and 6 Hz at 30 fps still attenuates fast motion. Ablating smooth_quats moved
+    # the mean wrist error from 4.24% to 0.02% and took all 31 over-bar words to zero -- the
+    # filter owned 100% of that error, and it scales with hand speed (corr +0.645 per word,
+    # +0.554 per frame; the slowest half of all frames sits at 0.96% and the fastest 1% at
+    # 16.15%).
+    #
+    # The arm cannot simply be exempted, though: with no filter at all it starts to SNAP. Swept
+    # on ALL 250 -- a first sweep over the 10 worst words plus 5 clean ones said arm popping was
+    # 0.000% up to x6 and appeared to give a clean threshold, and that was the sample, not the
+    # corpus. On all 250 there is no threshold; the trade is smooth:
+    #
+    #     boost   wrist    p95    shape   over-bar   ARM pops   worst arm step   finger pops
+    #     x1      3.09%   7.05%  10.78%    32/250     0.109%        128.5d          0.647%
+    #     x2      2.25%   5.19%  10.74%    15/250     0.125%        131.2d          0.647%
+    #     x3      1.78%   4.17%  10.73%    10/250     0.151%        133.4d          0.647%
+    #     x4      1.48%   3.49%  10.71%     3/250     0.176%        135.4d          0.647%
+    #     x6      1.11%   2.63%  10.70%     0/250     0.218%        138.6d          0.647%
+    #
+    # So the criterion is the CONTRACT, not a knee in a curve: x6 is the smallest boost at which
+    # every one of the 250 meets §14 test 7's 5%-of-a-shoulder-width wrist bar. The cost is
+    # stated rather than hidden -- arm popping roughly doubles off a small base, about fifty
+    # extra >30 deg arm frames across the whole corpus. It is not creating new large snaps: the
+    # WORST arm step moves only 128.5 -> 138.6 degrees, so this is slightly more of what was
+    # already there. Finger popping is 0.647% at every setting -- the thing this filter actually
+    # exists for is untouched, which is the whole reason the arm can be treated separately --
+    # and handshape drifts 0.08% better (it is wrist-relative, so arm rotation cannot move it).
+    #
+    # Only upperarm and lowerarm. `hand_*` keeps its own cutoff: its rotation does not move the
+    # wrist, it orients the fingers, so it belongs with them.
     return {b: Q_MIN_CUTOFF * ns * float(np.clip(L / ref, 0.25, 1.0))
+            * (Q_ARM_BOOST if b.startswith(("upperarm", "lowerarm")) else 1.0)
             for b, L in lens.items()}
 
 
