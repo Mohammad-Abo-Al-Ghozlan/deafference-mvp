@@ -81,7 +81,13 @@ payload = json.loads(pay_path.read_text(encoding="utf-8"))
 # fact as the error columns -- how far to trust what is on screen -- and it is the only one
 # that covers the passive hand, which no error column can see.
 stats = {w: {"err": s.get("err"), "p95": s.get("p95"), "shape": s.get("shape"),
-             "front": s.get("front"), "clamp": s.get("clamp"), "synth": s.get("synth")}
+             "front": s.get("front"), "clamp": s.get("clamp"), "synth": s.get("synth"),
+             # `invented` is the complement of all four error columns above: every one of
+             # them is a mean over frames where the hand was TRACKED, so each describes a
+             # different fraction of each sign and none of them says which. Without it the
+             # viewer shows `fall` at 2.5% wrist error next to `stairs` at 2.4% and implies
+             # they are equally trustworthy, while a fifth of `fall` is slerp.
+             "invented": s.get("invented")}
          for w, s in payload["signs"].items()}
 
 # The </script> sequence inside a JSON string would close the host <script> tag early. It

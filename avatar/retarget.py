@@ -266,6 +266,12 @@ WRIST_BAR = 5.0
 # unmarked_base() for what goes wrong without it.
 REACH_FRAC = 0.97
 
+# The shortest bridged gap that counts as invented motion, in frames. At 30 fps, 3 frames is
+# 100 ms -- about the point where a slerped stretch stops being a rounding of the data and
+# starts being a pose nobody made. Below it the bridge is shorter than the filter's own
+# response and there is nothing to report. See bridge_gaps() for what this number buys.
+GAP_MIN = 3
+
 # TRIED AND REJECTED: solving the hand bone's rotation by least squares over all five
 # metacarpal heads instead of the two-vector index/pinky frame. It is a better fit by every
 # average -- handshape 12.83% -> 12.77%, thumb direction 6.4 -> 5.4 degrees, jumps over 30
@@ -1201,8 +1207,28 @@ def bridge_gaps(out_q, held):
     held frames bracketed by two solved ones is slerped between them, so the hand travels
     across the gap instead of waiting and then leaping. A run with no solved frame after it --
     the hand simply never comes back -- has no target, so it keeps holding.
+
+    THERE IS NO LENGTH LIMIT, and there should not be -- holding is the thing this exists to
+    replace -- but that means a sign can ship mostly slerp while no error column says so,
+    because every one of them skips untracked frames by construction. So the bridging is
+    COUNTED and returned alongside the poses. Measured over all 250 shipped clips, counting a
+    gap as >= GAP_MIN frames:
+
+        invented fraction   median 5.4%   mean 7.3%   max 30.4%
+        over 10% invented   85 of 250      over 20%   21 of 250
+        no bridged gap      16 of 250
+        worst single gap    `alligator`, 16 frames = 533 ms
+
+    And it is NOT the coverage column in the exemplar meta: corr is -0.795, not -1, because
+    coverage counts the missing frames while the damage is how they are ARRANGED. The two
+    words under the 65% coverage bar are `fall` (60.0% coverage, 20.0% invented) and `drop`
+    (62.9%, 22.9%) -- neither is the worst sign in the corpus. `arm` at 69.6% coverage is
+    30.4% invented and `go` at 66.7% is 30.3%, and both clear the coverage bar; `alligator` at
+    78.0% coverage loses 22.0% of the sign in one half-second hole. Ranking the corpus by
+    coverage gets the ranking wrong, which is why this number is reported separately.
     """
     n = len(out_q)
+    bridged = [False] * n
     for nm in sorted({k for f in out_q for k in f}):
         solved = [i for i in range(n) if nm in out_q[i] and nm not in held[i]]
         if not solved:
@@ -1222,7 +1248,14 @@ def bridge_gaps(out_q, held):
             for i in range(a + 1, b):
                 q = slerp(q0, q1, (i - a) / (b - a))
                 out_q[i][nm] = [round(float(x), 4) for x in q]
-    return out_q
+            # Per FRAME, not per bone-frame: a frame in which any bone had to be invented is
+            # an invented frame, and counting bone-frames instead would just report how many
+            # bones the hand has. Short gaps are excluded because a one- or two-frame bridge
+            # is below what 30 fps resolves; GAP_MIN is where that line is drawn.
+            if b - a - 1 >= GAP_MIN:
+                for i in range(a + 1, b):
+                    bridged[i] = True
+    return out_q, (sum(bridged) / n if n else 0.0)
 
 
 def mirror_passive_hand(F, dom):
@@ -1740,7 +1773,7 @@ def frame_from(origin, fwd, across):
     return np.column_stack([x, y, np.cross(x, y)])
 
 
-def retarget_word(rig, word, chains, fixed_shift=None):
+def retarget_word(rig, word, chains, fixed_shift=None, fixed_base=None):
     d = json.loads((WORDS / f"{word}.json").read_text(encoding="utf-8"))
     F = np.array(d["frames"], dtype=float)
 
@@ -1864,6 +1897,7 @@ def retarget_word(rig, word, chains, fixed_shift=None):
         chains = [c for c in chains if not c[0].endswith(f"_{passive}")]
     mirrored = synth_hand
     dom_shifts = []          # the dominant hand's per-frame placement correction; see below
+    base_pos = []            # the placed base's own per-frame mapped wrist; see below
 
     HS = {s: hand_scale(F, s, rig) for s in ("l", "r")}
     SEGS = {s: hand_chains(rig, s) for s in ("l", "r")}
@@ -2137,9 +2171,36 @@ def retarget_word(rig, word, chains, fixed_shift=None):
             # is supposed to be held still for. So the median over the clip is used, which
             # costs one extra solve on the 35 words that have a base and nothing on the 215
             # that do not.
+            #
+            # AND THE POSITION IS ONE VECTOR TOO, not just the shift. The clip-constant above
+            # only makes the base static to the extent that `P[wr_]` is, and it is not: the
+            # base is written into the landmarks as ONE constant 3-vector by unmarked_base(),
+            # but solve_depth then re-derives its DEPTH per frame from the arm chain, and the
+            # other end of that chain -- the real passive shoulder, and the elbow _elbow_2d
+            # hangs off it -- does move. So the base hand swam toward and away from the camera
+            # while its x and y sat perfectly still.
+            #
+            # Measured over all 35 base words, decomposed by patching this call site:
+            #     data-space base drift   0.000000 sh.w.   (one constant vector, as written)
+            #     rig shoulder drift      0.0000           (the body is not carrying it)
+            #     want dx, dy             0.0000-0.0012    (already static)
+            #     want dz                 up to 0.0343     <- all of it, and all in the target
+            #     the two z rules below   fired on 0.0% of passive frames on all 35 words
+            #     two_bone_ik             reached `want` exactly; 0% of frames unreachable
+            # `read` 0.0343, `garbage` 0.0273, `before` 0.0193 -- one word over the 0.03 bar.
+            #
+            # It is NOT the old failure, a base dragged along by the hand it belongs to: the
+            # least-squares slope of the passive hand's displacement on the dominant hand's is
+            # +0.007 on `read` (R2 0.022), against the 0.33 sh.w. that the per-frame shift used
+            # to produce on `jump`. It is depth noise on a hand whose depth was never measured.
+            #
+            # A placed base's z is as authored as its x and y -- it comes out of the same
+            # lexicon vector -- so it gets the same treatment: the clip median, taken in the
+            # first solve and applied in the second, exactly like fixed_shift beside it.
             if s_ == synth_arm and cls == "2a":
+                base_pos.append(np.asarray(P[wr_], dtype=float).copy())
                 if fixed_shift is not None:
-                    want = P[wr_] + fixed_shift
+                    want = (P[wr_] if fixed_base is None else fixed_base) + fixed_shift
             elif s_ == dom:
                 dom_shift = want - P[wr_]
                 dom_shifts.append(dom_shift)
@@ -2383,7 +2444,7 @@ def retarget_word(rig, word, chains, fixed_shift=None):
         keep.append({lm: tgt[lm].copy() for lm in _METRIC_LM
                      if lm in tgt and not np.any(np.isnan(tgt[lm]))})
 
-    out_q = bridge_gaps(out_q, held)
+    out_q, invented = bridge_gaps(out_q, held)
     out_q = smooth_quats(out_q, fps=float(d.get("fps", 30)),
                          bone_cut=bone_cutoffs(rig, chains, clip_noise(F)))
 
@@ -2438,7 +2499,9 @@ def retarget_word(rig, word, chains, fixed_shift=None):
     # only on the 35 words with a base -- the other 215 solve once, as before.
     if cls == "2a" and synth_arm and fixed_shift is None and dom_shifts:
         return retarget_word(rig, word, chains,
-                             fixed_shift=np.median(np.array(dom_shifts), axis=0))
+                             fixed_shift=np.median(np.array(dom_shifts), axis=0),
+                             fixed_base=(np.median(np.array(base_pos), axis=0)
+                                         if base_pos else None))
 
     # AFTER scoring, never before. The holds are copies of frames already scored and the
     # stretched frames are interpolations between them, so scoring the stroke scores the
@@ -2447,6 +2510,11 @@ def retarget_word(rig, word, chains, fixed_shift=None):
     out_q, timing = retime(out_q)
     timing["mirrored"] = mirrored
     timing["class"] = cls
+    # Carried in `timing` rather than as another tuple slot: this return is already nine wide
+    # and every caller unpacks it positionally. Measured over the STROKE, before retime pads
+    # it -- the holds are copies of solved frames and would dilute the fraction with frames
+    # that were never in question.
+    timing["invented"] = round(100.0 * invented, 1)
     # Which synthesis ran, so the label and the viewer can say it rather than imply two
     # tracked hands. "mirror" = 2s handshape reflected onto a tracked arm; "mirror+arm" = the
     # whole limb reflected because the signer left it down; "base" = a 2a unmarked base placed
@@ -2613,21 +2681,39 @@ def selftest(rig, chains):
     # hands separate to 1.28, twice a hand length. What contact asserts is that the dominant
     # hand reaches the base at some point in the sign, so take the minimum.
     apart = float(np.min(np.linalg.norm(pos - dom, axis=1)) / sw_)
-    drift = float(np.linalg.norm(pos - pos.mean(0), axis=1).max() / sw_)
     assert apart < hand_, (
         f"[err] `after`'s dominant hand never comes closer than {apart:.2f} shoulder-widths to "
         f"the base it contacts, further than the rig's own hand is long ({hand_:.2f}). It is "
         f"pressing on nothing. See the clip-constant shift in retarget_word().")
-    assert drift < 0.03, (
-        f"[err] `after`'s base moved {drift:.3f} shoulder-widths across the clip. A 2a base "
-        f"is static by definition -- if it follows the dominant hand it is not a base.")
+
+    # STATICNESS IS CHECKED ON `read`, NOT ON `after`. This assertion used to sit on `after`
+    # with the rest of the base checks, and it could not do its job there: measured over all
+    # 35 base words, `after` drifts 0.0013 and `read` drifts 0.0342, so the ONE word over the
+    # bar was the one word this test never looked at. A property that varies 26x across the
+    # corpus has to be asserted where it is largest, or the assertion is only testing an easy
+    # case. (`after` stays above because contact is a different property and it is the right
+    # word for that one -- 2a, a plain-hand base, and 34 frames.)
+    #
+    # 0.005 sh.w. is about 1.8 mm. The residual after the fix is 0.0005 on all 35 words --
+    # slerp between retimed frames, since a fixed wrist is not a fixed quaternion -- so the
+    # bar sits 10x above what the pipeline can achieve and 68x below the 0.33 that the old
+    # per-frame shift produced on `jump`. It fails if either clip constant is removed:
+    # without fixed_base `read` reads 0.0342, without fixed_shift `jump` reads 0.33.
+    _, rq, *_rr = retarget_word(rig, "read", chains)
+    assert _rr[-1].get("synth") == "base", "[err] `read` is class 2a and did not get a base"
+    rpos = np.array([fk_world(rig, f)[rig.by["hand_l"]] for f in rq])
+    drift = float(np.linalg.norm(rpos - rpos.mean(0), axis=1).max() / sw_)
+    assert drift < 0.005, (
+        f"[err] `read`'s base moved {drift:.4f} shoulder-widths across the clip. A 2a base "
+        f"is static by definition -- if it follows the dominant hand, or swims in depth "
+        f"because solve_depth re-derives a z for it every frame, it is not a base.")
     one = retarget_word(rig, "blue", chains)[-1]
     assert one.get("synth") is None and one.get("class") == "1", (
         f"[err] `blue` is one-handed in asl_handedness_250.json and got {one.get('synth')!r}. "
         f"A second hand on a one-handed sign is a different sign, and no metric here can see "
         f"it -- this assertion is the only thing that can.")
     print(f"[selftest] synthesized hands      -> `after`s hands close to {apart:.2f} sh.w. "
-          f"(rig hand {hand_:.2f}), base drifts {drift:.3f}; `blue` stays one-handed")
+          f"(rig hand {hand_:.2f}), `read`s base drifts {drift:.4f}; `blue` stays one-handed")
 
     # 7. THE PASSIVE LIMB IS THE SAME BODY AS THE DOMINANT ONE. Two faults hid here for weeks
     # because a synthesized limb is excluded from every error column, so all three of the
@@ -2684,9 +2770,14 @@ def main():
     assert not missing, f"rig has no bone named {sorted(set(missing))}"
     print(f"rig    {len(rig.joints)} joints, {len(chains)} driven bones "
           f"(shoulder width {np.linalg.norm(rig.wp('upperarm_l')-rig.wp('upperarm_r')):.3f} m)")
+    # `invented` sits next to the error columns on purpose. Every column to its left is
+    # measured ONLY on frames where the hand was tracked, so each of them describes a
+    # different fraction of each sign, and this is that fraction's complement. Without it
+    # `fall` reads "wrist err 2.5%" exactly like `stairs` does, while one of them is a fifth
+    # slerp and the other is entirely data.
     print(f"\n{'word':<12s} {'frames':>12s} {'hands':>16s} {'wrist err':>11s} "
-          f"{'p95':>7s} {'handshape':>10s} {'in front':>9s} {'clamped':>8s}")
-    print("-" * 94)
+          f"{'p95':>7s} {'handshape':>10s} {'in front':>9s} {'clamped':>8s} {'invented':>9s}")
+    print("-" * 104)
     baked, failed = {}, []
     for w in words:
         if not (WORDS / f"{w}.json").exists():
@@ -2726,7 +2817,7 @@ def main():
         fcol = (f"{timing['stroke']}>{len(q)}" +
                 (f" x{timing['stretch']:.1f}" if timing["stretch"] > 1.005 else ""))
         print(f"{w:<12s} {fcol:>12s} {hands:>16s} {e:>11s} {p95:>7s} {hs:>10s} "
-              f"{fr_s:>9s} {cl*100.0/max(tot,1):7.1f}%")
+              f"{fr_s:>9s} {cl*100.0/max(tot,1):7.1f}% {timing['invented']:8.1f}%")
         baked[w] = {"fps": d["fps"], "frames": q,
                     "hands": hands, "gloss": d.get("glosses", [w])[0],
                     "lh": round(float(lh * 100), 0), "rh": round(float(rh * 100), 0),
@@ -2773,6 +2864,20 @@ def main():
               + (f", +{len(over)-6} more" if len(over) > 6 else ""))
     else:
         print(f"     §14 test 7: all {len(baked)} wrists within {WRIST_BAR}% of a shoulder-width.")
+
+    # ... and immediately say how much of the corpus that line is actually about. The §14
+    # number above is a mean over TRACKED frames only, so it is silent on the rest, and
+    # printing a clean pass line straight after a bake that invented a fifth of some signs
+    # would repeat the hardcoded-string mistake in a subtler form: a true statement that
+    # implies a stronger one. No bar is asserted here because none is earned -- nothing in
+    # this file can put the missing frames back, and the fix is a better take, not a better
+    # solve. See bridge_gaps() for why this does not track the exemplar coverage column.
+    inv = sorted(((v.get("invented") or 0.0, w) for w, v in baked.items()), reverse=True)
+    vals = np.array([x for x, _ in inv])
+    if len(vals):
+        print(f"     interpolated across gaps >= {GAP_MIN} frames: median {np.median(vals):.1f}%"
+              f" of frames, {(vals > 20).sum()} words over 20% -- "
+              + ", ".join(f"{w} {x:.0f}%" for x, w in inv[:4]))
 
 
 if __name__ == "__main__":

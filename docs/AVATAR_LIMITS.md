@@ -116,6 +116,41 @@ lever on it is a better hand tracker or a re-extraction at higher resolution, no
 What was fixable was the third cause this section did not have: our own exemplar gate. That one is
 now fixed (§3).
 
+### Coverage is the wrong column to rank this by — 2026-09-19
+
+The tier table above counts *how many* frames lost the hand. What a viewer sees is how many frames
+were **invented to cover the loss**, and those are not the same ranking. `bridge_gaps()` slerps
+across any gap bracketed by two solved frames — there is no length limit, and there should not be,
+since holding the pose instead is what it was written to replace — so the bake now reports the
+share of frames that came out of that interpolation rather than out of the capture. Measured on
+the shipped bake, counting a gap as ≥3 frames (100 ms at 30 fps):
+
+| | |
+|---|---|
+| median | **5.4%** of frames invented |
+| mean | 7.3% |
+| over 10% | **85 of 250** words |
+| over 20% | **21 of 250** |
+| nothing invented | 109 of 250 |
+| worst | `arm` **30.4%**, `go` 30.3%, `rain` 28.2%, `white` 27.5% |
+| longest single gap | `alligator`, **16 frames = 533 ms** |
+
+**`corr(coverage, invented) = −0.794`, not −1.** Coverage counts the missing frames; the damage is
+how they are *arranged*. The two words below the 65% coverage bar — `fall` (60.0%, 20.0% invented)
+and `drop` (62.9%, 22.9%) — are **not** the worst signs in the corpus. `arm` at 69.6% coverage and
+`go` at 66.7% both clear that bar and are worse; `alligator` at 78.0% coverage loses a fifth of the
+sign in one half-second hole. Every error column in the table beside it — wrist, p95, handshape,
+in-front — is a mean over *tracked* frames only, so each describes a different fraction of each
+sign, and `invented` is the column that says which. Without it `fall` reads 2.5% wrist error next
+to `stairs` at 2.4% while one of them is a fifth slerp and the other is entirely data.
+
+**No bar is asserted on it, because none is earned.** Nothing in the renderer can put the missing
+frames back. Re-selecting the exemplar is the only lever and it points the wrong way: within-word
+`corr(coverage, arm-travel)` is **negative on 100% of all 250 words**, and the most positive it
+ever gets anywhere in the corpus is **−0.265**. A better-covered take of any word is a stiller
+take of it — which is exactly why the selector carries a median-travel floor. Pool size is not the
+constraint either: `will` has **127** valid candidates and still tops out at 62.6% coverage.
+
 ---
 
 ## 3. ✅ 23 words were degraded at the source by the 2s gate — TAKEN 2026-09-18

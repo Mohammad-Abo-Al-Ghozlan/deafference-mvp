@@ -462,7 +462,8 @@ function signSentence(text){
                   hold_out: SIGNS[r.picked[r.picked.length-1]].hold_out || 0,
                   stroke: r.frames.length, hands: "sequence", lh: null, rh: null,
                   segments: r.segments};
-  STATS[UTTER] = {err: null, p95: null, shape: null, front: null, clamp: null, synth: null};
+  STATS[UTTER] = {err: null, p95: null, shape: null, front: null, clamp: null, synth: null,
+                  invented: null};
   const MARK = {q: "yes/no question — brow raise", wh: "wh-question — brow furrow + tilt",
                 neg: "negation — headshake", top: "topic — brow raise on the first sign"};
   note.textContent = (r.missing.length
@@ -548,6 +549,13 @@ function renderStats(){
       }">${SIGNS[cur].hands}</span></dd>` +
     `<dt>hand tracked</dt><dd>L ${SIGNS[cur].lh == null ? "—" : SIGNS[cur].lh + "%"} · ` +
       `R ${SIGNS[cur].rh == null ? "—" : SIGNS[cur].rh + "%"}</dd>` +
+    // ... and how much of what is ON SCREEN was invented to cover those gaps. Every number
+    // above is averaged over tracked frames only, so this is the one that says how much of
+    // the sign they describe. It does NOT track the tracked-% beside it: corr is -0.795, so
+    // the arrangement of the missing frames matters as much as how many there are.
+    `<dt>interpolated</dt><dd><span class="pill ${
+        st.invented == null ? "warn" : st.invented < 10 ? "ok" : st.invented < 20 ? "warn" : "err"
+      }">${st.invented == null ? "—" : st.invented.toFixed(0) + "%"}</span> of frames</dd>` +
     // WHICH HAND IS REAL. The passive hand is never in this corpus, so on a two-handed sign
     // one of the two hands on screen was synthesized from a lexicon a Deaf signer has not yet
     // reviewed. Nothing in the error columns says so -- they only score hands with landmarks
@@ -613,7 +621,9 @@ document.getElementById("footnote").textContent =
   "A clamped frame is one where the limb was foreshortened past what the rig can reach. " +
   "“In front” is the share of frames with the wrist forward of the shoulder — " +
   "ASL happens in the signing space in front of the body, so a low number means the depth " +
-  "solve went the wrong way.";
+  "solve went the wrong way. “Interpolated” is the share of frames the tracker lost and the " +
+  "solve slerped through; every other number on this panel is averaged over the frames that " +
+  "were tracked, so it says how much of the sign they describe.";
 
 const playBtn = document.getElementById("play");
 playBtn.addEventListener("click", () => {
