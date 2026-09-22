@@ -9,6 +9,7 @@ largest array.
 """
 import base64
 import json
+import os
 import struct
 from pathlib import Path
 
@@ -92,7 +93,11 @@ for k, j in enumerate(joints):
     bones.append({"n": name[j], "p": jpos.get(p, -1) if p is not None else -1,
                   "t": [round(v, 6) for v in t], "q": [round(v, 6) for v in q]})
 
-signs = json.loads((REPO / "avatar" / "baked_signs.json").read_text(encoding="utf-8"))
+# Same corpus switch as retarget.py's bake output, so a second language cannot silently
+# overwrite the shipped ASL payload -- which is exactly what the hardcoded path did once.
+_C = os.environ.get("SIGN_CORPUS", "")
+_SUF = f"_{_C}" if _C else ""
+signs = json.loads((REPO / "avatar" / f"baked_signs{_SUF}.json").read_text(encoding="utf-8"))
 
 payload = {
     "nv": len(P), "ni": len(IDX), "nb": len(joints),
@@ -101,7 +106,7 @@ payload = {
     "blob": base64.b64encode(blob).decode("ascii"),
     "signs": signs["signs"],
 }
-out = REPO / "avatar" / "viewer_payload.json"
+out = REPO / "avatar" / f"viewer_payload{_SUF}.json"
 out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 print(f"vertices {len(P):,}  tris {len(IDX)//3:,}  bones {len(joints)}  "
       f"signs {len(signs['signs'])}")

@@ -117,3 +117,9 @@ node_modules/
 # Offline handshape renders from avatar/render_check.py — derived from the same
 # gitignored geometry, regenerate with `python avatar/render_check.py <word>`.
 avatar/_check_*.png
+
+# LSL: extracted arrays and built viewer (same reasoning as the ASL ones above)
+lsl_*.npz
+avatar/baked_signs_lsl.json
+avatar/viewer_payload_lsl.json
+avatar/sign_viewer_lsl.html

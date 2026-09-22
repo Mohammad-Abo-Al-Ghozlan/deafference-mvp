@@ -52,7 +52,9 @@ def check_syntax(template):
 
 tpl = (HERE / "sign_viewer_template.html").read_text(encoding="utf-8")
 check_syntax(tpl)
-pay_path, bake_path = HERE / "viewer_payload.json", HERE / "baked_signs.json"
+_C = os.environ.get("SIGN_CORPUS", "")
+_SUF = f"_{_C}" if _C else ""
+pay_path, bake_path = HERE / f"viewer_payload{_SUF}.json", HERE / f"baked_signs{_SUF}.json"
 
 # A STALENESS CHECK, because the alternative is a confident lie. This script only inlines the
 # payload -- it never reads the bake -- so a rebake followed by a rebuild used to print
@@ -97,7 +99,7 @@ blob = json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
 html = tpl.replace("__PAYLOAD__", blob).replace("__STATS__",
                                                 json.dumps(stats, separators=(",", ":")))
 assert "__PAYLOAD__" not in html and "__STATS__" not in html
-out = HERE / "sign_viewer.html"
+out = HERE / f"sign_viewer{_SUF}.html"
 out.write_text(html, encoding="utf-8")
 print(f"[ok] {out}")
 mb = out.stat().st_size / 1e6

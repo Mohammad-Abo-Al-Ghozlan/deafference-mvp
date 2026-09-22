@@ -23,6 +23,7 @@ Usage:
     python avatar/retarget.py --all-medical --out X.json
 """
 import json
+import os
 import struct
 import sys
 from pathlib import Path
@@ -31,7 +32,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 GLB = REPO / "3D Char deaf [untextured].glb"
-WORDS = REPO / "animation_handoff" / "words"
+# Overridable so a SECOND corpus can be retargeted without copying this file. The Lebanese
+# Sign Language set in s3://lsldataset is the first: same 75-point layout, same
+# shoulder-centred space, different language. Nothing below is ASL-specific -- a word absent
+# from the three lexicons falls back to measuring the take, which is exactly what an
+# unknown-language word needs. Default is unchanged.
+WORDS = Path(os.environ.get("SIGN_WORDS_DIR") or (REPO / "animation_handoff" / "words"))
 
 # ── the three lexicon files this renderer is REQUIRED to read ────────────────────────────
 # asl_handedness_250.json's `renderer_contract` is not advice, it is the interface: "For every
@@ -2757,6 +2763,7 @@ def selftest(rig, chains):
 
 
 def main():
+    global WORDS                     # rebound around the selftest; see below
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if "--all" in sys.argv:
         words = sorted(p.stem for p in WORDS.glob("*.json"))
@@ -2764,7 +2771,17 @@ def main():
         words = args or ["hello", "mom", "water"]
     rig = Rig(GLB if GLB.exists() else REPO / "3D Char deaf.glb")
     chains = build_chains(rig)
-    selftest(rig, chains)
+    # THE SELFTEST CHECKS THE SOLVER, NOT THE CORPUS, so it always runs against the ASL
+    # fixtures it was written for -- `after`, `read`, `ride`, `flag`, `blue` -- no matter
+    # which corpus is being baked. Those words are not in another language's directory, so
+    # leaving WORDS pointed at it would crash on a missing file; and the tempting fix, to
+    # skip the selftest whenever SIGN_WORDS_DIR is set, would silently disable every
+    # assertion in this file for exactly the runs that are newest and least proven.
+    _bake_words, WORDS = WORDS, REPO / "animation_handoff" / "words"
+    try:
+        selftest(rig, chains)
+    finally:
+        WORDS = _bake_words
     missing = [c[0] for c in chains if c[0] not in rig.by] + \
               [c[1] for c in chains if c[1] not in rig.by]
     assert not missing, f"rig has no bone named {sorted(set(missing))}"
@@ -2833,7 +2850,13 @@ def main():
                     # the holds at an internal join instead of stacking two of them. frames
                     # [hold_in : hold_in+stroke] is the sign itself.
                     **timing}
-    out = REPO / "avatar" / "baked_signs.json"
+    # THE OUTPUT NAME FOLLOWS THE CORPUS. This was hardcoded, and the first LSL bake
+    # overwrote the shipped 250-sign ASL file -- the artifact the animator is waiting on --
+    # with 18 Arabic words, silently and in a second. It was recoverable only because the
+    # file happens to be tracked in git. Deriving the name from the input makes a corpus
+    # unable to land on another corpus's file at all, which is better than remembering.
+    out = REPO / "avatar" / (f"baked_signs_{WORDS.parent.name.replace('animation_handoff', '').strip('_') or 'asl'}.json"
+                             if os.environ.get("SIGN_WORDS_DIR") else "baked_signs.json")
     out.write_text(json.dumps({
         "_note": ("Bone rotations baked by avatar/retarget.py from the 75-landmark motion in "
                   "animation_handoff/words/. Quaternions are LOCAL, xyzw, keyed by the "
